@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Coffee Oasis POS — Online Orders</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #f8f9fb; font-family: 'Inter', system-ui, sans-serif; color: #212529; font-size: 14px; -webkit-font-smoothing: antialiased; }
+button { font-family: inherit; cursor: pointer; }
+
+/* ── NAV ── */
+.nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: #fff; border-bottom: 1px solid #e9ecef; display: flex; align-items: center; justify-content: center; gap: 4px; height: 54px; }
+.nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 18px; border-radius: 8px; border: none; background: transparent; color: #6c757d; font-size: 11px; font-weight: 500; transition: all .15s; cursor: pointer; position: relative; }
+.nav-item svg { width: 20px; height: 20px; }
+.nav-item.active { color: #28a745; background: #f0fdf4; }
+.nav-item .badge { position: absolute; top: 3px; right: 10px; background: #dc3545; color: #fff; border-radius: 999px; font-size: 10px; font-weight: 700; padding: 1px 5px; border: 2px solid #fff; }
+
+/* ── BRANCH BAR ── */
+.branch-bar { margin-top: 54px; background: #fff; border-bottom: 1px solid #e9ecef; padding: 6px 24px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6c757d; }
+.branch-dot { width: 8px; height: 8px; border-radius: 50%; background: #28a745; }
+
+/* ── ONLINE ALERT BANNER ── */
+.online-banner { background: linear-gradient(90deg, #0d6efd 0%, #0a58ca 100%); color: #fff; padding: 10px 24px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 500; }
+.online-banner svg { flex-shrink: 0; }
+.online-banner .pulse { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #fff; animation: pulse 1.5s ease-in-out infinite; flex-shrink: 0; }
+@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .5; transform: scale(.8); } }
+
+/* ── PAGE SHELL ── */
+.page { max-width: 1200px; margin: 0 auto; padding: 24px 24px 60px; }
+.page-title { font-size: 22px; font-weight: 700; color: #212529; display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.page-sub { font-size: 13px; color: #6c757d; margin-bottom: 20px; }
+
+/* ── STAT TILES ── */
+.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+.stat-card { background: #fff; border: 1px solid #e9ecef; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; }
+.stat-label { font-size: 12px; color: #6c757d; font-weight: 500; }
+.stat-num { font-size: 28px; font-weight: 800; }
+.stat-sub { font-size: 11px; color: #6c757d; }
+
+/* ── SECTION ── */
+.section-label { font-size: 13px; font-weight: 600; color: #495057; margin-bottom: 12px; }
+
+/* ── QUEUE COLUMNS ── */
+.queue { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.col { background: #f1f3f5; border-radius: 10px; padding: 12px; min-height: 400px; }
+.col-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.col-title { font-size: 13px; font-weight: 700; color: #495057; display: flex; align-items: center; gap: 6px; }
+.col-count { background: #dee2e6; color: #495057; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 700; }
+.col.col-pending .col-count { background: #fff3cd; color: #856404; }
+.col.col-inprogress .col-count { background: #cff4fc; color: #055160; }
+.col.col-ready .col-count { background: #d1e7dd; color: #0f5132; }
+
+/* ── ORDER CARD ── */
+.order-card { background: #fff; border: 1px solid #e9ecef; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.order-card.urgent { border-left: 3px solid #dc3545; }
+.order-card.new-flash { animation: cardFlash .6s ease-out; }
+@keyframes cardFlash { from { background: #e8f5e9; } to { background: #fff; } }
+
+.order-num { font-size: 13px; font-weight: 700; color: #212529; }
+.order-meta { font-size: 11px; color: #6c757d; display: flex; gap: 8px; margin-top: 2px; flex-wrap: wrap; }
+.order-items { margin: 10px 0 8px; display: flex; flex-direction: column; gap: 4px; }
+.order-item { font-size: 12.5px; color: #495057; }
+.order-item-mods { font-size: 11px; color: #6c757d; padding-left: 12px; }
+.order-footer { display: flex; align-items: center; gap: 6px; justify-content: space-between; margin-top: 10px; }
+.order-total { font-size: 13px; font-weight: 700; color: #212529; }
+
+/* pickup badge */
+.pickup-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; }
+.pickup-badge.counter { background: #e9ecef; color: #495057; }
+.pickup-badge.curbside { background: #cff4fc; color: #055160; }
+
+/* timer */
+.timer { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+.timer.ok { background: #d1e7dd; color: #0f5132; }
+.timer.warn { background: #fff3cd; color: #856404; }
+.timer.late { background: #f8d7da; color: #842029; }
+
+/* action buttons */
+.btn { border: none; border-radius: 6px; padding: 7px 12px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; transition: filter .12s; white-space: nowrap; }
+.btn:hover { filter: brightness(.93); }
+.btn-green { background: #28a745; color: #fff; }
+.btn-blue { background: #0d6efd; color: #fff; }
+.btn-teal { background: #20c997; color: #fff; }
+.btn-gray { background: #e9ecef; color: #495057; }
+.btn-outline { background: transparent; border: 1px solid #dee2e6; color: #6c757d; }
+.btn-red { background: #dc3545; color: #fff; }
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+
+/* ── PRINT SIMULATION ── */
+.print-toast { position: fixed; bottom: 24px; right: 24px; z-index: 200; background: #fff; border: 1px solid #e9ecef; border-radius: 10px; padding: 14px 18px; box-shadow: 0 8px 24px rgba(0,0,0,.12); display: flex; align-items: flex-start; gap: 12px; min-width: 260px; max-width: 320px; }
+.print-toast-icon { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; flex-shrink: 0; }
+.print-toast h4 { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+.print-toast p { font-size: 12px; color: #6c757d; }
+
+/* ── KDS MODAL ── */
+.modal-bg { position: fixed; inset: 0; z-index: 150; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; }
+.modal { background: #fff; border-radius: 12px; padding: 24px; width: min(480px, 92vw); box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+.modal h3 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+.modal-sub { font-size: 13px; color: #6c757d; margin-bottom: 18px; }
+
+/* ── ADMIN DASHBOARD PREVIEW ── */
+.admin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 10px; }
+.admin-card { background: #fff; border: 1px solid #e9ecef; border-radius: 10px; padding: 16px; cursor: pointer; transition: box-shadow .15s; }
+.admin-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); }
+.admin-card-icon { width: 32px; height: 32px; margin-bottom: 8px; }
+.admin-card h4 { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+.admin-card p { font-size: 12px; color: #6c757d; }
+.admin-card.highlight { border: 1.5px solid #0d6efd; background: #f0f7ff; }
+
+.feature-card { border-radius: 10px; padding: 16px; color: #fff; cursor: pointer; transition: filter .12s; }
+.feature-card:hover { filter: brightness(.93); }
+.feature-card h4 { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+.feature-card p { font-size: 12px; opacity: .9; }
+
+/* tabs */
+.tab-bar { display: flex; gap: 4px; background: #f1f3f5; border-radius: 8px; padding: 4px; margin-bottom: 20px; width: fit-content; }
+.tab { padding: 7px 16px; border-radius: 6px; border: none; background: transparent; font-size: 13px; font-weight: 600; color: #6c757d; cursor: pointer; }
+.tab.active { background: #fff; color: #212529; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <button class="nav-item" onclick="showView('admin')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+    Admin
+  </button>
+  <button class="nav-item" onclick="showView('admin')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+    Menu
+  </button>
+  <button class="nav-item" onclick="showView('admin')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.2a2 2 0 0 0 2-1.5L20.5 8H6"/></svg>
+    Cart
+  </button>
+  <button class="nav-item active" id="nav-online" onclick="showView('online')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg>
+    Online
+    <span class="badge" id="nav-badge">3</span>
+  </button>
+</nav>
+
+<!-- BRANCH BAR -->
+<div class="branch-bar">
+  <div class="branch-dot"></div>
+  <span>Shell Collectco <strong>(MAIN)</strong></span>
+</div>
+
+<!-- ═══════════════════════ ADMIN DASHBOARD VIEW ═══════════════════════ -->
+<div id="view-admin" style="display:none">
+  <div class="page">
+    <div class="page-title">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6f42c1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      Admin Dashboard
+    </div>
+    <div class="page-sub">Coffee Oasis POS</div>
+
+    <!-- stats -->
+    <div class="stat-row">
+      <div class="stat-card"><span class="stat-label">Today's Orders</span><span class="stat-num" style="color:#0d6efd">10</span></div>
+      <div class="stat-card"><span class="stat-label">Today's Revenue</span><span class="stat-num" style="color:#28a745">RM 7.50</span></div>
+      <div class="stat-card"><span class="stat-label">Items Sold</span><span class="stat-num" style="color:#20c997">10</span></div>
+      <div class="stat-card"><span class="stat-label">Online Orders</span><span class="stat-num" style="color:#0d6efd">3 <span style="font-size:16px;font-weight:500;color:#6c757d">pending</span></span></div>
+    </div>
+
+    <div class="section-label">Operations</div>
+    <div class="admin-grid" style="grid-template-columns:1fr 1fr 1fr; margin-bottom:20px;">
+      <div class="admin-card">
+        <svg class="admin-card-icon" viewBox="0 0 24 24" fill="none" stroke="#6f42c1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/></svg>
+        <h4>Order Management</h4>
+        <p>Monitor and manage all orders</p>
+      </div>
+      <!-- NEW: Online Orders tile -->
+      <div class="admin-card highlight" onclick="showView('online')" style="cursor:pointer">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <svg class="admin-card-icon" style="margin-bottom:0" viewBox="0 0 24 24" fill="none" stroke="#0d6efd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg>
+          <span style="background:#dc3545;color:#fff;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700">3 new</span>
+        </div>
+        <h4 style="color:#0d6efd">Online Orders</h4>
+        <p>Manage mobile & web orders queue</p>
+      </div>
+      <div class="admin-card">
+        <svg class="admin-card-icon" viewBox="0 0 24 24" fill="none" stroke="#28a745" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        <h4>Kitchen Display</h4>
+        <p>View KDS and printer status</p>
+      </div>
+    </div>
+
+    <div class="section-label">Analytics</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="feature-card" style="background:linear-gradient(135deg,#28a745,#20a83a)"><h4>📊 Daily Sales</h4><p>Order-by-order breakdown with COGS</p></div>
+      <div class="feature-card" style="background:linear-gradient(135deg,#0d6efd,#0a58ca)"><h4>$ Sales Reports</h4><p>View revenue, analytics, and performance</p></div>
+      <div class="feature-card" style="background:linear-gradient(135deg,#6f42c1,#5a32a3)"><h4>📦 Products Sold</h4><p>Product performance, margins, and trends</p></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="feature-card" style="background:linear-gradient(135deg,#20c997,#199d7a)"><h4>📋 Stock Check</h4><p>Physical inventory count and stock update</p></div>
+      <div class="feature-card" style="background:linear-gradient(135deg,#fd7e14,#e06912)"><h4>📈 Stock Usage</h4><p>Track all stock level changes and movements</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ ONLINE ORDERS VIEW ═══════════════════════ -->
+<div id="view-online" style="display:none">
+  <!-- online alert banner -->
+  <div class="online-banner" id="online-banner">
+    <span class="pulse"></span>
+    <span>Online ordering is <strong>LIVE</strong> — 3 orders pending · Avg wait time 3 min 20 sec</span>
+    <button class="btn btn-outline" style="margin-left:auto;color:#fff;border-color:rgba(255,255,255,.4);background:rgba(255,255,255,.1);padding:5px 12px;font-size:12px" onclick="simulateNewOrder()">
+      + Simulate incoming order
+    </button>
+    <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.4);background:rgba(255,255,255,.1);padding:5px 12px;font-size:12px" onclick="togglePause()">
+      ⏸ Pause intake
+    </button>
+  </div>
+
+  <div class="page">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+      <div>
+        <div class="page-title">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0d6efd" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg>
+          Online Orders
+        </div>
+        <div class="page-sub">Real-time queue · Shell Seksyen 13 · <span style="color:#28a745;font-weight:600">● Live</span></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="stat-card" style="padding:10px 16px;flex-direction:row;gap:10px;align-items:center;min-width:0">
+          <span style="font-size:22px;font-weight:800;color:#856404">3</span><span style="font-size:11px;color:#6c757d;line-height:1.3">Pending<br/>acceptance</span>
+        </div>
+        <div class="stat-card" style="padding:10px 16px;flex-direction:row;gap:10px;align-items:center;min-width:0">
+          <span style="font-size:22px;font-weight:800;color:#055160">2</span><span style="font-size:11px;color:#6c757d;line-height:1.3">In<br/>progress</span>
+        </div>
+        <div class="stat-card" style="padding:10px 16px;flex-direction:row;gap:10px;align-items:center;min-width:0">
+          <span style="font-size:22px;font-weight:800;color:#0f5132">1</span><span style="font-size:11px;color:#6c757d;line-height:1.3">Ready for<br/>pickup</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUEUE COLUMNS -->
+    <div class="queue" id="queue-board">
+
+      <!-- PENDING -->
+      <div class="col col-pending">
+        <div class="col-header">
+          <div class="col-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#856404" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l2.5 2.5"/></svg>
+            New · Pending
+          </div>
+          <span class="col-count" id="pending-count">3</span>
+        </div>
+        <div id="col-pending"></div>
+        <div id="empty-pending" style="display:none;text-align:center;padding:40px 16px;color:#6c757d;font-size:13px">
+          <div style="font-size:28px;margin-bottom:8px">✓</div>
+          All orders accepted
+        </div>
+      </div>
+
+      <!-- IN PROGRESS -->
+      <div class="col col-inprogress">
+        <div class="col-header">
+          <div class="col-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#055160" stroke-width="2.5" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg>
+            In Progress
+          </div>
+          <span class="col-count" id="inprogress-count">2</span>
+        </div>
+        <div id="col-inprogress"></div>
+      </div>
+
+      <!-- READY -->
+      <div class="col col-ready">
+        <div class="col-header">
+          <div class="col-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0f5132" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+            Ready · Awaiting Pickup
+          </div>
+          <span class="col-count" id="ready-count">1</span>
+        </div>
+        <div id="col-ready"></div>
+      </div>
+    </div>
+
+    <!-- COLLECTED today (collapsible) -->
+    <div style="margin-top:24px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div class="section-label" style="margin-bottom:0">Collected today</div>
+        <span style="background:#d1e7dd;color:#0f5132;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700" id="collected-count">0</span>
+      </div>
+      <div id="col-collected" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"></div>
+      <div id="empty-collected" style="text-align:center;padding:24px;color:#6c757d;font-size:13px;background:#f1f3f5;border-radius:8px">No collected orders yet today</div>
+    </div>
+  </div>
+</div>
+
+<!-- PRINT TOAST container -->
+<div id="toast-area"></div>
+
+<!-- KDS MODAL -->
+<div class="modal-bg" id="kds-modal" style="display:none" onclick="closeKDS()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3>🖥️ KDS — Sent to display</h3>
+    <div class="modal-sub">This order has appeared on the kitchen display screen</div>
+    <div id="kds-content" style="background:#1a1a2e;color:#00ff88;font-family:monospace;font-size:13px;border-radius:8px;padding:16px;line-height:1.8;margin-bottom:18px;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-gray" onclick="closeKDS()">Close</button>
+      <button class="btn btn-teal" onclick="closeKDS()">✓ Acknowledged</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════
+let orderIdCounter = 2183;
+let paused = false;
+
+const ORDERS = [
+  {
+    id: "A2183", status: "pending", ts: Date.now() - 1000 * 60 * 2, // 2 min ago
+    customer: "Amir R.", phone: "012-345-6789",
+    pickup: "counter",
+    items: [
+      { name: "Flat White", qty: 1, mods: "Large · Oat milk · Less sugar" },
+      { name: "Butter Danish", qty: 1, mods: null },
+    ],
+    total: 22.00,
+    note: "",
+  },
+  {
+    id: "A2184", status: "pending", ts: Date.now() - 1000 * 60 * 1,
+    customer: "Nurul H.", phone: "016-234-5678",
+    pickup: "curbside",
+    items: [
+      { name: "Oasis Latte", qty: 2, mods: "Regular · Whole milk" },
+    ],
+    total: 22.00,
+    note: "Extra hot please",
+  },
+  {
+    id: "A2185", status: "pending", ts: Date.now() - 1000 * 30,
+    customer: "Kevin T.", phone: "017-876-5432",
+    pickup: "counter",
+    items: [
+      { name: "Iced Latte", qty: 1, mods: "Regular · Oat milk · Less ice" },
+      { name: "Coffee Frappe", qty: 1, mods: "Regular · No sugar" },
+      { name: "Almond Croissant", qty: 1, mods: null },
+    ],
+    total: 34.50,
+    note: "",
+  },
+  {
+    id: "A2181", status: "inprogress", ts: Date.now() - 1000 * 60 * 5,
+    customer: "Priya M.", phone: "011-234-5678",
+    pickup: "counter",
+    items: [
+      { name: "Cappuccino", qty: 1, mods: "Regular · Whole milk" },
+      { name: "Kaya Butter Toast", qty: 1, mods: null },
+    ],
+    total: 17.00, note: "",
+  },
+  {
+    id: "A2182", status: "inprogress", ts: Date.now() - 1000 * 60 * 4,
+    customer: "Hafiz A.", phone: "019-345-6789",
+    pickup: "curbside",
+    items: [
+      { name: "Kopi-O Gula Melaka", qty: 2, mods: "Regular · Less sugar" },
+    ],
+    total: 17.00, note: "Pulling up in silver Myvi",
+  },
+  {
+    id: "A2180", status: "ready", ts: Date.now() - 1000 * 60 * 7,
+    customer: "Liyana S.", phone: "013-456-7890",
+    pickup: "counter",
+    items: [
+      { name: "Matcha Latte", qty: 1, mods: "Large · Oat milk" },
+    ],
+    total: 14.50, note: "",
+  },
+];
+
+// ═══════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════
+function elapsed(ts) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return s + "s";
+  return Math.floor(s / 60) + "m " + (s % 60) + "s";
+}
+
+function timerClass(ts, status) {
+  const m = (Date.now() - ts) / 60000;
+  if (status === "pending" && m > 2) return "late";
+  if (status === "inprogress" && m > 6) return "warn";
+  return "ok";
+}
+
+function formatTime(ts) {
+  return new Date(ts).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
+}
+
+function orderCardHTML(order) {
+  const urgent = order.status === "pending" && (Date.now() - order.ts) > 120000;
+  const pickupBadge = order.pickup === "curbside"
+    ? `<span class="pickup-badge curbside">🚗 Curbside</span>`
+    : `<span class="pickup-badge counter">🚶 Counter</span>`;
+  const timerCls = timerClass(order.ts, order.status);
+  const elapsedStr = elapsed(order.ts);
+
+  const itemsHTML = order.items.map(it => `
+    <div class="order-item">
+      <strong>${it.qty}×</strong> ${it.name}
+      ${it.mods ? `<div class="order-item-mods">${it.mods}</div>` : ""}
+    </div>
+  `).join("");
+
+  const noteHTML = order.note
+    ? `<div style="font-size:11px;color:#0d6efd;background:#f0f7ff;border-radius:5px;padding:5px 8px;margin-top:6px">💬 ${order.note}</div>`
+    : "";
+
+  let actions = "";
+  if (order.status === "pending") {
+    actions = `
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button class="btn btn-green" style="flex:1" onclick="acceptOrder('${order.id}')">✓ Accept & Print</button>
+        <button class="btn btn-gray btn-sm" onclick="rejectOrder('${order.id}')">Reject</button>
+      </div>`;
+  } else if (order.status === "inprogress") {
+    actions = `
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button class="btn btn-teal" style="flex:1" onclick="markReady('${order.id}')">🔔 Mark Ready</button>
+        <button class="btn btn-outline btn-sm" onclick="showKDS('${order.id}')">KDS</button>
+      </div>`;
+  } else if (order.status === "ready") {
+    actions = `
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button class="btn btn-blue" style="flex:1" onclick="markCollected('${order.id}')">✓ Collected</button>
+        <button class="btn btn-outline btn-sm" onclick="reprintLabel('${order.id}')">Reprint</button>
+      </div>`;
+  }
+
+  return `
+    <div class="order-card ${urgent ? 'urgent' : ''}" id="card-${order.id}">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span class="order-num">#${order.id}</span>
+        <span class="timer ${timerCls}" id="timer-${order.id}">${elapsedStr}</span>
+      </div>
+      <div class="order-meta">
+        <span>${order.customer}</span>
+        <span>${formatTime(order.ts)}</span>
+        ${pickupBadge}
+      </div>
+      <div class="order-items">${itemsHTML}</div>
+      ${noteHTML}
+      <div class="order-footer">
+        <span class="order-total">RM ${order.total.toFixed(2)}</span>
+        <span style="font-size:11px;color:#6c757d">GrabPay · Paid</span>
+      </div>
+      ${actions}
+    </div>`;
+}
+
+function renderQueue() {
+  const pending    = ORDERS.filter(o => o.status === "pending");
+  const inprogress = ORDERS.filter(o => o.status === "inprogress");
+  const ready      = ORDERS.filter(o => o.status === "ready");
+  const collected  = ORDERS.filter(o => o.status === "collected");
+
+  document.getElementById("col-pending").innerHTML    = pending.map(orderCardHTML).join("");
+  document.getElementById("col-inprogress").innerHTML = inprogress.map(orderCardHTML).join("");
+  document.getElementById("col-ready").innerHTML      = ready.map(orderCardHTML).join("");
+  document.getElementById("col-collected").innerHTML  = collected.map(o => `
+    <div class="order-card" style="opacity:.65">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span class="order-num">#${o.id}</span>
+        <span style="font-size:11px;background:#d1e7dd;color:#0f5132;padding:2px 8px;border-radius:999px;font-weight:600">Collected</span>
+      </div>
+      <div class="order-meta"><span>${o.customer}</span><span>RM ${o.total.toFixed(2)}</span></div>
+    </div>`).join("");
+
+  document.getElementById("pending-count").textContent    = pending.length;
+  document.getElementById("inprogress-count").textContent = inprogress.length;
+  document.getElementById("ready-count").textContent      = ready.length;
+  document.getElementById("collected-count").textContent  = collected.length;
+  document.getElementById("nav-badge").textContent        = pending.length;
+  document.getElementById("nav-badge").style.display      = pending.length > 0 ? "" : "none";
+  document.getElementById("empty-pending").style.display  = pending.length === 0 ? "" : "none";
+  document.getElementById("empty-collected").style.display = collected.length === 0 ? "" : "none";
+}
+
+// ═══════════════════════════════════════════════════════
+// ACTIONS
+// ═══════════════════════════════════════════════════════
+function acceptOrder(id) {
+  const o = ORDERS.find(x => x.id === id);
+  if (!o) return;
+  o.status = "inprogress";
+  renderQueue();
+  showPrintToast("Label printed", `#${id} · ${o.items.map(i => i.name).join(", ")}`, "#20c997");
+  showPrintToast("Sent to KDS", `#${id} now on kitchen display`, "#0d6efd");
+}
+
+function rejectOrder(id) {
+  const idx = ORDERS.findIndex(x => x.id === id);
+  if (idx >= 0) ORDERS.splice(idx, 1);
+  renderQueue();
+  showPrintToast("Order rejected", `#${id} — customer notified`, "#dc3545");
+}
+
+function markReady(id) {
+  const o = ORDERS.find(x => x.id === id);
+  if (!o) return;
+  o.status = "ready";
+  renderQueue();
+  showPrintToast("Customer notified", `#${id} · ${o.customer} — order is ready`, "#28a745");
+}
+
+function markCollected(id) {
+  const o = ORDERS.find(x => x.id === id);
+  if (!o) return;
+  o.status = "collected";
+  o.collectedAt = Date.now();
+  renderQueue();
+}
+
+function reprintLabel(id) {
+  const o = ORDERS.find(x => x.id === id);
+  showPrintToast("Label reprinted", `#${id} · ${o.items.map(i=>i.name).join(", ")}`, "#20c997");
+}
+
+function showKDS(id) {
+  const o = ORDERS.find(x => x.id === id);
+  const lines = o.items.map(i => `  ${i.qty}x ${i.name}${i.mods ? '\n     └ ' + i.mods : ''}`).join('\n');
+  document.getElementById("kds-content").textContent =
+    `ORDER #${o.id}\nCustomer: ${o.customer}\nPickup: ${o.pickup.toUpperCase()}\nTime: ${formatTime(o.ts)}\n\n${lines}${o.note ? '\nNote: ' + o.note : ''}\n\nTotal: RM ${o.total.toFixed(2)} [PAID]`;
+  document.getElementById("kds-modal").style.display = "flex";
+}
+
+function closeKDS() {
+  document.getElementById("kds-modal").style.display = "none";
+}
+
+function showPrintToast(title, body, color) {
+  const area = document.getElementById("toast-area");
+  const t = document.createElement("div");
+  t.className = "print-toast";
+  t.style.cssText = "animation:slideIn .25s ease-out";
+  t.innerHTML = `
+    <div class="print-toast-icon" style="background:${color}20">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round"><path d="m5 12 5 5L20 7"/></svg>
+    </div>
+    <div>
+      <h4>${title}</h4>
+      <p>${body}</p>
+    </div>`;
+  area.appendChild(t);
+  setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .4s"; setTimeout(() => t.remove(), 400); }, 3000);
+}
+
+function simulateNewOrder() {
+  if (paused) { showPrintToast("Intake paused", "Resume intake to accept new orders", "#856404"); return; }
+  orderIdCounter++;
+  const names = ["Sarah K.", "David L.", "Siti N.", "Raj P.", "Mei Ling C."];
+  const pickups = ["counter", "curbside"];
+  const sampleItems = [
+    [{ name: "Flat White", qty: 1, mods: "Regular · Oat milk" }],
+    [{ name: "Iced Latte", qty: 1, mods: "Large · Less ice" }, { name: "Butter Danish", qty: 1, mods: null }],
+    [{ name: "Mocha", qty: 2, mods: "Regular · Whole milk" }],
+    [{ name: "Matcha Latte", qty: 1, mods: "Large · Oat milk · No sugar" }, { name: "Almond Croissant", qty: 1, mods: null }],
+  ];
+  const items = sampleItems[Math.floor(Math.random() * sampleItems.length)];
+  const total = items.reduce((s, i) => s + i.qty * 10.5, 0);
+  ORDERS.unshift({
+    id: "A" + orderIdCounter,
+    status: "pending",
+    ts: Date.now(),
+    customer: names[Math.floor(Math.random() * names.length)],
+    phone: "01x-xxx-xxxx",
+    pickup: pickups[Math.floor(Math.random() * pickups.length)],
+    items, total,
+    note: "",
+  });
+  renderQueue();
+  const card = document.getElementById("card-A" + orderIdCounter);
+  if (card) card.classList.add("new-flash");
+  showPrintToast("New online order!", `#A${orderIdCounter} · ${items.map(i=>i.name).join(", ")}`, "#0d6efd");
+}
+
+function togglePause() {
+  paused = !paused;
+  const banner = document.getElementById("online-banner");
+  if (paused) {
+    banner.style.background = "linear-gradient(90deg,#856404,#6e5210)";
+    banner.querySelector("span:nth-child(2)").innerHTML = "⚠️ Online intake <strong>PAUSED</strong> — new orders are queued but not shown";
+  } else {
+    banner.style.background = "linear-gradient(90deg,#0d6efd,#0a58ca)";
+    banner.querySelector("span:nth-child(2)").innerHTML = "Online ordering is <strong>LIVE</strong> — 3 orders pending · Avg wait time 3 min 20 sec";
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// NAV + VIEW SWITCHING
+// ═══════════════════════════════════════════════════════
+function showView(v) {
+  document.getElementById("view-admin").style.display  = v === "admin"  ? "" : "none";
+  document.getElementById("view-online").style.display = v === "online" ? "" : "none";
+  document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
+  if (v === "online") document.getElementById("nav-online").classList.add("active");
+}
+
+// ═══════════════════════════════════════════════════════
+// TIMERS — live elapsed update
+// ═══════════════════════════════════════════════════════
+setInterval(() => {
+  ORDERS.forEach(o => {
+    const el = document.getElementById("timer-" + o.id);
+    if (!el) return;
+    el.textContent = elapsed(o.ts);
+    el.className = "timer " + timerClass(o.ts, o.status);
+  });
+}, 5000);
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+showView("online");
+renderQueue();
+
+// inject slide-in toast animation
+const st = document.createElement("style");
+st.textContent = "@keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }";
+document.head.appendChild(st);
+</script>
+</body>
+</html>
