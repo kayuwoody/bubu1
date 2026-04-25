@@ -80,6 +80,27 @@ CREATE TABLE IF NOT EXISTS outlet_settings (
 INSERT INTO outlet_settings (outlet_id, intake_paused) VALUES ('main', false)
 ON CONFLICT (outlet_id) DO NOTHING;
 
+-- Checkout sessions: hold cart data between payment redirect and callback
+CREATE TABLE IF NOT EXISTS checkout_sessions (
+  id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_name  TEXT        NOT NULL,
+  customer_email TEXT        NOT NULL DEFAULT '',
+  customer_phone TEXT        NOT NULL,
+  pickup_type    TEXT        NOT NULL DEFAULT 'counter'
+                 CHECK (pickup_type IN ('counter','curbside')),
+  items          JSONB       NOT NULL,
+  total_amount   NUMERIC     NOT NULL,
+  currency       TEXT        NOT NULL DEFAULT 'MYR',
+  outlet_id      TEXT        NOT NULL DEFAULT 'main',
+  order_id       TEXT,
+  status         TEXT        NOT NULL DEFAULT 'pending'
+                 CHECK (status IN ('pending','paid','failed')),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at     TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '30 minutes')
+);
+
+CREATE INDEX IF NOT EXISTS idx_checkout_sessions_status ON checkout_sessions (status);
+
 CREATE OR REPLACE FUNCTION set_updated_at() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $$;
 
