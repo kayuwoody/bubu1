@@ -113,7 +113,7 @@ export default function CheckoutPage() {
         <div style={{ background: '#fff', borderRadius: R, border: `1.5px solid ${hex(INK, .08)}`, padding: 16, marginBottom: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 14, color: hex(INK, .65) }}>
             <span>Pickup</span>
-            <span style={{ fontWeight: 700, color: INK }}>{pending.pickup === 'car' ? 'Curbside' : 'At counter'}</span>
+            <span style={{ fontWeight: 700, color: INK }}>{pending.pickup === 'curbside' ? 'Curbside' : 'At counter'}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 20, color: INK, borderTop: `1px solid ${hex(INK, .06)}`, paddingTop: 8, marginTop: 4 }}>
             <span>Total</span>
