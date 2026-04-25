@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { CartLine } from '@/lib/types';
 import MENU_DATA from '@/lib/menu-data';
@@ -23,7 +23,7 @@ interface Pending {
   total:   number;
 }
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const searchParams = useSearchParams();
   const cancelled    = searchParams.get('cancelled') === '1';
 
@@ -178,5 +178,13 @@ export default function CheckoutPage() {
         </form>
       )}
     </div>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#FFF6E8' }}/>}>
+      <CheckoutContent />
+    </Suspense>
   );
 }

@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 const INK = '#3A2414';
 const PRI = '#F58220';
 const BG  = '#FFF6E8';
 
-export default function ReturnPage() {
+function ReturnContent() {
   const router      = useRouter();
   const searchParams = useSearchParams();
   const orderID     = searchParams.get('orderID') ?? searchParams.get('orderid') ?? '';
@@ -103,5 +103,13 @@ export default function ReturnPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function ReturnPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#FFF6E8' }}/>}>
+      <ReturnContent />
+    </Suspense>
   );
 }
