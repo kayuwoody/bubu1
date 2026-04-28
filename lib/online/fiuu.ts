@@ -15,28 +15,28 @@ export function verifyFiuuCallback(body: Record<string, string>): boolean {
     return true;
   }
 
-  const { tranID, orderID, status, domain, amount, currency, paydate, skey } = body;
-  const base = `${tranID}${orderID}${status}${domain}${amount}${currency}${paydate}`;
+  // Fiuu sends orderid lowercase; use whichever key has a value
+  const tranID   = body.tranID   ?? body.TranID  ?? '';
+  const orderid  = body.orderid  ?? body.orderID ?? body.OrderID ?? '';
+  const status   = body.status   ?? body.Status  ?? body.StatCode ?? '';
+  const domain   = body.domain   ?? body.Domain  ?? '';
+  const amount   = body.amount   ?? body.Amount  ?? '';
+  const currency = body.currency ?? body.Currency ?? 'MYR';
+  const paydate  = body.paydate  ?? body.Paydate ?? '';
+  const skey     = body.skey     ?? '';
 
   const mask = (k: string) => k ? `${k.slice(0,4)}...${k.slice(-4)} (len ${k.length})` : 'MISSING';
-  console.log('[fiuu/verify] secretKey:', mask(secretKey), '| verifyKey:', mask(verifyKey ?? ''));
-  console.log('[fiuu/verify] base:', base);
+  console.log('[fiuu/verify] secretKey:', mask(secretKey));
+  console.log('[fiuu/verify] fields — tranID:', tranID, 'orderid:', orderid, 'status:', status,
+    'domain:', domain, 'amount:', amount, 'currency:', currency, 'paydate:', paydate);
   console.log('[fiuu/verify] skey from Fiuu:', skey);
 
-  const variants: Record<string, string> = {
-    'md5(md5(base+secretKey))': md5(md5(base + secretKey)),
-    'md5(base+md5(secretKey))': md5(base + md5(secretKey)),
-    'md5(base+secretKey)':      md5(base + secretKey),
-    'md5(md5(base+verifyKey))': md5(md5(base + (verifyKey ?? ''))),
-    'md5(base+md5(verifyKey))': md5(base + md5(verifyKey ?? '')),
-    'md5(base+verifyKey)':      md5(base + (verifyKey ?? '')),
-  };
+  // Confirmed formula: md5(md5(tranID+orderid+status+domain+amount+currency+paydate+secretKey))
+  const raw  = `${tranID}${orderid}${status}${domain}${amount}${currency}${paydate}${secretKey}`;
+  const computed = md5(md5(raw));
+  console.log('[fiuu/verify] computed:', computed, computed === skey ? '✓ MATCH' : '✗ MISMATCH');
 
-  for (const [label, computed] of Object.entries(variants)) {
-    console.log(`[fiuu/verify] ${label} =`, computed, computed === skey ? '✓ MATCH' : '');
-  }
-
-  return Object.values(variants).some(v => v === skey);
+  return computed === skey;
 }
 
 export function isFiuuSuccess(status: string) {
