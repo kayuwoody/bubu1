@@ -43,26 +43,26 @@ export function isFiuuSuccess(status: string) {
   return status === '00';
 }
 
-export interface FiuuPaymentData {
-  url:    string;
-  params: Record<string, string>;
+export interface FiuuSeamlessAttrs {
+  scriptUrl: string;
+  attrs:     Record<string, string>;
 }
 
-// Returns a URL + POST params for Fiuu's hosted payment page (shows all methods).
-// The checkout page must auto-submit these as a hidden POST form.
-export function buildFiuuPaymentData(opts: {
-  sessionId:     string;
-  amount:        number;
-  currency?:     string;
-  channel?:      string;
-  baseUrl:       string;
-  customerName?: string;
+// Returns the Fiuu Seamless script URL and data-* attributes for a
+// data-toggle="molpayseamless" button. The JS SDK handles channel
+// selection and payment internally — no hosted page or GET redirect.
+export function buildFiuuSeamlessAttrs(opts: {
+  sessionId:      string;
+  amount:         number;
+  currency?:      string;
+  baseUrl:        string;
+  customerName?:  string;
   customerEmail?: string;
   customerPhone?: string;
-}): FiuuPaymentData {
+}): FiuuSeamlessAttrs {
   const merchantId = process.env.FIUU_MERCHANT_ID;
   const verifyKey  = process.env.FIUU_VERIFY_KEY;
-  const fiuuBase   = process.env.FIUU_BASE_URL ?? 'https://payment.fiuu.com';
+  const fiuuBase   = process.env.FIUU_BASE_URL ?? 'https://pay.fiuu.com';
   if (!merchantId || !verifyKey) throw new Error('FIUU_MERCHANT_ID and FIUU_VERIFY_KEY must be set');
 
   const amountStr = opts.amount.toFixed(2);
@@ -71,28 +71,23 @@ export function buildFiuuPaymentData(opts: {
   // vcode = md5(amount + merchantID + orderID + verifyKey)
   const vcode = md5(amountStr + merchantId + opts.sessionId + verifyKey);
 
-  // Omitting channel shows Fiuu's hosted channel selection page.
-  // Pass a specific channel code (e.g. 'credit', 'TNG-EWALLET') to skip selection.
-  const channelPath = opts.channel ? `/${opts.channel}` : '';
-  // Trailing slash required when using POST method (per Fiuu docs)
-  const url = `${fiuuBase}/RMS/pay/${merchantId}${channelPath}/`;
+  const scriptUrl = `${fiuuBase}/RMS/API/seamless/3.28/js/MOLPay_seamless.deco.js`;
 
-  const params: Record<string, string> = {
-    mpsmerchantid: merchantId,
-    mpschannel:    opts.channel ?? 'credit',
-    mpsamount:     amountStr,
-    mpsorderid:    opts.sessionId,
-    mpsbill_name:  opts.customerName  ?? '',
-    mpsbill_email: opts.customerEmail || 'noreply@coffeeoasis.my',
-    mpsbill_mobile: opts.customerPhone ?? '',
-    mpsbill_desc:  'Coffee Oasis Order',
-    mpscurrency:   currency,
-    mpscountry:    'MY',
-    mpsvcode:      vcode,
-    mpsreturnurl:  `${opts.baseUrl}/return`,
-    mpscallbackurl: `${opts.baseUrl}/api/fiuu/callback`,
-    mpsnotifyurl:  `${opts.baseUrl}/api/fiuu/callback`,
+  const attrs: Record<string, string> = {
+    'data-toggle':          'molpayseamless',
+    'data-mpsmerchantid':   merchantId,
+    'data-mpsamount':       amountStr,
+    'data-mpsorderid':      opts.sessionId,
+    'data-mpsbillname':     opts.customerName  ?? '',
+    'data-mpsbillemail':    opts.customerEmail || 'noreply@coffeeoasis.my',
+    'data-mpsbillmobile':   opts.customerPhone ?? '',
+    'data-mpsbilldesc':     'Coffee Oasis Order',
+    'data-mpscurrency':     currency,
+    'data-mpsvcode':        vcode,
+    'data-mpsreturnurl':    `${opts.baseUrl}/return`,
+    'data-mpscallbackurl':  `${opts.baseUrl}/api/fiuu/callback`,
+    'data-mpsnotifyurl':    `${opts.baseUrl}/api/fiuu/callback`,
   };
 
-  return { url, params };
+  return { scriptUrl, attrs };
 }

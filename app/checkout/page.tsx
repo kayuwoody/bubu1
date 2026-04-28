@@ -74,19 +74,25 @@ function CheckoutContent() {
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? 'Checkout failed.'); setLoading(false); return; }
       localStorage.setItem('co_session', data.sessionId);
-      // Fiuu hosted payment page requires a POST form submission
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = data.fiuuUrl;
-      for (const [k, v] of Object.entries(data.fiuuParams as Record<string, string>)) {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = k;
-        input.value = v;
-        form.appendChild(input);
+
+      // Load Fiuu Seamless JS, then trigger the payment button
+      await new Promise<void>((resolve, reject) => {
+        if (document.querySelector(`script[src="${data.fiuuScriptUrl}"]`)) { resolve(); return; }
+        const s = document.createElement('script');
+        s.src = data.fiuuScriptUrl;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('Failed to load Fiuu script'));
+        document.head.appendChild(s);
+      });
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      for (const [k, v] of Object.entries(data.fiuuAttrs as Record<string, string>)) {
+        btn.setAttribute(k, v);
       }
-      document.body.appendChild(form);
-      form.submit();
+      btn.style.display = 'none';
+      document.body.appendChild(btn);
+      btn.click();
     } catch {
       setError('Network error. Please try again.');
       setLoading(false);
