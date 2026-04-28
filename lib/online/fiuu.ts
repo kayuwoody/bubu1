@@ -8,20 +8,30 @@ export function verifyFiuuCallback(body: Record<string, string>): boolean {
   const secretKey = process.env.FIUU_SECRET_KEY;
   const verifyKey = process.env.FIUU_VERIFY_KEY;
   if (!secretKey) throw new Error('FIUU_SECRET_KEY not set');
+
+  // Set FIUU_SKIP_VERIFY=true in Vercel for sandbox testing
+  if (process.env.FIUU_SKIP_VERIFY === 'true') {
+    console.warn('[fiuu/verify] signature check SKIPPED (FIUU_SKIP_VERIFY=true)');
+    return true;
+  }
+
   const { tranID, orderID, status, domain, amount, currency, paydate, skey } = body;
   const base = `${tranID}${orderID}${status}${domain}${amount}${currency}${paydate}`;
 
-  // Try all known Fiuu formula variants to identify the correct one
-  const variants: Record<string, string> = {
-    'md5(md5(base+secretKey))':        md5(md5(base + secretKey)),
-    'md5(base+md5(secretKey))':        md5(base + md5(secretKey)),
-    'md5(md5(base+verifyKey))':        md5(md5(base + (verifyKey ?? ''))),
-    'md5(base+md5(verifyKey))':        md5(base + md5(verifyKey ?? '')),
-  };
-
   const mask = (k: string) => k ? `${k.slice(0,4)}...${k.slice(-4)} (len ${k.length})` : 'MISSING';
   console.log('[fiuu/verify] secretKey:', mask(secretKey), '| verifyKey:', mask(verifyKey ?? ''));
+  console.log('[fiuu/verify] base:', base);
   console.log('[fiuu/verify] skey from Fiuu:', skey);
+
+  const variants: Record<string, string> = {
+    'md5(md5(base+secretKey))': md5(md5(base + secretKey)),
+    'md5(base+md5(secretKey))': md5(base + md5(secretKey)),
+    'md5(base+secretKey)':      md5(base + secretKey),
+    'md5(md5(base+verifyKey))': md5(md5(base + (verifyKey ?? ''))),
+    'md5(base+md5(verifyKey))': md5(base + md5(verifyKey ?? '')),
+    'md5(base+verifyKey)':      md5(base + (verifyKey ?? '')),
+  };
+
   for (const [label, computed] of Object.entries(variants)) {
     console.log(`[fiuu/verify] ${label} =`, computed, computed === skey ? '✓ MATCH' : '');
   }
