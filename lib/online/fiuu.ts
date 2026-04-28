@@ -73,5 +73,5 @@ export function buildFiuuRedirectUrl(opts: {
   // Omit channel from path to show Fiuu's hosted payment page with all methods.
   // Pass a specific channel string (e.g. 'credit', 'TNG-EWALLET') to go direct.
   const channelPath = opts.channel ? `/${opts.channel}` : '';
-  return `${fiuuBase}/RMS/pay/${merchantId}${channelPath}?${params.toString()}`;
+  return `${fiuuBase}/RMS/pay/${merchantId}${channelPath}/?${params.toString()}`;
 }
