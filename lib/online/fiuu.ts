@@ -59,8 +59,8 @@ export function buildFiuuRedirectUrl(opts: {
   const currency  = opts.currency ?? 'MYR';
   const method    = opts.paymentMethod ?? 'ALL';
 
-  // vcode = md5(orderID + amount + currency + verifyKey)
-  const vcode = md5(opts.sessionId + amountStr + currency + verifyKey);
+  // vcode = md5(amount + merchantID + orderID + verifyKey)
+  const vcode = md5(amountStr + merchantId + opts.sessionId + verifyKey);
 
   const params = new URLSearchParams({
     orderid:   opts.sessionId,
