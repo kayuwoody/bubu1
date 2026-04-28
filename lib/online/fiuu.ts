@@ -79,7 +79,7 @@ export function buildFiuuPaymentData(opts: {
 
   const params: Record<string, string> = {
     mpsmerchantid: merchantId,
-    mpschannel:    opts.channel ?? '',
+    mpschannel:    opts.channel ?? 'credit',
     mpsamount:     amountStr,
     mpsorderid:    opts.sessionId,
     mpsbill_name:  opts.customerName  ?? '',
