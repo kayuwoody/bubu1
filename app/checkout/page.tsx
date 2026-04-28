@@ -75,6 +75,16 @@ function CheckoutContent() {
       if (!res.ok) { setError(data.error ?? 'Checkout failed.'); setLoading(false); return; }
       localStorage.setItem('co_session', data.sessionId);
 
+      // Fiuu Seamless requires jQuery
+      await new Promise<void>((resolve, reject) => {
+        if ((window as any).jQuery) { resolve(); return; }
+        const s = document.createElement('script');
+        s.src = 'https://code.jquery.com/jquery-3.7.1.min.js';
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('Failed to load jQuery'));
+        document.head.appendChild(s);
+      });
+
       // Load Fiuu Seamless JS, then trigger the payment button
       await new Promise<void>((resolve, reject) => {
         if (document.querySelector(`script[src="${data.fiuuScriptUrl}"]`)) { resolve(); return; }
