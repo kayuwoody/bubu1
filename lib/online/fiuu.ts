@@ -86,7 +86,7 @@ export function buildFiuuPaymentData(opts: {
     vcode,
     returnurl:    `${opts.baseUrl}/return`,
     bill_name:    opts.customerName  ?? '',
-    bill_email:   opts.customerEmail ?? '',
+    bill_email:   opts.customerEmail || 'noreply@coffeeoasis.my',
     bill_mobile:  opts.customerPhone ?? '',
     bill_desc:    'Coffee Oasis Order',
   };
