@@ -9,7 +9,10 @@ export function verifyFiuuCallback(body: Record<string, string>): boolean {
   if (!secretKey) throw new Error('FIUU_SECRET_KEY not set');
   const { tranID, orderID, status, domain, amount, currency, paydate, skey } = body;
   const raw = `${tranID}${orderID}${status}${domain}${amount}${currency}${paydate}${secretKey}`;
-  return md5(md5(raw)) === skey;
+  const computed = md5(md5(raw));
+  console.log('[fiuu/verify] inputs:', { tranID, orderID, status, domain, amount, currency, paydate });
+  console.log('[fiuu/verify] computed:', computed, '| expected:', skey, '| match:', computed === skey);
+  return computed === skey;
 }
 
 export function isFiuuSuccess(status: string) {
