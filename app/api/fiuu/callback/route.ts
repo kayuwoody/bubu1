@@ -21,9 +21,11 @@ export async function POST(req: Request) {
   console.log('[fiuu/callback] body:', JSON.stringify(body));
 
   // Normalise for required-field check (verifyFiuuCallback re-normalises internally)
-  const tranID  = body.tranID  ?? body.TranID  ?? '';
-  const orderID = body.orderID ?? body.OrderID ?? body.orderid ?? '';
-  const status  = body.status  ?? body.Status  ?? body.StatCode ?? '';
+  const tranID   = body.tranID   ?? body.TranID   ?? '';
+  const orderID  = body.orderID  ?? body.OrderID  ?? body.orderid  ?? '';
+  const status   = body.status   ?? body.Status   ?? body.StatCode ?? '';
+  const amount   = body.amount   ?? body.Amount   ?? '';
+  const currency = body.currency ?? body.Currency ?? 'MYR';
 
   if (!tranID || !orderID || !status) {
     console.error('[fiuu/callback] missing required fields — tranID:', tranID, 'orderID:', orderID, 'status:', status);
