@@ -95,6 +95,16 @@ function CheckoutContent() {
         document.head.appendChild(s);
       });
 
+      // Initialise FiuuSeamless with the verify endpoint
+      const verifyUrl = data.fiuuScriptUrl.replace(/\/RMS\/API\/.*$/, '/RMS/verify');
+      const FiuuSeamlessCtor = (window as any).FiuuSeamless;
+      if (FiuuSeamlessCtor) {
+        new FiuuSeamlessCtor({
+          merchantId: data.fiuuAttrs['data-mpsmerchantid'],
+          verifyUrl,
+        });
+      }
+
       const btn = document.createElement('button');
       btn.type = 'button';
       for (const [k, v] of Object.entries(data.fiuuAttrs as Record<string, string>)) {
