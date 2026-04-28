@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { CartLine } from '@/lib/types';
 import MENU_DATA from '@/lib/menu-data';
@@ -34,20 +34,12 @@ function CheckoutContent() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const formRef = useRef<HTMLFormElement>(null);
-  const [fiuuData, setFiuuData] = useState<{ url: string; params: Record<string, string> } | null>(null);
-
   useEffect(() => {
     try {
       const raw = localStorage.getItem('co_pending');
       if (raw) setPending(JSON.parse(raw));
     } catch { /* ignore */ }
   }, []);
-
-  // Auto-submit the hidden Fiuu form once params are set
-  useEffect(() => {
-    if (fiuuData && formRef.current) formRef.current.submit();
-  }, [fiuuData]);
 
   if (!pending) {
     return (
@@ -81,9 +73,8 @@ function CheckoutContent() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? 'Checkout failed.'); setLoading(false); return; }
-      // Store sessionId for return page
       localStorage.setItem('co_session', data.sessionId);
-      setFiuuData({ url: data.fiuuUrl, params: data.fiuuParams });
+      window.location.href = data.redirectUrl;
     } catch {
       setError('Network error. Please try again.');
       setLoading(false);
@@ -169,14 +160,6 @@ function CheckoutContent() {
         </form>
       </div>
 
-      {/* Hidden Fiuu form — auto-submitted once fiuuData is set */}
-      {fiuuData && (
-        <form ref={formRef} method="POST" action={fiuuData.url} style={{ display: 'none' }}>
-          {Object.entries(fiuuData.params).map(([k, v]) => (
-            <input key={k} type="hidden" name={k} value={v} />
-          ))}
-        </form>
-      )}
     </div>
   );
 }
