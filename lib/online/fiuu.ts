@@ -78,16 +78,20 @@ export function buildFiuuPaymentData(opts: {
   const url = `${fiuuBase}/RMS/pay/${merchantId}${channelPath}/`;
 
   const params: Record<string, string> = {
-    orderid:     opts.sessionId,
-    amount:      amountStr,
-    currency,
-    country:     'MY',
-    vcode,
-    returnurl:   `${opts.baseUrl}/return`,
-    bill_name:   opts.customerName  ?? '',
-    bill_email:  opts.customerEmail || 'noreply@coffeeoasis.my',
-    bill_mobile: opts.customerPhone ?? '',
-    bill_desc:   'Coffee Oasis Order',
+    mpsmerchantid: merchantId,
+    mpschannel:    opts.channel ?? '',
+    mpsamount:     amountStr,
+    mpsorderid:    opts.sessionId,
+    mpsbill_name:  opts.customerName  ?? '',
+    mpsbill_email: opts.customerEmail || 'noreply@coffeeoasis.my',
+    mpsbill_mobile: opts.customerPhone ?? '',
+    mpsbill_desc:  'Coffee Oasis Order',
+    mpscurrency:   currency,
+    mpscountry:    'MY',
+    mpsvcode:      vcode,
+    mpsreturnurl:  `${opts.baseUrl}/return`,
+    mpscallbackurl: `${opts.baseUrl}/api/fiuu/callback`,
+    mpsnotifyurl:  `${opts.baseUrl}/api/fiuu/callback`,
   };
 
   return { url, params };
