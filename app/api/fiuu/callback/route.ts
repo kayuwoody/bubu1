@@ -8,23 +8,35 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   let body: Record<string, string>;
+  let rawText = '';
   try {
-    const text = await req.text();
-    body = Object.fromEntries(new URLSearchParams(text));
+    rawText = await req.text();
+    body = Object.fromEntries(new URLSearchParams(rawText));
   } catch {
+    console.error('[fiuu/callback] body parse failed, raw:', rawText);
     return new Response('FAILED', { status: 400 });
   }
 
-  const { tranID, orderID, status, amount, currency } = body;
+  console.log('[fiuu/callback] received fields:', JSON.stringify(Object.keys(body)));
+  console.log('[fiuu/callback] body:', JSON.stringify(body));
+
+  // Fiuu field names vary by integration version — normalise both cases
+  const tranID   = body.tranID   ?? body.TranID   ?? '';
+  const orderID  = body.orderID  ?? body.OrderID  ?? '';
+  const status   = body.status   ?? body.Status   ?? body.StatCode ?? '';
+  const amount   = body.amount   ?? body.Amount   ?? '';
+  const currency = body.currency ?? body.Currency ?? 'MYR';
 
   if (!tranID || !orderID || !status) {
+    console.error('[fiuu/callback] missing required fields — tranID:', tranID, 'orderID:', orderID, 'status:', status);
     return new Response('FAILED', { status: 400 });
   }
 
-  // Verify Fiuu callback signature
+  // Verify Fiuu callback signature (use normalised body)
+  const normBody = { ...body, tranID, orderID, status, amount, currency };
   let valid = false;
   try {
-    valid = verifyFiuuCallback(body);
+    valid = verifyFiuuCallback(normBody);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'sig error';
     console.error('[fiuu/callback] verify error:', msg);
