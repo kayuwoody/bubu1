@@ -19,6 +19,8 @@ export function verifyFiuuCallback(body: Record<string, string>): boolean {
     'md5(base+md5(verifyKey))':        md5(base + md5(verifyKey ?? '')),
   };
 
+  const mask = (k: string) => k ? `${k.slice(0,4)}...${k.slice(-4)} (len ${k.length})` : 'MISSING';
+  console.log('[fiuu/verify] secretKey:', mask(secretKey), '| verifyKey:', mask(verifyKey ?? ''));
   console.log('[fiuu/verify] skey from Fiuu:', skey);
   for (const [label, computed] of Object.entries(variants)) {
     console.log(`[fiuu/verify] ${label} =`, computed, computed === skey ? '✓ MATCH' : '');
