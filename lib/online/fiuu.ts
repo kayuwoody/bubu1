@@ -71,10 +71,11 @@ export function buildFiuuPaymentData(opts: {
   // vcode = md5(amount + merchantID + orderID + verifyKey)
   const vcode = md5(amountStr + merchantId + opts.sessionId + verifyKey);
 
-  // Fiuu seamless integration requires a specific channel in the URL path.
-  // Defaults to 'credit' (Visa/Mastercard). Pass a channel code to override.
-  const channel = opts.channel ?? 'credit';
-  const url = `${fiuuBase}/RMS/pay/${merchantId}/${channel}`;
+  // Omitting channel shows Fiuu's hosted channel selection page.
+  // Pass a specific channel code (e.g. 'credit', 'TNG-EWALLET') to skip selection.
+  const channelPath = opts.channel ? `/${opts.channel}` : '';
+  // Trailing slash required when using POST method (per Fiuu docs)
+  const url = `${fiuuBase}/RMS/pay/${merchantId}${channelPath}/`;
 
   const params: Record<string, string> = {
     merchant_id:  merchantId,
