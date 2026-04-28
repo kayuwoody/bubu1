@@ -82,6 +82,7 @@ export function buildFiuuPaymentData(opts: {
     orderid:      opts.sessionId,
     amount:       amountStr,
     currency,
+    country:      'MY',
     vcode,
     returnurl:    `${opts.baseUrl}/return`,
     bill_name:    opts.customerName  ?? '',
