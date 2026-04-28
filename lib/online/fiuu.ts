@@ -6,13 +6,25 @@ function md5(v: string) {
 
 export function verifyFiuuCallback(body: Record<string, string>): boolean {
   const secretKey = process.env.FIUU_SECRET_KEY;
+  const verifyKey = process.env.FIUU_VERIFY_KEY;
   if (!secretKey) throw new Error('FIUU_SECRET_KEY not set');
   const { tranID, orderID, status, domain, amount, currency, paydate, skey } = body;
-  const raw = `${tranID}${orderID}${status}${domain}${amount}${currency}${paydate}${secretKey}`;
-  const computed = md5(md5(raw));
-  console.log('[fiuu/verify] inputs:', { tranID, orderID, status, domain, amount, currency, paydate });
-  console.log('[fiuu/verify] computed:', computed, '| expected:', skey, '| match:', computed === skey);
-  return computed === skey;
+  const base = `${tranID}${orderID}${status}${domain}${amount}${currency}${paydate}`;
+
+  // Try all known Fiuu formula variants to identify the correct one
+  const variants: Record<string, string> = {
+    'md5(md5(base+secretKey))':        md5(md5(base + secretKey)),
+    'md5(base+md5(secretKey))':        md5(base + md5(secretKey)),
+    'md5(md5(base+verifyKey))':        md5(md5(base + (verifyKey ?? ''))),
+    'md5(base+md5(verifyKey))':        md5(base + md5(verifyKey ?? '')),
+  };
+
+  console.log('[fiuu/verify] skey from Fiuu:', skey);
+  for (const [label, computed] of Object.entries(variants)) {
+    console.log(`[fiuu/verify] ${label} =`, computed, computed === skey ? '✓ MATCH' : '');
+  }
+
+  return Object.values(variants).some(v => v === skey);
 }
 
 export function isFiuuSuccess(status: string) {
