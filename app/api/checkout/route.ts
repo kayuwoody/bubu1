@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/online/supabase';
-import { buildFiuuRedirectUrl } from '@/lib/online/fiuu';
+import { buildFiuuPaymentData } from '@/lib/online/fiuu';
 import type { CartLine } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -67,17 +67,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 });
   }
 
-  let redirectUrl: string;
+  let fiuu: { url: string; params: Record<string, string> };
   try {
-    redirectUrl = buildFiuuRedirectUrl({
-      sessionId: session.id,
-      amount:    total,
-      baseUrl:   getBaseUrl(),
+    fiuu = buildFiuuPaymentData({
+      sessionId:     session.id,
+      amount:        total,
+      baseUrl:       getBaseUrl(),
+      customerName:  name,
+      customerEmail: email ?? '',
+      customerPhone: phone,
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error';
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 
-  return NextResponse.json({ sessionId: session.id, redirectUrl });
+  return NextResponse.json({ sessionId: session.id, fiuuUrl: fiuu.url, fiuuParams: fiuu.params });
 }

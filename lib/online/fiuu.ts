@@ -43,13 +43,23 @@ export function isFiuuSuccess(status: string) {
   return status === '00';
 }
 
-export function buildFiuuRedirectUrl(opts: {
-  sessionId: string;
-  amount: number;
-  currency?: string;
-  channel?: string;
-  baseUrl: string;
-}): string {
+export interface FiuuPaymentData {
+  url:    string;
+  params: Record<string, string>;
+}
+
+// Returns a URL + POST params for Fiuu's hosted payment page (shows all methods).
+// The checkout page must auto-submit these as a hidden POST form.
+export function buildFiuuPaymentData(opts: {
+  sessionId:     string;
+  amount:        number;
+  currency?:     string;
+  channel?:      string;
+  baseUrl:       string;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+}): FiuuPaymentData {
   const merchantId = process.env.FIUU_MERCHANT_ID;
   const verifyKey  = process.env.FIUU_VERIFY_KEY;
   const fiuuBase   = process.env.FIUU_BASE_URL ?? 'https://payment.fiuu.com';
@@ -61,17 +71,21 @@ export function buildFiuuRedirectUrl(opts: {
   // vcode = md5(amount + merchantID + orderID + verifyKey)
   const vcode = md5(amountStr + merchantId + opts.sessionId + verifyKey);
 
-  const params = new URLSearchParams({
-    orderid:   opts.sessionId,
-    amount:    amountStr,
+  const channelPath = opts.channel ? `/${opts.channel}` : '';
+  const url = `${fiuuBase}/RMS/pay/${merchantId}${channelPath}/`;
+
+  const params: Record<string, string> = {
+    merchant_id:  merchantId,
+    orderid:      opts.sessionId,
+    amount:       amountStr,
     currency,
     vcode,
-    returnurl: `${opts.baseUrl}/return`,
-    notifyurl: `${opts.baseUrl}/api/fiuu/callback`,
-  });
+    returnurl:    `${opts.baseUrl}/return`,
+    bill_name:    opts.customerName  ?? '',
+    bill_email:   opts.customerEmail ?? '',
+    bill_mobile:  opts.customerPhone ?? '',
+    bill_desc:    'Coffee Oasis Order',
+  };
 
-  // Omit channel from path to show Fiuu's hosted payment page with all methods.
-  // Pass a specific channel string (e.g. 'credit', 'TNG-EWALLET') to go direct.
-  const channelPath = opts.channel ? `/${opts.channel}` : '';
-  return `${fiuuBase}/RMS/pay/${merchantId}${channelPath}/?${params.toString()}`;
+  return { url, params };
 }

@@ -74,7 +74,19 @@ function CheckoutContent() {
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? 'Checkout failed.'); setLoading(false); return; }
       localStorage.setItem('co_session', data.sessionId);
-      window.location.href = data.redirectUrl;
+      // Fiuu hosted payment page requires a POST form submission
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = data.fiuuUrl;
+      for (const [k, v] of Object.entries(data.fiuuParams as Record<string, string>)) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = k;
+        input.value = v;
+        form.appendChild(input);
+      }
+      document.body.appendChild(form);
+      form.submit();
     } catch {
       setError('Network error. Please try again.');
       setLoading(false);
