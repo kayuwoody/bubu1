@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 
   // Fiuu field names vary by integration version — normalise both cases
   const tranID   = body.tranID   ?? body.TranID   ?? '';
-  const orderID  = body.orderID  ?? body.OrderID  ?? '';
+  const orderID  = body.orderID  ?? body.OrderID  ?? body.orderid  ?? '';
   const status   = body.status   ?? body.Status   ?? body.StatCode ?? '';
   const amount   = body.amount   ?? body.Amount   ?? '';
   const currency = body.currency ?? body.Currency ?? 'MYR';
@@ -32,11 +32,11 @@ export async function POST(req: Request) {
     return new Response('FAILED', { status: 400 });
   }
 
-  // Verify Fiuu callback signature (use normalised body)
-  const normBody = { ...body, tranID, orderID, status, amount, currency };
+  // Verify using raw body keys so the hash matches exactly what Fiuu signed
+  const verifyBody = { ...body, tranID, orderID, status, amount, currency };
   let valid = false;
   try {
-    valid = verifyFiuuCallback(normBody);
+    valid = verifyFiuuCallback(verifyBody);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'sig error';
     console.error('[fiuu/callback] verify error:', msg);
