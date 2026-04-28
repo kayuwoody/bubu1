@@ -47,7 +47,7 @@ export function buildFiuuRedirectUrl(opts: {
   sessionId: string;
   amount: number;
   currency?: string;
-  paymentMethod?: string;
+  channel?: string;
   baseUrl: string;
 }): string {
   const merchantId = process.env.FIUU_MERCHANT_ID;
@@ -57,7 +57,6 @@ export function buildFiuuRedirectUrl(opts: {
 
   const amountStr = opts.amount.toFixed(2);
   const currency  = opts.currency ?? 'MYR';
-  const method    = opts.paymentMethod ?? 'ALL';
 
   // vcode = md5(amount + merchantID + orderID + verifyKey)
   const vcode = md5(amountStr + merchantId + opts.sessionId + verifyKey);
@@ -71,5 +70,8 @@ export function buildFiuuRedirectUrl(opts: {
     notifyurl: `${opts.baseUrl}/api/fiuu/callback`,
   });
 
-  return `${fiuuBase}/RMS/pay/${merchantId}/${method}?${params.toString()}`;
+  // Omit channel from path to show Fiuu's hosted payment page with all methods.
+  // Pass a specific channel string (e.g. 'credit', 'TNG-EWALLET') to go direct.
+  const channelPath = opts.channel ? `/${opts.channel}` : '';
+  return `${fiuuBase}/RMS/pay/${merchantId}${channelPath}?${params.toString()}`;
 }
