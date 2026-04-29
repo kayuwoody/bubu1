@@ -68,9 +68,11 @@ export function buildFiuuSeamlessAttrs(opts: {
 
   const amountStr = opts.amount.toFixed(2);
   const currency  = opts.currency ?? 'MYR';
+  // Strip hyphens — Fiuu normalises orderID before vcode verification
+  const orderId   = opts.sessionId.replace(/-/g, '');
 
-  // vcode = md5(amount + merchantID + orderID + verifyKey)
-  const vcode = md5(amountStr + merchantId + opts.sessionId + verifyKey);
+  // vcode = md5(amount + merchantID + orderID + verifyKey)  — use hyphen-free orderId
+  const vcode = md5(amountStr + merchantId + orderId + verifyKey);
 
   // Sandbox uses a different filename + cache-bust timestamp; production uses the versioned file
   const isSandbox = fiuuBase.includes('sandbox');
@@ -84,7 +86,7 @@ export function buildFiuuSeamlessAttrs(opts: {
     'data-mpsmerchantid':   merchantId,
     'data-mpschannel':      opts.channel ?? '',
     'data-mpsamount':       amountStr,
-    'data-mpsorderid':      opts.sessionId,
+    'data-mpsorderid':      orderId,
     'data-mpsbillname':     opts.customerName  ?? '',
     'data-mpsbillemail':    opts.customerEmail || 'noreply@coffeeoasis.my',
     'data-mpsbillmobile':   opts.customerPhone ?? '',

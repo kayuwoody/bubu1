@@ -22,10 +22,15 @@ export async function POST(req: Request) {
 
   // Normalise for required-field check (verifyFiuuCallback re-normalises internally)
   const tranID   = body.tranID   ?? body.TranID   ?? '';
-  const orderID  = body.orderID  ?? body.OrderID  ?? body.orderid  ?? '';
+  const rawOrder = body.orderID  ?? body.OrderID  ?? body.orderid  ?? '';
   const status   = body.status   ?? body.Status   ?? body.StatCode ?? '';
   const amount   = body.amount   ?? body.Amount   ?? '';
   const currency = body.currency ?? body.Currency ?? 'MYR';
+
+  // Fiuu receives hyphen-free UUID; reconstruct the standard UUID format for Supabase
+  const orderID = rawOrder.length === 32 && /^[0-9a-f]+$/i.test(rawOrder)
+    ? `${rawOrder.slice(0,8)}-${rawOrder.slice(8,12)}-${rawOrder.slice(12,16)}-${rawOrder.slice(16,20)}-${rawOrder.slice(20)}`
+    : rawOrder;
 
   if (!tranID || !orderID || !status) {
     console.error('[fiuu/callback] missing required fields — tranID:', tranID, 'orderID:', orderID, 'status:', status);
