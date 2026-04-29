@@ -73,7 +73,7 @@ export function buildFiuuHostedForm(opts: {
   const vcode = md5(amountStr + merchantId + orderId + verifyKey);
   console.log('[fiuu/build] amount:', amountStr, 'merchantId:', merchantId, 'orderId:', orderId, 'vcode:', vcode);
 
-  const action = `${fiuuBase}/RMS/pay/${merchantId}/${opts.channel}`;
+  const action = `${fiuuBase}/RMS/pay/${merchantId}`;
 
   const fields: Record<string, string> = {
     merchant_id:  merchantId,
