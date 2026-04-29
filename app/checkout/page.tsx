@@ -99,23 +99,55 @@ function CheckoutContent() {
       // Load jQuery (required by Fiuu Seamless SDK)
       await loadScript('https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js');
 
-      // Before loading the SDK, intercept all its jQuery AJAX calls to Fiuu's domain
-      // and route them through our server-side proxy (avoids CORS on the verify call).
+      // Intercept ALL network calls to Fiuu's domain before loading the SDK,
+      // routing them through our server-side proxy to avoid CORS on the verify call.
+      // Covers jQuery AJAX, native XHR, and fetch — whichever the SDK uses.
       const FIUU_RE = /sandbox-payment\.fiuu\.com|pay\.fiuu\.com|molpay\.com|razer\.com/;
+      const proxyCall = (url: string, method: string, body: string) =>
+        fetch('/api/fiuu/proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, method, body }),
+        });
+
+      // 1. jQuery ajaxPrefilter
       (window as any).jQuery.ajaxPrefilter((opts: any) => {
         if (opts.url && FIUU_RE.test(opts.url)) {
-          console.log('[mps-proxy] intercepting:', opts.type, opts.url);
-          const origUrl    = opts.url;
-          const origMethod = (opts.type || 'GET').toUpperCase();
-          const origBody   = typeof opts.data === 'string' ? opts.data : '';
-          opts.url         = '/api/fiuu/proxy';
-          opts.type        = 'POST';
-          opts.contentType = 'application/json';
-          opts.data        = JSON.stringify({ url: origUrl, method: origMethod, body: origBody });
+          console.log('[mps-proxy] jQuery intercepted:', opts.type, opts.url);
+          const u = opts.url, m = (opts.type || 'GET').toUpperCase(), b = typeof opts.data === 'string' ? opts.data : '';
+          opts.url = '/api/fiuu/proxy'; opts.type = 'POST'; opts.contentType = 'application/json';
+          opts.data = JSON.stringify({ url: u, method: m, body: b });
         }
       });
 
-      // Load Fiuu Seamless SDK — its verify AJAX call will now go through our proxy
+      // 2. Native XHR
+      const _XHR = (window as any).XMLHttpRequest;
+      (window as any).XMLHttpRequest = function () {
+        const xhr = new _XHR();
+        let _p = false, _pu = '', _pm = '';
+        const _open = xhr.open.bind(xhr), _setH = xhr.setRequestHeader.bind(xhr), _send = xhr.send.bind(xhr);
+        xhr.open = (m: string, u: string, ...a: any[]) => {
+          if (FIUU_RE.test(u)) { _p = true; _pu = u; _pm = m; console.log('[mps-proxy] XHR intercepted:', m, u); _open('POST', '/api/fiuu/proxy', ...a); }
+          else _open(m, u, ...a);
+        };
+        xhr.setRequestHeader = (h: string, v: string) => { if (!_p) _setH(h, v); };
+        xhr.send = (body?: any) => {
+          if (_p) { _setH('Content-Type', 'application/json'); _send(JSON.stringify({ url: _pu, method: _pm, body: typeof body === 'string' ? body : '' })); }
+          else _send(body);
+        };
+        return xhr;
+      };
+      (window as any).XMLHttpRequest.prototype = _XHR.prototype;
+
+      // 3. Fetch API
+      const _fetch = window.fetch.bind(window);
+      window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+        const u = typeof input === 'string' ? input : (input instanceof URL ? input.href : (input as Request).url);
+        if (FIUU_RE.test(u)) { console.log('[mps-proxy] fetch intercepted:', u); return proxyCall(u, init?.method || 'GET', (init?.body || '').toString()); }
+        return _fetch(input, init);
+      };
+
+      // Load Fiuu Seamless SDK — all its network calls now go through our proxy
       await loadScript(data.scriptUrl);
 
       // Mirror the demo's role="molpayseamless" form pattern exactly:
