@@ -102,10 +102,24 @@ function CheckoutContent() {
       // Load Fiuu Seamless SDK (version-pinned, correct /MOLPay/ path)
       await loadScript(data.scriptUrl);
 
-      // Trigger payment using the jQuery plugin (Method 2 from Fiuu docs).
-      // The SDK reads mpsParams and takes over the payment flow.
+      // Mirror the demo's role="molpayseamless" form pattern exactly:
+      // create a hidden form with all mps params, point it at our passthrough
+      // endpoint, and trigger submit — the SDK intercepts, POSTs, reads JSON, pays.
       const jQuery = (window as any).jQuery;
-      jQuery('#mps-trigger').MOLPaySeamless(data.mpsParams);
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/api/checkout/mps';
+      form.setAttribute('role', 'molpayseamless');
+      form.style.display = 'none';
+      for (const [k, v] of Object.entries(data.mpsParams as Record<string, string>)) {
+        const inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = k;
+        inp.value = String(v);
+        form.appendChild(inp);
+      }
+      document.body.appendChild(form);
+      jQuery(form).submit();
 
       // loading stays true — SDK is now driving the payment UI
     } catch (err) {
@@ -121,9 +135,6 @@ function CheckoutContent() {
 
   return (
     <div style={{ minHeight: '100vh', background: BG, fontFamily: "'Nunito', system-ui", padding: '24px 16px 48px' }}>
-      {/* Hidden trigger element for the Fiuu Seamless jQuery plugin */}
-      <div id="mps-trigger" style={{ display: 'none' }} />
-
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
         <a href="/" style={{ color: hex(INK, .55), fontSize: 14, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24 }}>← Back to menu</a>
 
