@@ -87,7 +87,8 @@ function CheckoutContent() {
 
       // Load Fiuu Seamless JS, then trigger the payment button
       await new Promise<void>((resolve, reject) => {
-        if (document.querySelector(`script[src="${data.fiuuScriptUrl}"]`)) { resolve(); return; }
+        const base = data.fiuuScriptUrl.split('?')[0];
+        if (document.querySelector(`script[src^="${base}"]`)) { resolve(); return; }
         const s = document.createElement('script');
         s.src = data.fiuuScriptUrl;
         s.onload = () => resolve();

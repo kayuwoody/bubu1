@@ -71,7 +71,12 @@ export function buildFiuuSeamlessAttrs(opts: {
   // vcode = md5(amount + merchantID + orderID + verifyKey)
   const vcode = md5(amountStr + merchantId + opts.sessionId + verifyKey);
 
-  const scriptUrl = `${fiuuBase}/RMS/API/seamless/3.28/js/MOLPay_seamless.deco.js`;
+  // Sandbox uses a different filename + cache-bust timestamp; production uses the versioned file
+  const isSandbox = fiuuBase.includes('sandbox');
+  const cacheBust = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
+  const scriptUrl = isSandbox
+    ? `${fiuuBase}/RMS/API/seamless/latest/js/MOLPay_seamless_sandbox.deco.js?v=${cacheBust}`
+    : `${fiuuBase}/RMS/API/seamless/latest/js/MOLPay_seamless.deco.js`;
 
   const attrs: Record<string, string> = {
     'data-toggle':          'molpayseamless',
