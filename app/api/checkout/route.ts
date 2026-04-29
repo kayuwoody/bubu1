@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/online/supabase';
-import { buildFiuuHostedForm } from '@/lib/online/fiuu';
+import { buildFiuuSeamlessParams } from '@/lib/online/fiuu';
 import type { CartLine } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -72,9 +72,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 });
   }
 
-  let fiuu: { action: string; fields: Record<string, string> };
+  let fiuu: { scriptUrl: string; mpsParams: Record<string, string | boolean | number> };
   try {
-    fiuu = buildFiuuHostedForm({
+    fiuu = buildFiuuSeamlessParams({
       sessionId:     session.id,
       amount:        total,
       baseUrl:       getBaseUrl(),
@@ -88,5 +88,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 
-  return NextResponse.json({ sessionId: session.id, fiuuAction: fiuu.action, fiuuFields: fiuu.fields });
+  return NextResponse.json({
+    sessionId: session.id,
+    scriptUrl: fiuu.scriptUrl,
+    mpsParams: fiuu.mpsParams,
+  });
 }

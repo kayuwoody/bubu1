@@ -8,13 +8,11 @@ export function verifyFiuuCallback(body: Record<string, string>): boolean {
   const secretKey = process.env.FIUU_SECRET_KEY;
   if (!secretKey) throw new Error('FIUU_SECRET_KEY not set');
 
-  // Set FIUU_SKIP_VERIFY=true in Vercel for sandbox testing
   if (process.env.FIUU_SKIP_VERIFY === 'true') {
     console.warn('[fiuu/verify] signature check SKIPPED (FIUU_SKIP_VERIFY=true)');
     return true;
   }
 
-  // Fiuu sends orderid lowercase; use whichever key has a value
   const tranID   = body.tranID   ?? body.TranID  ?? '';
   const orderid  = body.orderid  ?? body.orderID ?? body.OrderID ?? '';
   const status   = body.status   ?? body.Status  ?? body.StatCode ?? '';
@@ -30,8 +28,7 @@ export function verifyFiuuCallback(body: Record<string, string>): boolean {
     'domain:', domain, 'amount:', amount, 'currency:', currency, 'paydate:', paydate);
   console.log('[fiuu/verify] skey from Fiuu:', skey);
 
-  // Confirmed formula: md5(md5(tranID+orderid+status+domain+amount+currency+paydate+secretKey))
-  const raw  = `${tranID}${orderid}${status}${domain}${amount}${currency}${paydate}${secretKey}`;
+  const raw     = `${tranID}${orderid}${status}${domain}${amount}${currency}${paydate}${secretKey}`;
   const computed = md5(md5(raw));
   console.log('[fiuu/verify] computed:', computed, computed === skey ? '✓ MATCH' : '✗ MISMATCH');
 
@@ -42,15 +39,14 @@ export function isFiuuSuccess(status: string) {
   return status === '00';
 }
 
-export interface FiuuHostedForm {
-  action: string;
-  fields: Record<string, string>;
+export interface FiuuSeamlessResult {
+  scriptUrl: string;
+  // JSON body to return from the /api/checkout endpoint — the SDK reads this
+  // after POSTing to the merchant's process_order endpoint (role="molpayseamless" pattern)
+  mpsParams: Record<string, string | boolean | number>;
 }
 
-// Builds action URL + mps-prefixed form fields for a direct POST to Fiuu's hosted payment page.
-// Uses mps-prefixed param names (same as Seamless SDK) but posts the form directly — no SDK,
-// no jQuery, no mpslinkkey required.
-export function buildFiuuHostedForm(opts: {
+export function buildFiuuSeamlessParams(opts: {
   sessionId:      string;
   amount:         number;
   currency?:      string;
@@ -59,7 +55,7 @@ export function buildFiuuHostedForm(opts: {
   customerName?:  string;
   customerEmail?: string;
   customerPhone?: string;
-}): FiuuHostedForm {
+}): FiuuSeamlessResult {
   const merchantId = process.env.FIUU_MERCHANT_ID;
   const verifyKey  = process.env.FIUU_VERIFY_KEY;
   const fiuuBase   = process.env.FIUU_BASE_URL ?? 'https://pay.fiuu.com';
@@ -67,16 +63,18 @@ export function buildFiuuHostedForm(opts: {
 
   const amountStr = opts.amount.toFixed(2);
   const currency  = opts.currency ?? 'MYR';
-  // Strip hyphens — Fiuu normalises orderID before vcode verification
   const orderId   = opts.sessionId.replace(/-/g, '');
 
-  // vcode = md5(amount + merchantID + orderID + verifyKey)
   const vcode = md5(amountStr + merchantId + orderId + verifyKey);
   console.log('[fiuu/build] amount:', amountStr, 'merchantId:', merchantId, 'orderId:', orderId, 'vcode:', vcode);
 
-  const action = `${fiuuBase}/RMS/pay/${merchantId}`;
+  const isSandbox = fiuuBase.includes('sandbox');
+  const scriptUrl = isSandbox
+    ? `${fiuuBase}/MOLPay/API/seamless/3.28/js/MOLPay_seamless_sandbox.deco.js`
+    : `${fiuuBase}/MOLPay/API/seamless/3.28/js/MOLPay_seamless.deco.js`;
 
-  const fields: Record<string, string> = {
+  const mpsParams = {
+    status:         true,
     mpsmerchantid:  merchantId,
     mpschannel:     opts.channel,
     mpsamount:      amountStr,
@@ -85,14 +83,16 @@ export function buildFiuuHostedForm(opts: {
     mpsbill_email:  opts.customerEmail || 'noreply@coffeeoasis.my',
     mpsbill_mobile: opts.customerPhone ?? '',
     mpsbill_desc:   'Coffee Oasis Order',
-    mpscurrency:    currency,
+    mpscountry:     'MY',
     mpsvcode:       vcode,
+    mpscurrency:    currency,
+    mpslangcode:    'en',
+    mpscancelurl:   `${opts.baseUrl}/checkout?cancelled=1`,
     mpsreturnurl:   `${opts.baseUrl}/return`,
     mpscallbackurl: `${opts.baseUrl}/api/fiuu/callback`,
-    mpsnotifyurl:   `${opts.baseUrl}/api/fiuu/callback`,
-    mpslangcode:    'en',
+    mpsapiversion:  '3.28',
   };
 
-  console.log('[fiuu/build] action:', action, 'fields:', JSON.stringify(fields));
-  return { action, fields };
+  console.log('[fiuu/build] scriptUrl:', scriptUrl, 'params:', JSON.stringify(mpsParams));
+  return { scriptUrl, mpsParams };
 }

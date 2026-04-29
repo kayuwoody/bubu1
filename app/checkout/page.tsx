@@ -23,6 +23,17 @@ interface Pending {
   total:   number;
 }
 
+function loadScript(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload  = () => resolve();
+    s.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(s);
+  });
+}
+
 function CheckoutContent() {
   const searchParams = useSearchParams();
   const cancelled    = searchParams.get('cancelled') === '1';
@@ -85,22 +96,20 @@ function CheckoutContent() {
       if (!res.ok) { setError(data.error ?? 'Checkout failed.'); setLoading(false); return; }
       localStorage.setItem('co_session', data.sessionId);
 
-      // POST to Fiuu hosted payment page via a hidden form
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = data.fiuuAction;
-      for (const [k, v] of Object.entries(data.fiuuFields as Record<string, string>)) {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = k;
-        input.value = v;
-        form.appendChild(input);
-      }
-      document.body.appendChild(form);
-      form.submit();
-      // loading stays true — browser is navigating away
-    } catch {
-      setError('Network error. Please try again.');
+      // Load jQuery (required by Fiuu Seamless SDK)
+      await loadScript('https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js');
+
+      // Load Fiuu Seamless SDK (version-pinned, correct /MOLPay/ path)
+      await loadScript(data.scriptUrl);
+
+      // Trigger payment using the jQuery plugin (Method 2 from Fiuu docs).
+      // The SDK reads mpsParams and takes over the payment flow.
+      const jQuery = (window as any).jQuery;
+      jQuery('#mps-trigger').MOLPaySeamless(data.mpsParams);
+
+      // loading stays true — SDK is now driving the payment UI
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error. Please try again.');
       setLoading(false);
     }
   };
@@ -112,6 +121,9 @@ function CheckoutContent() {
 
   return (
     <div style={{ minHeight: '100vh', background: BG, fontFamily: "'Nunito', system-ui", padding: '24px 16px 48px' }}>
+      {/* Hidden trigger element for the Fiuu Seamless jQuery plugin */}
+      <div id="mps-trigger" style={{ display: 'none' }} />
+
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
         <a href="/" style={{ color: hex(INK, .55), fontSize: 14, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24 }}>← Back to menu</a>
 
@@ -124,7 +136,6 @@ function CheckoutContent() {
         <div style={{ fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 28, color: INK, marginBottom: 4 }}>Checkout</div>
         <div style={{ fontSize: 14, color: hex(INK, .6), marginBottom: 24 }}>{itemNames}</div>
 
-        {/* Order summary */}
         <div style={{ background: '#fff', borderRadius: R, border: `1.5px solid ${hex(INK, .08)}`, padding: 16, marginBottom: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 14, color: hex(INK, .65) }}>
             <span>Pickup</span>
@@ -157,7 +168,6 @@ function CheckoutContent() {
             ))}
           </div>
 
-          {/* Payment method */}
           <div style={{ marginTop: 14 }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: hex(INK, .65), marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.04em' }}>Payment Method</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -188,7 +198,7 @@ function CheckoutContent() {
               boxShadow: loading ? 'none' : `0 6px 0 ${hex(PRI, .4)}`,
             }}
           >
-            {loading ? 'Redirecting to payment…' : `Pay RM ${pending.total.toFixed(2)} →`}
+            {loading ? 'Loading payment…' : `Pay RM ${pending.total.toFixed(2)} →`}
           </button>
 
           <div style={{ textAlign: 'center', marginTop: 10, fontSize: 12, color: hex(INK, .5) }}>
