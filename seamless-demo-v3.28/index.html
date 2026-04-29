@@ -1,0 +1,490 @@
+<!DOCTYPE html
+	PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<title>Fiuu Seamless Version 3.28 : Demo</title>
+	<link rel="icon" type="image/png" href="images/Favicon-Fiuu.png">
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+	<link rel="stylesheet" href="css/bootstrap.min.css">
+	<link rel="stylesheet" type="text/css" href="css/style.css">
+
+	<!-- jQuery (necessary for Fiuu Seamless JavaScript plugins) -->
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+	<script src="https://pay.fiuu.com/MOLPay/API/seamless/3.28/js/MOLPay_seamless.deco.js"></script>
+
+	<!-- XDKs -->
+	<script src="https://pay.google.com/gp/p/js/pay.js"></script>
+	<script src="https://applepay.cdn-apple.com/jsapi/v1/apple-pay-sdk.js"></script>
+	<script src="https://sandbox-payment.fiuu.com/RMS/GooglePay/xdk_v2.js"></script>
+	<script src="https://sandbox-payment.fiuu.com/RMS/ApplePay/xdk.js"></script>
+
+	<script>
+		$(document).ready(function () {
+			$(".thb").hide();
+			$(".vnd").hide();
+
+			$('#selector').change(function () {
+				var cur = $(this).val();
+				$(".cur_span").text(cur);
+				$("#currency").val(cur);
+				$("input[name='total_amount']").val("1.01");
+				$("span.price_span").text(" 1.01");
+
+				if (cur == "MYR") {
+					$(".myr").show();
+					$(".thb").hide();
+					$(".vnd").hide();
+				}
+				else if (cur == "VND") {
+					$(".myr").hide();
+					$(".thb").hide();
+					$(".vnd").show();
+					$("input[name='total_amount']").val("25000");
+					$("span.price_span").text(" 25000");
+				}
+				else {
+					$(".thb").show();
+					$(".myr").hide();
+					$(".vnd").hide();
+				}
+			});
+
+			$('input[name=payment_options]').on('click', function () {
+				var $myForm = $(this).closest('form');
+				if ($myForm[0].checkValidity()) {
+					$myForm.trigger("submit");
+				}
+				else {
+					alert("Please fill in required field.");
+					$(":input[required]").each(function () {
+						if ($(this).val().length == 0) {
+							$(this).focus();
+							return false;
+						}
+					});
+				}
+			});
+		});
+	</script>
+
+	<style>
+		.pay-buttons-wrapper {
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			gap: 20px;
+		}
+	</style>
+</head>
+
+<body>
+
+	<nav class="navbar ">
+		<div class="container">
+			<div class="navbar-header">
+				<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar"
+					aria-expanded="false" aria-controls="navbar">
+					<span class="sr-only">Toggle navigation</span>
+					<span class="icon-bar"></span>
+					<span class="icon-bar"></span>
+					<span class="icon-bar"></span>
+				</button>
+				<img src="images/Fiuu_blue.png" style="width:200px;height:auto" />
+			</div>
+			<div id="navbar" class="navbar-collapse collapse">
+				<ul class="nav navbar-nav pull-right">
+					<li class="active"><a href="#">Home</a></li>
+					<li><a href="#">About</a></li>
+					<li><a href="#">Contact</a></li>
+					<li><select class="form-control" id="selector" autocomplete="off">
+							<option value="MYR" selected>MYR</option>
+							<option value="THB">THB</option>
+							<option value="VND">VND</option>
+						</select></li>
+				</ul>
+			</div><!--/.nav-collapse -->
+		</div>
+	</nav>
+
+	<form method="POST" action="process_order.php" role="molpayseamless">
+
+		<div class="jumbotron">
+			<div class="container">
+
+				<h1>Order Details</h1>
+
+				<table class="table">
+					<tr class="ordertable-head">
+						<td>Product</td>
+						<td>Price</td>
+						<td>Quantity</td>
+						<td>Total</td>
+					</tr>
+					<tr>
+						<td>
+							<div class="row">
+								<div class="col-md-3"><img src="images/order-headphone.png" style="width:100%;height:auto;border-radius:12px;" /></div>
+								<div class="col-md-6">Premium Wireless Headphones<br />Color: Black</div>
+							</div>
+						</td>
+						<td><span class="cur_span">MYR</span><span class="price_span"> 1.01</span></td>
+						<td>1</td>
+						<td><span class="cur_span">MYR</span><span class="price_span"> 1.01</span></td>
+					</tr>
+				</table>
+
+				<table class="table">
+					<tr>
+						<td colspan="4" bgcolor=""
+							style="padding: 15px 10px;background-color: rgb(255, 255, 255, 0.2); vertical-align: middle;">
+							<div style="display: flex; align-items: center; gap: 10px;">
+								<input placeholder="Enter your coupon code here" class="form-control" style="margin:0;" />
+								<button style="background-color:#ffffff;color:#003ba0;border:none;padding:6px 16px;border-radius:4px;cursor:pointer;font-weight:600;">Apply</button>
+							</div>
+						</td>
+					</tr>
+				</table>
+
+				<div class="row">
+					<div class="col-md-offset-8">
+						<div class="row">
+							<div class="col-md-6 text-right">Shipping Fee:</div>
+							<div class="col-md-5 text-right">Free</div>
+						</div>
+					</div>
+					<div class="col-md-offset-8">
+						<div class="row">
+							<div class="col-md-6 text-right">Sub Total:</div>
+							<div class="col-md-5 text-right"><span class="cur_span">MYR</span><span class="price_span"> 1.01</span></div>
+						</div>
+					</div>
+					<div class="col-md-offset-8">
+						<div class="row" style="padding: 10px 0;">
+							<div class="col-md-6 text-right ordertotal"><strong>Total:</strong></div>
+							<div class="col-md-5 text-right ordertotal"><strong><span class="cur_span">MYR</span><span class="price_span"> 1.01</span></strong></div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="container">
+			<h1 class="margintop">Billing Information</h1>
+			<div class="row">
+				<div class="col-md-4 marginbttm">First Name <span class="mandatory">*</span> <input type="fname"
+						class="form-control" name="billingFirstName" id="billingFirstName" value="Fiuu" required></div>
+				<div class="col-md-4 marginbttm">Last Name <span class="mandatory">*</span> <input type="lname"
+						class="form-control" name="billingLastName" id="billingLastName" value="Demo" required></div>
+				<div class="col-md-4 marginbttm">Phone <span class="mandatory">*</span> <input type="mobile"
+						class="form-control" name="billingMobile" id="billingMobile" value="55218438" required></div>
+				<div class="col-md-4 marginbttm">Email <span class="mandatory">*</span> <input type="email"
+						class="form-control" name="billingEmail" id="billingEmail" value="demo@fiuu.com" required>
+				</div>
+				<div class="col-md-8 marginbttm">Address <span class="mandatory">*</span> <input type="address"
+						class="form-control" name="billingAddress" id="billingAddress"
+						value="J-39-1, Block J, Jalan Multimedia, I-City" required></div>
+				<div class="col-md-4 marginbttm">City <span class="mandatory">*</span> <input type="city"
+						class="form-control" name="billingCity" id="billingCity" value="Selangor" required></div>
+				<div class="col-md-4 marginbttm">State <span class="mandatory">*</span> <input type="state"
+						class="form-control" name="billingState" id="billingState" value="Shah Alam" required></div>
+				<div class="col-md-4 marginbttm">Postcode/ZIP <span class="mandatory">*</span> <input type="poscode"
+						class="form-control" name="billingPostcode" id="billingPostcode" value="40000" required></div>
+			</div>
+
+			<div class="smalltxt">
+				<input type="checkbox" name="chk_deliver_same_addr" aria-label="Deliver to the same address" checked
+					required> Deliver to the same address<br />
+				<input type="checkbox" name="chk_tnc" aria-label="Deliver to the same address" checked required> I've
+				read and accept the terms & conditions.
+			</div>
+
+			<h1 class="margintop" style="margin-top:70px">Payment Method</h1>
+
+			<p class="smalltxt">
+				<strong style="color:#003ba0;">Secure Online Payment by Fiuu</strong>
+				<br />
+				Please select a payment type from below to proceed for payment.
+			</p>
+
+			<div class="pay-buttons-wrapper" style="margin: 20px 0;">
+				<div id="googlepaycheckoutButtonDiv"></div>
+				<div id="applepaybutton"></div>
+			</div>
+
+			<div class="row" style="margin-top:20px">
+				<div class="col-md-2 col-xs-6 marginbttm text-center myr">
+					<label class="hand" for="paymentcredit_alb-paymex"><img src="images/payment-credit.jpg"
+							title="ALB-Paymex" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="paymentcredit_alb-paymex" value="credit" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center myr">
+					<label class="hand" for="paymentm2u"><img src="images/payment-m2u.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="paymentm2u" value="maybank2u" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center myr">
+					<label class="hand" for="paymenthlb"><img src="images/payment-hlb.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="paymenthlb" value="hlb" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center myr">
+					<label class="hand" for="paymentcimb"><img src="images/payment-cimb.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="paymentcimb" value="cimbclicks" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center myr">
+					<label class="hand" for="paymentcimbva"><img src="images/payment-cimb-va.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="paymentcimbva" value="cimb-va" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center myr">
+					<label class="hand" for="paymentrhb"><img src="images/payment-rhb.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="paymentrhb" value="rhb" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center myr">
+					<label class="hand" for="paymentaffin"><img src="images/payment-affin.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="paymentaffin" value="affinonline" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center myr">
+					<label class="hand" for="paymentam"><img src="images/payment-amonline.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="paymentam" value="amb" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center myr">
+					<label class="hand" for="paymentislam"><img src="images/payment-bank-islam.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="paymentislam" value="bankislam" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center myr">
+					<label class="hand" for="paymentpbe"><img src="images/payment-pbe.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="paymentpbe" value="pbb" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center myr">
+					<label class="hand" for="payment7e"><img src="images/payment-7e.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="payment7e" value="cash-711" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center myr">
+					<label class="hand" for="jompay"><img src="images/payment-jompay.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="jompay" value="jompay" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center thb">
+					<label class="hand" for="scb"><img src="images/payment-scb.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="scb" value="TH_PB_SCBPN" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center thb">
+					<label class="hand" for="krungthai"><img src="images/payment-krungthai.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="krungthai" value="TH_PB_KTBPN" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center thb">
+					<label class="hand" for="krungsri"><img src="images/payment-krungsri.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="krungsri" value="TH_PB_BAYPN" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center thb">
+					<label class="hand" for="bangkokbank"><img src="images/payment-bangkokbank.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="bangkokbank" value="TH_PB_BBLPN" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center thb">
+					<label class="hand" for="paysbuy"><img src="images/payment-paysbuy.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="paysbuy" value="TH_PB_CASH" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center myr">
+					<label class="hand" for="FPX_OCBC"><img src="images/payment-ocbc.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="FPX_OCBC" value="FPX_OCBC" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center myr">
+					<label class="hand" for="FPX_SCB"><img src="images/payment-standard-chartered.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="FPX_SCB" value="FPX_SCB" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center vnd">
+					<label class="hand" for="VTCPay_Ewallet"><img src="images/vtcpay/vtcpay.png"
+							alt="VTCPay_Ewallet" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="VTCPay_Ewallet" value="vtcpay-ewallet" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center vnd">
+					<label class="hand" for="VTCPay_Vietcombank"><img src="images/vtcpay/vietcombank.png" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="VTCPay_Vietcombank" value="vtcpay-vietcombank" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center vnd">
+					<label class="hand" for="VTCPay_Techcombank"><img src="images/vtcpay/techcom-bank.png" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="VTCPay_Techcombank" value="vtcpay-techcombank" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center thb">
+					<label class="hand" for="BigC"><img src="images/payment-bigc.jpg" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="BigC" value="BigC" required />
+				</div>
+				<div class="col-md-2 col-xs-6 marginbttm text-center thb">
+					<label class="hand" for="KBANK_PayPlus"><img src="images/payment-Kasikornbank.png" /></label>
+					<br />
+					<input type="radio" name="payment_options" id="KBANK_PayPlus" value="KBANK_PayPlus" required />
+				</div>
+			</div>
+			<br />
+		</div>
+
+		</div>
+		<input type="hidden" name="currency" id="currency" value="MYR" />
+		<input type="hidden" name="total_amount" value="1.01" />
+	</form>
+
+	<div id="footer">
+		<div class="container">
+			<div class="col-md-8">Fiuu. Powering Future Payments</div>
+			<div class="col-md-4">
+				<ul class="soc">
+					<li><a href="https://www.facebook.com/FiuuPayment" target="_blank" style="color:#ffffff;font-size:18px;margin-right:12px;"><i class="fa-brands fa-facebook"></i></a></li>
+					<li><a href="https://www.instagram.com/fiuupayment" target="_blank" style="color:#ffffff;font-size:18px;margin-right:12px;"><i class="fa-brands fa-instagram"></i></a></li>
+					<li><a href="https://github.com/FiuuPayment" target="_blank" style="color:#ffffff;font-size:18px;margin-right:12px;"><i class="fa-brands fa-github"></i></a></li>
+					<li><a href="https://x.com/FiuuPayment" target="_blank" style="color:#ffffff;font-size:18px;margin-right:12px;"><i class="fa-brands fa-x-twitter"></i></a></li>
+					<li><a href="https://www.linkedin.com/company/fiuupayment" target="_blank" style="color:#ffffff;font-size:18px;"><i class="fa-brands fa-linkedin"></i></a></li>
+				</ul>
+			</div>
+		</div>
+	</div>
+
+	<script>
+		document.addEventListener("DOMContentLoaded", function () {
+			// Configuration
+			const COMPANY_NAME = "";       // company name
+			const MERCHANT_ID = "";      // your merchant ID
+			const CURRENCY = "";
+			const AMOUNT = "";
+			const ACCEPTED_METHODS = ["CC", "TNG-EWALLET", "SHOPEEPAY"]; // GooglePay accepted payment methods
+			const ORDER_ID = "";
+			const VERIFY_KEY = "";      // your account's verify key
+			const EXPIRATION_TIME = ""; 		// in seconds
+			const CUSTOMER_NAME = ""; 		// Customer Name
+			const CUSTOMER_EMAIL = ""; 		// Customer Email Address
+			const CUSTOMER_CONTACT = ""; 		// Customer Contact Number
+			const RETURN_URL = "";		// Your Return URL
+			const CALLBACK_URL = "";		// Your System Callback URL to receive asynchronous callback notification from Fiuu
+
+			// Google Pay setup
+			let checkGooglePay = true;
+			let pluginCheck = 1;
+			const paymentsClient = getGooglePaymentsClient();
+
+			name = COMPANY_NAME;
+			origin = MERCHANT_ID;
+			currency = CURRENCY;
+			amount = AMOUNT;
+			acceptedMethod = JSON.stringify(ACCEPTED_METHODS);
+
+			// Guide to obtain your Google MerchantID.
+			//https://developers.google.com/pay/api/web/guides/test-and-deploy/publish-your-integration
+			googleMID = "";
+
+			paymentsClient.isReadyToPay(getGoogleIsReadyToPayRequest())
+				.then(response => {
+					if (!response.result) {
+						checkGooglePay = false;
+						pluginCheck--;
+					}
+				})
+				.catch(err => console.error("GPay readiness error:", err));
+
+			// Helper to generate hidden inputs
+			function createHiddenInputs(container, dataPairs) {
+				dataPairs.forEach(([id, value]) => {
+					const inp = document.createElement("input");
+					inp.type = "hidden";
+					inp.id = id;
+					inp.value = value;
+					container.appendChild(inp);
+				});
+			}
+
+			function addGooglePay() {
+				const container = document.getElementById("googlepaycheckoutButtonDiv");
+				addGooglePayButton();
+				createHiddenInputs(container, [
+					["MerchantID", MERCHANT_ID],
+					["ReferenceNo", ORDER_ID],
+					["TxnType", "SALS"],
+					["TxnCurrency", CURRENCY],
+					["TxnAmount", AMOUNT],
+					["Signature", VERIFY_KEY],
+					["CustName", CUSTOMER_NAME],
+					["CustEmail", CUSTOMER_EMAIL],
+					["CustContact", CUSTOMER_CONTACT],
+					["ReturnURL", RETURN_URL],
+					["NotificationURL", CALLBACK_URL],
+					["CallbackURL", CALLBACK_URL],
+					["ExpirationTime", EXPIRATION_TIME],
+					["CustDesc", `Payment for ${ORDER_ID}`]
+				]);
+			}
+
+			function appleDirectServerHTML() {
+				if (!(window.ApplePaySession && ApplePaySession.canMakePayments())) return;
+				pluginCheck++;
+				const container = document.getElementById("applepaybutton");
+
+				const btn = document.createElement("apple-pay-button");
+				btn.className = "apple-pay-button";
+				btn.setAttribute("type", "plain");
+				btn.setAttribute("locale", "en");
+				btn.addEventListener("click", makeApplePayment);
+				container.appendChild(btn);
+
+				createHiddenInputs(container, [
+					["MerchantID", MERCHANT_ID],
+					["ReferenceNo", ORDER_ID],
+					["TxnType", "SALS"],
+					["TxnCurrency", CURRENCY],
+					["TxnAmount", AMOUNT],
+					["Signature", VERIFY_KEY],
+					["CustName", CUSTOMER_NAME],
+					["CustEmail", CUSTOMER_EMAIL],
+					["CustContact", CUSTOMER_CONTACT],
+					["CustDesc", `Payment for ${ORDER_ID}`],
+					["ReturnURL", RETURN_URL],
+					["NotificationURL", CALLBACK_URL],
+					["CallbackURL", CALLBACK_URL]
+				]);
+			}
+
+			// Initialize payment buttons
+			addGooglePay();
+			appleDirectServerHTML();
+
+			// Sync all displayed prices/currency on the page (only if config values are set)
+			if (CURRENCY) {
+				document.querySelectorAll('.cur_span')
+					.forEach(el => el.textContent = CURRENCY);
+				const currencyField = document.getElementById('currency');
+				if (currencyField) currencyField.value = CURRENCY;
+			}
+			if (AMOUNT) {
+				document.querySelectorAll('.price_span')
+					.forEach(el => el.textContent = AMOUNT);
+				const totalField = document.querySelector('input[name="total_amount"]');
+				if (totalField) totalField.value = AMOUNT;
+			}
+		});
+	</script>
+
+</body>
+
+</html>
