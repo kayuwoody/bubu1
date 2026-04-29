@@ -56,6 +56,7 @@ export function buildFiuuSeamlessAttrs(opts: {
   amount:         number;
   currency?:      string;
   baseUrl:        string;
+  channel?:       string;
   customerName?:  string;
   customerEmail?: string;
   customerPhone?: string;
@@ -81,6 +82,7 @@ export function buildFiuuSeamlessAttrs(opts: {
   const attrs: Record<string, string> = {
     'data-toggle':          'molpayseamless',
     'data-mpsmerchantid':   merchantId,
+    'data-mpschannel':      opts.channel ?? '',
     'data-mpsamount':       amountStr,
     'data-mpsorderid':      opts.sessionId,
     'data-mpsbillname':     opts.customerName  ?? '',

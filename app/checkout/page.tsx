@@ -31,8 +31,17 @@ function CheckoutContent() {
   const [name,  setName]  = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [channel, setChannel] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const CHANNELS = [
+    { value: 'fpx',          label: 'Online Banking (FPX)' },
+    { value: 'TNG-EWALLET',  label: "Touch 'n Go eWallet" },
+    { value: 'GrabPay',      label: 'GrabPay' },
+    { value: 'BOOST',        label: 'Boost' },
+    { value: 'creditAN',     label: 'Credit / Debit Card' },
+  ];
 
   useEffect(() => {
     try {
@@ -57,6 +66,7 @@ function CheckoutContent() {
     setError('');
     if (!name.trim() || !phone.trim()) { setError('Name and phone are required.'); return; }
 
+    if (!channel) { setError('Please select a payment method.'); return; }
     setLoading(true);
     try {
       const res = await fetch('/api/checkout', {
@@ -69,6 +79,7 @@ function CheckoutContent() {
           pickup: pending.pickup,
           items: pending.lines,
           total: pending.total,
+          channel,
         }),
       });
       const data = await res.json();
@@ -170,6 +181,19 @@ function CheckoutContent() {
                 />
               </div>
             ))}
+          </div>
+
+          {/* Payment method */}
+          <div style={{ marginTop: 14 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: hex(INK, .65), marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.04em' }}>Payment Method</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {CHANNELS.map(c => (
+                <label key={c.value} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: '#fff', border: `1.5px solid ${channel === c.value ? PRI : hex(INK, .12)}`, borderRadius: R - 8, cursor: 'pointer', fontSize: 15, color: INK, fontWeight: channel === c.value ? 700 : 400 }}>
+                  <input type="radio" name="channel" value={c.value} checked={channel === c.value} onChange={() => setChannel(c.value)} style={{ accentColor: PRI }} />
+                  {c.label}
+                </label>
+              ))}
+            </div>
           </div>
 
           {error && (

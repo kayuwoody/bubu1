@@ -19,6 +19,7 @@ export async function POST(req: Request) {
     pickup: 'counter' | 'curbside';
     items: CartLine[];
     total: number;
+    channel?: string;
     outlet_id?: string;
   };
 
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { name, email, phone, pickup, items, total, outlet_id = 'main' } = body;
+  const { name, email, phone, pickup, items, total, channel, outlet_id = 'main' } = body;
 
   if (!name || !phone || !items?.length || total == null) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -73,6 +74,7 @@ export async function POST(req: Request) {
       sessionId:     session.id,
       amount:        total,
       baseUrl:       getBaseUrl(),
+      channel,
       customerName:  name,
       customerEmail: email ?? '',
       customerPhone: phone,
