@@ -34,7 +34,6 @@ function CheckoutContent() {
   const [channel, setChannel] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [fiuuReady, setFiuuReady] = useState<{ attrs: Record<string, string> } | null>(null);
 
   const CHANNELS = [
     { value: 'fpx',          label: 'Online Banking (FPX)' },
@@ -66,7 +65,6 @@ function CheckoutContent() {
     e.preventDefault();
     setError('');
     if (!name.trim() || !phone.trim()) { setError('Name and phone are required.'); return; }
-
     if (!channel) { setError('Please select a payment method.'); return; }
     setLoading(true);
     try {
@@ -87,37 +85,20 @@ function CheckoutContent() {
       if (!res.ok) { setError(data.error ?? 'Checkout failed.'); setLoading(false); return; }
       localStorage.setItem('co_session', data.sessionId);
 
-      // Fiuu Seamless requires jQuery
-      await new Promise<void>((resolve, reject) => {
-        if ((window as any).jQuery) { resolve(); return; }
-        const s = document.createElement('script');
-        s.src = 'https://code.jquery.com/jquery-3.7.1.min.js';
-        s.onload = () => resolve();
-        s.onerror = () => reject(new Error('Failed to load jQuery'));
-        document.head.appendChild(s);
-      });
-
-      // Load Fiuu Seamless JS, then trigger the payment button
-      await new Promise<void>((resolve, reject) => {
-        const base = data.fiuuScriptUrl.split('?')[0];
-        if (document.querySelector(`script[src^="${base}"]`)) { resolve(); return; }
-        const s = document.createElement('script');
-        s.src = data.fiuuScriptUrl;
-        s.onload = () => resolve();
-        s.onerror = () => reject(new Error('Failed to load Fiuu script'));
-        document.head.appendChild(s);
-      });
-
-      // Initialise FiuuSeamless using our server-side proxy to avoid CORS on /RMS/verify
-      const verifyUrl = data.fiuuVerifyUrl ?? '/api/fiuu/verify';
-      const FiuuSeamlessCtor = (window as any).FiuuSeamless;
-      if (FiuuSeamlessCtor) {
-        new FiuuSeamlessCtor({ merchantId: data.fiuuAttrs['data-mpsmerchantid'], verifyUrl });
+      // POST to Fiuu hosted payment page via a hidden form
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = data.fiuuAction;
+      for (const [k, v] of Object.entries(data.fiuuFields as Record<string, string>)) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = k;
+        input.value = v;
+        form.appendChild(input);
       }
-
-      // Show the Fiuu button for the user to click — gives SDK time to complete verify
-      setFiuuReady({ attrs: data.fiuuAttrs });
-      setLoading(false);
+      document.body.appendChild(form);
+      form.submit();
+      // loading stays true — browser is navigating away
     } catch {
       setError('Network error. Please try again.');
       setLoading(false);
@@ -195,48 +176,26 @@ function CheckoutContent() {
             </div>
           )}
 
-          {!fiuuReady && (
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                marginTop: 24, width: '100%', padding: '16px',
-                background: loading ? hex(PRI, .6) : PRI,
-                color: '#fff', border: 'none', borderRadius: R,
-                fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 17,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                boxShadow: loading ? 'none' : `0 6px 0 ${hex(PRI, .4)}`,
-              }}
-            >
-              {loading ? 'Loading payment…' : `Pay RM ${pending.total.toFixed(2)} →`}
-            </button>
-          )}
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              marginTop: 24, width: '100%', padding: '16px',
+              background: loading ? hex(PRI, .6) : PRI,
+              color: '#fff', border: 'none', borderRadius: R,
+              fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 17,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              boxShadow: loading ? 'none' : `0 6px 0 ${hex(PRI, .4)}`,
+            }}
+          >
+            {loading ? 'Redirecting to payment…' : `Pay RM ${pending.total.toFixed(2)} →`}
+          </button>
 
           <div style={{ textAlign: 'center', marginTop: 10, fontSize: 12, color: hex(INK, .5) }}>
             FPX · GrabPay · Boost · Touch 'n Go
           </div>
         </form>
-
-        {fiuuReady && (
-          <div style={{ marginTop: 16 }}>
-            <button
-              {...Object.fromEntries(
-                Object.entries(fiuuReady.attrs).map(([k, v]) => [k, v])
-              )}
-              type="button"
-              style={{
-                width: '100%', padding: '16px',
-                background: PRI, color: '#fff', border: 'none', borderRadius: R,
-                fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 17,
-                cursor: 'pointer', boxShadow: `0 6px 0 ${hex(PRI, .4)}`,
-              }}
-            >
-              Confirm & Pay RM {pending.total.toFixed(2)} →
-            </button>
-          </div>
-        )}
       </div>
-
     </div>
   );
 }

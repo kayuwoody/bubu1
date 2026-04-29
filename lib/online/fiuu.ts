@@ -6,7 +6,6 @@ function md5(v: string) {
 
 export function verifyFiuuCallback(body: Record<string, string>): boolean {
   const secretKey = process.env.FIUU_SECRET_KEY;
-  const verifyKey = process.env.FIUU_VERIFY_KEY;
   if (!secretKey) throw new Error('FIUU_SECRET_KEY not set');
 
   // Set FIUU_SKIP_VERIFY=true in Vercel for sandbox testing
@@ -43,25 +42,23 @@ export function isFiuuSuccess(status: string) {
   return status === '00';
 }
 
-export interface FiuuSeamlessAttrs {
-  scriptUrl: string;
-  attrs:     Record<string, string>;
+export interface FiuuHostedForm {
+  action: string;
+  fields: Record<string, string>;
 }
 
-// Returns the Fiuu Seamless script URL and data-* attributes for a
-// data-toggle="molpayseamless" button. The JS SDK handles channel
-// selection and payment internally — no hosted page or GET redirect.
-export function buildFiuuSeamlessAttrs(opts: {
+// Builds action URL + form fields for a direct POST to Fiuu's hosted payment page.
+// No SDK, no jQuery, no mpslinkkey — browser posts the form and Fiuu redirects back.
+export function buildFiuuHostedForm(opts: {
   sessionId:      string;
   amount:         number;
   currency?:      string;
   baseUrl:        string;
-  channel?:       string;
+  channel:        string;
   customerName?:  string;
   customerEmail?: string;
   customerPhone?: string;
-  linkKey?:       string;
-}): FiuuSeamlessAttrs {
+}): FiuuHostedForm {
   const merchantId = process.env.FIUU_MERCHANT_ID;
   const verifyKey  = process.env.FIUU_VERIFY_KEY;
   const fiuuBase   = process.env.FIUU_BASE_URL ?? 'https://pay.fiuu.com';
@@ -72,34 +69,27 @@ export function buildFiuuSeamlessAttrs(opts: {
   // Strip hyphens — Fiuu normalises orderID before vcode verification
   const orderId   = opts.sessionId.replace(/-/g, '');
 
-  // vcode = md5(amount + merchantID + orderID + verifyKey)  — use hyphen-free orderId
+  // vcode = md5(amount + merchantID + orderID + verifyKey)
   const vcode = md5(amountStr + merchantId + orderId + verifyKey);
-  console.log('[fiuu/build] vcode inputs — amount:', amountStr, 'merchantId:', merchantId, 'orderId:', orderId, 'vcode:', vcode);
+  console.log('[fiuu/build] amount:', amountStr, 'merchantId:', merchantId, 'orderId:', orderId, 'vcode:', vcode);
 
-  // Sandbox uses a different filename + cache-bust timestamp; production uses the versioned file
-  const isSandbox = fiuuBase.includes('sandbox');
-  const cacheBust = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
-  const scriptUrl = isSandbox
-    ? `${fiuuBase}/RMS/API/seamless/latest/js/MOLPay_seamless_sandbox.deco.js?v=${cacheBust}`
-    : `${fiuuBase}/RMS/API/seamless/latest/js/MOLPay_seamless.deco.js`;
+  const action = `${fiuuBase}/RMS/pay/${merchantId}/${opts.channel}`;
 
-  const attrs: Record<string, string> = {
-    'data-toggle':          'molpayseamless',
-    'data-mpsmerchantid':   merchantId,
-    'data-mpschannel':      opts.channel ?? '',
-    'data-mpsamount':       amountStr,
-    'data-mpsorderid':      orderId,
-    'data-mpsbillname':     opts.customerName  ?? '',
-    'data-mpsbillemail':    opts.customerEmail || 'noreply@coffeeoasis.my',
-    'data-mpsbillmobile':   opts.customerPhone ?? '',
-    'data-mpsbilldesc':     'Coffee Oasis Order',
-    'data-mpscurrency':     currency,
-    'data-mpsvcode':        vcode,
-    'data-mpsreturnurl':    `${opts.baseUrl}/return`,
-    'data-mpscallbackurl':  `${opts.baseUrl}/api/fiuu/callback`,
-    'data-mpsnotifyurl':    `${opts.baseUrl}/api/fiuu/callback`,
-    'data-mpslinkkey':      opts.linkKey ?? '',
+  const fields: Record<string, string> = {
+    merchant_id:  merchantId,
+    amount:       amountStr,
+    orderid:      orderId,
+    bill_name:    opts.customerName  ?? '',
+    bill_email:   opts.customerEmail || 'noreply@coffeeoasis.my',
+    bill_mobile:  opts.customerPhone ?? '',
+    bill_desc:    'Coffee Oasis Order',
+    country:      'MY',
+    currency,
+    vcode,
+    returnurl:    `${opts.baseUrl}/return`,
+    callbackurl:  `${opts.baseUrl}/api/fiuu/callback`,
+    bill_ch:      opts.channel,
   };
 
-  return { scriptUrl, attrs };
+  return { action, fields };
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/online/supabase';
-import { buildFiuuSeamlessAttrs } from '@/lib/online/fiuu';
+import { buildFiuuHostedForm } from '@/lib/online/fiuu';
 import type { CartLine } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -33,6 +33,10 @@ export async function POST(req: Request) {
 
   if (!name || !phone || !items?.length || total == null) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  }
+
+  if (!channel) {
+    return NextResponse.json({ error: 'Payment method is required' }, { status: 400 });
   }
 
   const { data: settings } = await supabase
@@ -68,33 +72,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 });
   }
 
-  // Fetch mpslinkkey server-side to avoid CORS blocking in browser
-  let linkKey = '';
+  let fiuu: { action: string; fields: Record<string, string> };
   try {
-    const fiuuBase = process.env.FIUU_BASE_URL ?? 'https://pay.fiuu.com';
-    const merchantId = process.env.FIUU_MERCHANT_ID ?? '';
-    const vres = await fetch(`${fiuuBase}/RMS/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `mpsmerchantid=${encodeURIComponent(merchantId)}`,
-    });
-    const vtext = await vres.text();
-    console.log('[checkout] verify raw response:', vtext.slice(0, 300));
-    try {
-      const vj = JSON.parse(vtext);
-      linkKey = vj.linkkey ?? vj.mpslinkkey ?? vj.link_key ?? '';
-    } catch {
-      const vp = new URLSearchParams(vtext);
-      linkKey = vp.get('linkkey') ?? vp.get('mpslinkkey') ?? '';
-    }
-    console.log('[checkout] linkKey:', linkKey ? linkKey.slice(0, 8) + '…' : 'EMPTY');
-  } catch (e) {
-    console.warn('[checkout] verify fetch failed:', e instanceof Error ? e.message : e);
-  }
-
-  let fiuu: { scriptUrl: string; attrs: Record<string, string> };
-  try {
-    fiuu = buildFiuuSeamlessAttrs({
+    fiuu = buildFiuuHostedForm({
       sessionId:     session.id,
       amount:        total,
       baseUrl:       getBaseUrl(),
@@ -102,12 +82,11 @@ export async function POST(req: Request) {
       customerName:  name,
       customerEmail: email ?? '',
       customerPhone: phone,
-      linkKey,
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error';
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 
-  return NextResponse.json({ sessionId: session.id, fiuuScriptUrl: fiuu.scriptUrl, fiuuAttrs: fiuu.attrs, fiuuVerifyUrl: '/api/fiuu/verify' });
+  return NextResponse.json({ sessionId: session.id, fiuuAction: fiuu.action, fiuuFields: fiuu.fields });
 }
