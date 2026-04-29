@@ -108,8 +108,8 @@ function CheckoutContent() {
         document.head.appendChild(s);
       });
 
-      // Initialise FiuuSeamless with the verify endpoint (async — fetches mpslinkkey)
-      const verifyUrl = data.fiuuScriptUrl.replace(/\/RMS\/API\/.*$/, '/RMS/verify');
+      // Initialise FiuuSeamless using our server-side proxy to avoid CORS on /RMS/verify
+      const verifyUrl = data.fiuuVerifyUrl ?? '/api/fiuu/verify';
       const FiuuSeamlessCtor = (window as any).FiuuSeamless;
       if (FiuuSeamlessCtor) {
         new FiuuSeamlessCtor({ merchantId: data.fiuuAttrs['data-mpsmerchantid'], verifyUrl });

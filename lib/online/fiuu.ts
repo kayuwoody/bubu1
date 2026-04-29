@@ -60,6 +60,7 @@ export function buildFiuuSeamlessAttrs(opts: {
   customerName?:  string;
   customerEmail?: string;
   customerPhone?: string;
+  linkKey?:       string;
 }): FiuuSeamlessAttrs {
   const merchantId = process.env.FIUU_MERCHANT_ID;
   const verifyKey  = process.env.FIUU_VERIFY_KEY;
@@ -73,6 +74,7 @@ export function buildFiuuSeamlessAttrs(opts: {
 
   // vcode = md5(amount + merchantID + orderID + verifyKey)  — use hyphen-free orderId
   const vcode = md5(amountStr + merchantId + orderId + verifyKey);
+  console.log('[fiuu/build] vcode inputs — amount:', amountStr, 'merchantId:', merchantId, 'orderId:', orderId, 'vcode:', vcode);
 
   // Sandbox uses a different filename + cache-bust timestamp; production uses the versioned file
   const isSandbox = fiuuBase.includes('sandbox');
@@ -96,6 +98,7 @@ export function buildFiuuSeamlessAttrs(opts: {
     'data-mpsreturnurl':    `${opts.baseUrl}/return`,
     'data-mpscallbackurl':  `${opts.baseUrl}/api/fiuu/callback`,
     'data-mpsnotifyurl':    `${opts.baseUrl}/api/fiuu/callback`,
+    'data-mpslinkkey':      opts.linkKey ?? '',
   };
 
   return { scriptUrl, attrs };
