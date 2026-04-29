@@ -34,6 +34,7 @@ function CheckoutContent() {
   const [channel, setChannel] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fiuuReady, setFiuuReady] = useState<{ attrs: Record<string, string> } | null>(null);
 
   const CHANNELS = [
     { value: 'fpx',          label: 'Online Banking (FPX)' },
@@ -107,24 +108,16 @@ function CheckoutContent() {
         document.head.appendChild(s);
       });
 
-      // Initialise FiuuSeamless with the verify endpoint
+      // Initialise FiuuSeamless with the verify endpoint (async — fetches mpslinkkey)
       const verifyUrl = data.fiuuScriptUrl.replace(/\/RMS\/API\/.*$/, '/RMS/verify');
       const FiuuSeamlessCtor = (window as any).FiuuSeamless;
       if (FiuuSeamlessCtor) {
-        new FiuuSeamlessCtor({
-          merchantId: data.fiuuAttrs['data-mpsmerchantid'],
-          verifyUrl,
-        });
+        new FiuuSeamlessCtor({ merchantId: data.fiuuAttrs['data-mpsmerchantid'], verifyUrl });
       }
 
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      for (const [k, v] of Object.entries(data.fiuuAttrs as Record<string, string>)) {
-        btn.setAttribute(k, v);
-      }
-      btn.style.display = 'none';
-      document.body.appendChild(btn);
-      btn.click();
+      // Show the Fiuu button for the user to click — gives SDK time to complete verify
+      setFiuuReady({ attrs: data.fiuuAttrs });
+      setLoading(false);
     } catch {
       setError('Network error. Please try again.');
       setLoading(false);
@@ -202,25 +195,46 @@ function CheckoutContent() {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              marginTop: 24, width: '100%', padding: '16px',
-              background: loading ? hex(PRI, .6) : PRI,
-              color: '#fff', border: 'none', borderRadius: R,
-              fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 17,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              boxShadow: loading ? 'none' : `0 6px 0 ${hex(PRI, .4)}`,
-            }}
-          >
-            {loading ? 'Redirecting to payment…' : `Pay RM ${pending.total.toFixed(2)} →`}
-          </button>
+          {!fiuuReady && (
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                marginTop: 24, width: '100%', padding: '16px',
+                background: loading ? hex(PRI, .6) : PRI,
+                color: '#fff', border: 'none', borderRadius: R,
+                fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 17,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                boxShadow: loading ? 'none' : `0 6px 0 ${hex(PRI, .4)}`,
+              }}
+            >
+              {loading ? 'Loading payment…' : `Pay RM ${pending.total.toFixed(2)} →`}
+            </button>
+          )}
 
           <div style={{ textAlign: 'center', marginTop: 10, fontSize: 12, color: hex(INK, .5) }}>
             FPX · GrabPay · Boost · Touch 'n Go
           </div>
         </form>
+
+        {fiuuReady && (
+          <div style={{ marginTop: 16 }}>
+            <button
+              {...Object.fromEntries(
+                Object.entries(fiuuReady.attrs).map(([k, v]) => [k, v])
+              )}
+              type="button"
+              style={{
+                width: '100%', padding: '16px',
+                background: PRI, color: '#fff', border: 'none', borderRadius: R,
+                fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 17,
+                cursor: 'pointer', boxShadow: `0 6px 0 ${hex(PRI, .4)}`,
+              }}
+            >
+              Confirm & Pay RM {pending.total.toFixed(2)} →
+            </button>
+          </div>
+        )}
       </div>
 
     </div>
