@@ -159,7 +159,11 @@ function CheckoutContent() {
       form.action = '/api/checkout/mps';
       form.setAttribute('role', 'molpayseamless');
       form.style.display = 'none';
-      for (const [k, v] of Object.entries(data.mpsParams as Record<string, string>)) {
+      const allParams = {
+        ...data.mpsParams,
+        mpsparenturl: window.location.href,
+      };
+      for (const [k, v] of Object.entries(allParams as Record<string, unknown>)) {
         const inp = document.createElement('input');
         inp.type = 'hidden';
         inp.name = k;

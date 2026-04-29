@@ -6,8 +6,9 @@ export async function POST(req: Request) {
   const text = await req.text();
   const body = Object.fromEntries(new URLSearchParams(text));
   console.log('[checkout/mps] received:', JSON.stringify(body));
-  // Return as JSON — the SDK reads {status:true, mpsmerchantid, mpsamount, ...}
-  return new Response(JSON.stringify({ status: true, ...body }), {
+  // Spread body first, then override status with boolean true so the SDK's
+  // strict `=== true` check passes (form encoding turns the boolean into "true" string)
+  return new Response(JSON.stringify({ ...body, status: true }), {
     headers: { 'Content-Type': 'application/json' },
   });
 }

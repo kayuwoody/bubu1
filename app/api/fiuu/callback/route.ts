@@ -6,6 +6,11 @@ import type { CartLine } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
+// Merchant portal verifies this endpoint with GET before activating callback
+export async function GET() {
+  return new Response('RECEIVEROK', { status: 200 });
+}
+
 export async function POST(req: Request) {
   let body: Record<string, string>;
   let rawText = '';
