@@ -47,8 +47,9 @@ export interface FiuuHostedForm {
   fields: Record<string, string>;
 }
 
-// Builds action URL + form fields for a direct POST to Fiuu's hosted payment page.
-// No SDK, no jQuery, no mpslinkkey — browser posts the form and Fiuu redirects back.
+// Builds action URL + mps-prefixed form fields for a direct POST to Fiuu's hosted payment page.
+// Uses mps-prefixed param names (same as Seamless SDK) but posts the form directly — no SDK,
+// no jQuery, no mpslinkkey required.
 export function buildFiuuHostedForm(opts: {
   sessionId:      string;
   amount:         number;
@@ -76,20 +77,22 @@ export function buildFiuuHostedForm(opts: {
   const action = `${fiuuBase}/RMS/pay/${merchantId}`;
 
   const fields: Record<string, string> = {
-    merchant_id:  merchantId,
-    amount:       amountStr,
-    orderid:      orderId,
-    bill_name:    opts.customerName  ?? '',
-    bill_email:   opts.customerEmail || 'noreply@coffeeoasis.my',
-    bill_mobile:  opts.customerPhone ?? '',
-    bill_desc:    'Coffee Oasis Order',
-    country:      'MY',
-    currency,
-    vcode,
-    returnurl:    `${opts.baseUrl}/return`,
-    callbackurl:  `${opts.baseUrl}/api/fiuu/callback`,
-    bill_ch:      opts.channel,
+    mpsmerchantid:  merchantId,
+    mpschannel:     opts.channel,
+    mpsamount:      amountStr,
+    mpsorderid:     orderId,
+    mpsbill_name:   opts.customerName  ?? '',
+    mpsbill_email:  opts.customerEmail || 'noreply@coffeeoasis.my',
+    mpsbill_mobile: opts.customerPhone ?? '',
+    mpsbill_desc:   'Coffee Oasis Order',
+    mpscurrency:    currency,
+    mpsvcode:       vcode,
+    mpsreturnurl:   `${opts.baseUrl}/return`,
+    mpscallbackurl: `${opts.baseUrl}/api/fiuu/callback`,
+    mpsnotifyurl:   `${opts.baseUrl}/api/fiuu/callback`,
+    mpslangcode:    'en',
   };
 
+  console.log('[fiuu/build] action:', action, 'fields:', JSON.stringify(fields));
   return { action, fields };
 }
