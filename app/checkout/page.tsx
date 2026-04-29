@@ -99,7 +99,23 @@ function CheckoutContent() {
       // Load jQuery (required by Fiuu Seamless SDK)
       await loadScript('https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js');
 
-      // Load Fiuu Seamless SDK (version-pinned, correct /MOLPay/ path)
+      // Before loading the SDK, intercept all its jQuery AJAX calls to Fiuu's domain
+      // and route them through our server-side proxy (avoids CORS on the verify call).
+      const FIUU_RE = /sandbox-payment\.fiuu\.com|pay\.fiuu\.com|molpay\.com|razer\.com/;
+      (window as any).jQuery.ajaxPrefilter((opts: any) => {
+        if (opts.url && FIUU_RE.test(opts.url)) {
+          console.log('[mps-proxy] intercepting:', opts.type, opts.url);
+          const origUrl    = opts.url;
+          const origMethod = (opts.type || 'GET').toUpperCase();
+          const origBody   = typeof opts.data === 'string' ? opts.data : '';
+          opts.url         = '/api/fiuu/proxy';
+          opts.type        = 'POST';
+          opts.contentType = 'application/json';
+          opts.data        = JSON.stringify({ url: origUrl, method: origMethod, body: origBody });
+        }
+      });
+
+      // Load Fiuu Seamless SDK — its verify AJAX call will now go through our proxy
       await loadScript(data.scriptUrl);
 
       // Mirror the demo's role="molpayseamless" form pattern exactly:

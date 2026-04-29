@@ -90,6 +90,7 @@ export function buildFiuuSeamlessParams(opts: {
     mpscancelurl:   `${opts.baseUrl}/checkout?cancelled=1`,
     mpsreturnurl:   `${opts.baseUrl}/return`,
     mpscallbackurl: `${opts.baseUrl}/api/fiuu/callback`,
+    mpsnotifyurl:   `${opts.baseUrl}/api/fiuu/callback`,
     mpsapiversion:  '3.28',
   };
 
