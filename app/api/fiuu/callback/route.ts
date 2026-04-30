@@ -147,13 +147,16 @@ export async function POST(req: Request) {
   if (itemsErr) console.error('[fiuu/callback] order items error:', itemsErr.message);
 
   // Update payment + session records
-  const [payErr, sessErr] = await Promise.all([
-    supabase.from('fiuu_payments').update({ order_id: orderId }).eq('payment_ref', tranID).then(r => r.error),
-    supabase.from('checkout_sessions').update({ status: 'paid', order_id: orderId }).eq('id', orderID).then(r => r.error),
+  const [{ error: payErr }, { data: sessData, error: sessErr }] = await Promise.all([
+    supabase.from('fiuu_payments').update({ order_id: orderId }).eq('payment_ref', tranID),
+    supabase.from('checkout_sessions')
+      .update({ status: 'paid', order_id: orderId })
+      .eq('id', orderID)
+      .select('id, status, order_id'),
   ]);
   if (payErr)  console.error('[fiuu/callback] fiuu_payments update error:', payErr.message);
   if (sessErr) console.error('[fiuu/callback] checkout_sessions update error:', sessErr.message);
-  console.log('[fiuu/callback] done — order:', orderId, 'session updated:', !sessErr);
+  console.log('[fiuu/callback] session rows updated:', JSON.stringify(sessData));
 
   return new Response('RECEIVEROK', { status: 200 });
 }
