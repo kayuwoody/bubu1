@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   }
 
   const { url, method = 'GET', body = '' } = payload;
-  console.log('[fiuu/proxy] →', method, url, body ? `body: ${body.slice(0, 120)}` : '');
+  console.log('[fiuu/proxy] →', method, url, body ? `body(${body.length}): ${body.slice(0, 800)}` : '(no body)');
 
   let res: Response;
   try {
