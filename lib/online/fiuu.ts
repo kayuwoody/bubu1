@@ -13,24 +13,29 @@ export function verifyFiuuCallback(body: Record<string, string>): boolean {
     return true;
   }
 
-  const tranID   = body.tranID   ?? body.TranID  ?? '';
-  const orderid  = body.orderid  ?? body.orderID ?? body.OrderID ?? '';
-  const status   = body.status   ?? body.Status  ?? body.StatCode ?? '';
-  const domain   = body.domain   ?? body.Domain  ?? '';
-  const amount   = body.amount   ?? body.Amount  ?? '';
+  const merchantId = process.env.FIUU_MERCHANT_ID ?? '';
+
+  const tranID   = body.tranID   ?? body.TranID   ?? '';
+  const orderid  = body.orderid  ?? body.orderID  ?? body.OrderID ?? '';
+  const status   = body.status   ?? body.Status   ?? body.StatCode ?? '';
+  const amount   = body.amount   ?? body.Amount   ?? '';
   const currency = body.currency ?? body.Currency ?? 'MYR';
-  const paydate  = body.paydate  ?? body.Paydate ?? '';
+  const paydate  = body.paydate  ?? body.Paydate  ?? '';
+  const appcode  = body.appcode  ?? body.Appcode  ?? '';
   const skey     = body.skey     ?? '';
 
   const mask = (k: string) => k ? `${k.slice(0,4)}...${k.slice(-4)} (len ${k.length})` : 'MISSING';
   console.log('[fiuu/verify] secretKey:', mask(secretKey));
   console.log('[fiuu/verify] fields — tranID:', tranID, 'orderid:', orderid, 'status:', status,
-    'domain:', domain, 'amount:', amount, 'currency:', currency, 'paydate:', paydate);
+    'merchantId:', merchantId, 'amount:', amount, 'currency:', currency, 'paydate:', paydate, 'appcode:', appcode);
   console.log('[fiuu/verify] skey from Fiuu:', skey);
 
-  const raw     = `${tranID}${orderid}${status}${domain}${amount}${currency}${paydate}${secretKey}`;
-  const computed = md5(md5(raw));
-  console.log('[fiuu/verify] computed:', computed, computed === skey ? '✓ MATCH' : '✗ MISMATCH');
+  // pre_skey = md5( {txnID}{orderID}{status}{merchantID}{amount}{currency} )
+  // skey     = md5( {paydate}{merchantID}{pre_skey}{appcode}{secret_key} )
+  const preSkey  = md5(`${tranID}${orderid}${status}${merchantId}${amount}${currency}`);
+  const computed = md5(`${paydate}${merchantId}${preSkey}${appcode}${secretKey}`);
+  console.log('[fiuu/verify] pre_skey:', preSkey);
+  console.log('[fiuu/verify] computed skey:', computed, computed === skey ? '✓ MATCH' : '✗');
 
   return computed === skey;
 }
