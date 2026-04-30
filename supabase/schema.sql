@@ -125,5 +125,5 @@ BEGIN
   WHERE id = p_product_id AND outlet_id = p_outlet_id AND stock_count IS NOT NULL;
 END; $$;
 
--- Enable Realtime (run once):
--- ALTER PUBLICATION supabase_realtime ADD TABLE online_orders;
+-- Enable Realtime for order status updates (run once in Supabase SQL editor):
+ALTER PUBLICATION supabase_realtime ADD TABLE online_orders;
