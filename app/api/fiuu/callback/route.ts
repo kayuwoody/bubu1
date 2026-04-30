@@ -39,7 +39,7 @@ export async function POST(req: Request) {
 
   if (!tranID || !orderID || !status) {
     console.error('[fiuu/callback] missing required fields — tranID:', tranID, 'orderID:', orderID, 'status:', status);
-    return new Response('FAILED', { status: 400 });
+    return new Response('FAILED', { status: 200 });
   }
 
   let valid = false;
@@ -48,12 +48,12 @@ export async function POST(req: Request) {
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'sig error';
     console.error('[fiuu/callback] verify error:', msg);
-    return new Response('FAILED', { status: 500 });
+    return new Response('FAILED', { status: 200 });
   }
 
   if (!valid) {
     console.warn('[fiuu/callback] invalid signature for tranID:', tranID);
-    return new Response('FAILED', { status: 400 });
+    return new Response('FAILED', { status: 200 });
   }
 
   // Upsert payment record
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
 
   if (!session) {
     console.error('[fiuu/callback] session not found:', orderID);
-    return new Response('FAILED', { status: 404 });
+    return new Response('FAILED', { status: 200 });
   }
 
   // Idempotency: already processed
@@ -97,7 +97,7 @@ export async function POST(req: Request) {
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'order number error';
     console.error('[fiuu/callback] order number error:', msg);
-    return new Response('FAILED', { status: 500 });
+    return new Response('FAILED', { status: 200 });
   }
 
   const now = new Date().toISOString();
@@ -118,7 +118,7 @@ export async function POST(req: Request) {
 
   if (orderErr) {
     console.error('[fiuu/callback] order insert error:', orderErr.message);
-    return new Response('FAILED', { status: 500 });
+    return new Response('FAILED', { status: 200 });
   }
 
   const items: CartLine[] = session.items ?? [];
