@@ -21,7 +21,8 @@ function ReturnContent() {
     if (status && status !== '00') { setFailed(true); setMessage('Payment was not completed.'); return; }
 
     let attempts = 0;
-    const MAX = 12; // ~24 seconds
+    const FAST_MAX  = 15;  // first 30s: poll every 2s
+    const SLOW_MAX  = 55;  // next 160s: poll every 4s (total ~3.2 min)
 
     const poll = async () => {
       attempts++;
@@ -43,13 +44,16 @@ function ReturnContent() {
         }
       } catch { /* network blip — keep polling */ }
 
-      if (attempts >= MAX) {
+      if (attempts >= FAST_MAX + SLOW_MAX) {
         setFailed(true);
         setMessage('Taking longer than expected. Please check your email or contact us.');
         return;
       }
 
-      setTimeout(poll, 2000);
+      // Switch to slower polling after the fast window — eWallet callbacks
+      // (TNG, GrabPay, Boost) can take 1-2 minutes to arrive from Fiuu.
+      const delay = attempts < FAST_MAX ? 2000 : 4000;
+      setTimeout(poll, delay);
     };
 
     poll();
