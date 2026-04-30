@@ -65,7 +65,7 @@ export function buildFiuuSeamlessParams(opts: {
   const currency  = opts.currency ?? 'MYR';
   const orderId   = opts.sessionId.replace(/-/g, '');
 
-  const vcode = md5(amountStr + merchantId + orderId + verifyKey);
+  const vcode = md5(amountStr + merchantId + orderId + verifyKey + currency);
   const mask = (k: string) => k ? `${k.slice(0,4)}...${k.slice(-4)} (len ${k.length})` : 'MISSING';
   console.log('[fiuu/build] verifyKey:', mask(verifyKey));
   console.log('[fiuu/build] amount:', amountStr, 'merchantId:', merchantId, 'orderId:', orderId, 'vcode:', vcode);
