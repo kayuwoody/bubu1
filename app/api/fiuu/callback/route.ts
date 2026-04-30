@@ -156,7 +156,7 @@ export async function POST(req: Request) {
   ]);
   if (payErr)  console.error('[fiuu/callback] fiuu_payments update error:', payErr.message);
   if (sessErr) console.error('[fiuu/callback] checkout_sessions update error:', sessErr.message);
-  console.log('[fiuu/callback] session rows updated:', JSON.stringify(sessData));
+  console.log('[fiuu/callback] done — order:', orderId, 'session rows updated:', sessData?.length ?? 0);
 
   return new Response('RECEIVEROK', { status: 200 });
 }

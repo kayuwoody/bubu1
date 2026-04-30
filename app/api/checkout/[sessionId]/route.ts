@@ -15,8 +15,6 @@ export async function GET(
     .eq('id', sessionId)
     .single();
 
-  console.log('[checkout/poll] sessionId:', sessionId, 'data:', JSON.stringify(data), 'error:', error?.message);
-
   if (error || !data) {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   }
