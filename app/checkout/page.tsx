@@ -110,8 +110,9 @@ function CheckoutContent() {
           body: JSON.stringify({ url, method, body }),
         });
 
-      // 1. jQuery ajaxPrefilter
+      // 1. jQuery ajaxPrefilter — log ALL jQuery AJAX calls to find the verify URL
       (window as any).jQuery.ajaxPrefilter((opts: any) => {
+        console.log('[sdk-jquery]', opts.type, opts.url);
         if (opts.url && FIUU_RE.test(opts.url)) {
           console.log('[mps-proxy] jQuery intercepted:', opts.type, opts.url);
           const u = opts.url, m = (opts.type || 'GET').toUpperCase(), b = typeof opts.data === 'string' ? opts.data : '';
@@ -127,6 +128,7 @@ function CheckoutContent() {
         let _p = false, _pu = '', _pm = '';
         const _open = xhr.open.bind(xhr), _setH = xhr.setRequestHeader.bind(xhr), _send = xhr.send.bind(xhr);
         xhr.open = (m: string, u: string, ...a: any[]) => {
+          console.log('[sdk-xhr]', m, u);
           if (FIUU_RE.test(u)) { _p = true; _pu = u; _pm = m; console.log('[mps-proxy] XHR intercepted:', m, u); _open('POST', '/api/fiuu/proxy', ...a); }
           else _open(m, u, ...a);
         };
@@ -143,6 +145,7 @@ function CheckoutContent() {
       const _fetch = window.fetch.bind(window);
       window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
         const u = typeof input === 'string' ? input : (input instanceof URL ? input.href : (input as Request).url);
+        console.log('[sdk-fetch]', init?.method || 'GET', u);
         if (FIUU_RE.test(u)) { console.log('[mps-proxy] fetch intercepted:', u); return proxyCall(u, init?.method || 'GET', (init?.body || '').toString()); }
         return _fetch(input, init);
       };
