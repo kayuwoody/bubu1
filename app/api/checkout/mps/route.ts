@@ -19,7 +19,7 @@ export async function POST(req: Request) {
       requestType:          'STYPE',
       ignoreInitialization: '0',
     });
-    const verifyUrl = `${fiuuBase}/RMS/API/seamless/verify?${params}`;
+    const verifyUrl = `${fiuuBase}/MOLPay/API/seamless/verify?${params}`;
     console.log('[checkout/mps] verify →', verifyUrl);
     const vRes  = await fetch(verifyUrl);
     const vText = await vRes.text();
