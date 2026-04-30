@@ -57,7 +57,7 @@ export async function POST(req: Request) {
   }
 
   // Upsert payment record
-  await supabase.from('fiuu_payments').upsert({
+  const { error: upsertErr } = await supabase.from('fiuu_payments').upsert({
     payment_ref:  tranID,
     order_id:     null,
     amount:       parseFloat(amount),
@@ -65,6 +65,7 @@ export async function POST(req: Request) {
     status_code:  status,
     raw_payload:  body,
   }, { onConflict: 'payment_ref' });
+  if (upsertErr) console.error('[fiuu/callback] fiuu_payments upsert error:', upsertErr.message);
 
   if (!isFiuuSuccess(status)) {
     await supabase
@@ -75,11 +76,12 @@ export async function POST(req: Request) {
   }
 
   // Look up checkout session for cart + customer data
-  const { data: session } = await supabase
+  const { data: session, error: sessionErr } = await supabase
     .from('checkout_sessions')
     .select('*')
     .eq('id', orderID)
     .single();
+  console.log('[fiuu/callback] session lookup — found:', !!session, sessionErr?.message ?? '');
 
   if (!session) {
     console.error('[fiuu/callback] session not found:', orderID);
@@ -88,12 +90,14 @@ export async function POST(req: Request) {
 
   // Idempotency: already processed
   if (session.order_id) {
+    console.log('[fiuu/callback] already processed, order:', session.order_id);
     return new Response('RECEIVEROK', { status: 200 });
   }
 
   let orderId: string;
   try {
     orderId = await nextOrderNumber();
+    console.log('[fiuu/callback] generated order number:', orderId);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'order number error';
     console.error('[fiuu/callback] order number error:', msg);
@@ -111,7 +115,7 @@ export async function POST(req: Request) {
     customer_name:       session.customer_name,
     customer_phone:      session.customer_phone,
     total_paid:          session.total_amount,
-    currency:            session.currency,
+    currency:            'MYR',
     created_at:          now,
     updated_at:          now,
   });
@@ -120,6 +124,7 @@ export async function POST(req: Request) {
     console.error('[fiuu/callback] order insert error:', orderErr.message);
     return new Response('FAILED', { status: 200 });
   }
+  console.log('[fiuu/callback] online_orders inserted:', orderId);
 
   const items: CartLine[] = session.items ?? [];
   const productIds = items.map((i) => i.id);
@@ -129,7 +134,7 @@ export async function POST(req: Request) {
     .in('id', productIds);
   const nameMap = Object.fromEntries((catalogue ?? []).map((p) => [p.id, p.name]));
 
-  await supabase.from('online_order_items').insert(
+  const { error: itemsErr } = await supabase.from('online_order_items').insert(
     items.map((line) => ({
       order_id:     orderId,
       product_id:   line.id,
@@ -139,12 +144,16 @@ export async function POST(req: Request) {
       mods:         line.mods ?? {},
     }))
   );
+  if (itemsErr) console.error('[fiuu/callback] order items error:', itemsErr.message);
 
   // Update payment + session records
-  await Promise.all([
-    supabase.from('fiuu_payments').update({ order_id: orderId }).eq('payment_ref', tranID),
-    supabase.from('checkout_sessions').update({ status: 'paid', order_id: orderId }).eq('id', orderID),
+  const [payErr, sessErr] = await Promise.all([
+    supabase.from('fiuu_payments').update({ order_id: orderId }).eq('payment_ref', tranID).then(r => r.error),
+    supabase.from('checkout_sessions').update({ status: 'paid', order_id: orderId }).eq('id', orderID).then(r => r.error),
   ]);
+  if (payErr)  console.error('[fiuu/callback] fiuu_payments update error:', payErr.message);
+  if (sessErr) console.error('[fiuu/callback] checkout_sessions update error:', sessErr.message);
+  console.log('[fiuu/callback] done — order:', orderId, 'session updated:', !sessErr);
 
   return new Response('RECEIVEROK', { status: 200 });
 }
