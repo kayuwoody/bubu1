@@ -88,7 +88,7 @@ export function buildFiuuSeamlessParams(opts: {
     mpscurrency:    currency,
     mpslangcode:    'en',
     mpscancelurl:   `${opts.baseUrl}/checkout?cancelled=1`,
-    mpsreturnurl:   `${opts.baseUrl}/return`,
+    mpsreturnurl:   `${opts.baseUrl}/api/fiuu/return`,
     mpscallbackurl: `${opts.baseUrl}/api/fiuu/callback`,
     mpsnotifyurl:   `${opts.baseUrl}/api/fiuu/callback`,
     mpsapiversion:  '3.28',
