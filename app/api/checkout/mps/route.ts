@@ -41,42 +41,11 @@ export async function POST(req: Request) {
   // can find the correct mpslinkkey endpoint. Remove once endpoint is known.
   await discoverSdkUrls(fiuuBase);
 
-  // Fetch mpslinkkey server-side; try known candidates in order.
-  // We'll remove this trial loop once the correct endpoint is confirmed.
-  let mpslinkkey = '';
-  const candidates = [
-    `${fiuuBase}/RMS/API/seamless/v2/index.php`,
-    `${fiuuBase}/RMS/API/seamless/token.php`,
-    `${fiuuBase}/MOLPay/API/seamless/token.php`,
-  ];
-  const qParams = new URLSearchParams({
-    domain:               body.mpsmerchantid ?? '',
-    key:                  body.mpsvcode ?? '',
-    requestType:          'STYPE',
-    ignoreInitialization: '0',
-  });
-
-  for (const base of candidates) {
-    try {
-      const url = `${base}?${qParams}`;
-      console.log('[checkout/mps] probe →', url);
-      const vRes  = await fetch(url);
-      const vText = await vRes.text();
-      console.log('[checkout/mps] probe ←', vRes.status, vText.slice(0, 200));
-      if (vRes.ok) {
-        try {
-          const vData = JSON.parse(vText);
-          mpslinkkey = vData.mpslinkkey ?? vData.token ?? '';
-        } catch {
-          const m = vText.match(/mpslinkkey=([^&\s]+)/);
-          if (m) mpslinkkey = m[1];
-        }
-        if (mpslinkkey) break;
-      }
-    } catch (e) {
-      console.error('[checkout/mps] probe error:', e instanceof Error ? e.message : e);
-    }
-  }
+  // All known verify endpoints 404. Test whether mpslinkkey just needs to be
+  // non-empty: use vcode as a stand-in. If P03 clears → mpslinkkey is the issue
+  // and the correct formula/endpoint still needs to be found.
+  // If P03 persists → something else is wrong and mpslinkkey is a red herring.
+  let mpslinkkey = body.mpsvcode ?? '';
 
   console.log('[checkout/mps] mpslinkkey:', mpslinkkey ? `${mpslinkkey.slice(0, 8)}… (len ${mpslinkkey.length})` : 'EMPTY');
 
