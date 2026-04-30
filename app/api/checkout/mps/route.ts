@@ -5,8 +5,7 @@ export const dynamic = 'force-dynamic';
 
 async function discoverSdkUrls(fiuuBase: string): Promise<void> {
   // Fetch the SDK JS file server-side (no browser CORS) and log any URL
-  // patterns containing "verify", "token", or "linkkey" so we can find
-  // the correct mpslinkkey endpoint.
+  // patterns so we can find the correct mpslinkkey endpoint.
   try {
     const sdkPath = fiuuBase.includes('sandbox')
       ? '/MOLPay/API/seamless/3.28/js/MOLPay_seamless_sandbox.deco.js'
@@ -17,10 +16,15 @@ async function discoverSdkUrls(fiuuBase: string): Promise<void> {
     console.log('[sdk-discover] status:', res.status);
     if (!res.ok) return;
     const text = await res.text();
-    // Extract all quoted strings that look like URL paths
-    const hits = [...text.matchAll(/["'](\/[^"']{5,80}(?:verify|token|linkkey)[^"']*?)["']/gi)]
-      .map(m => m[1]);
-    console.log('[sdk-discover] url patterns:', JSON.stringify([...new Set(hits)].slice(0, 20)));
+    // Broad search: any quoted string containing a slash and at least one alpha segment
+    const allPaths = [...text.matchAll(/["'](\/[A-Za-z][A-Za-z0-9/_.-]{8,120})["']/g)]
+      .map(m => m[1]).filter(p => !p.includes(' '));
+    console.log('[sdk-discover] all paths:', JSON.stringify([...new Set(allPaths)].slice(0, 30)));
+    // Also log raw 200-char segments near the word "token" or "verify"
+    const keyIdx = [...text.matchAll(/(?:token|linkkey|verify)/gi)].map(m => m.index!);
+    for (const idx of keyIdx.slice(0, 5)) {
+      console.log('[sdk-discover] context:', JSON.stringify(text.slice(Math.max(0, idx-60), idx+140)));
+    }
   } catch (e) {
     console.error('[sdk-discover] error:', e instanceof Error ? e.message : e);
   }
