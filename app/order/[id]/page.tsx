@@ -31,6 +31,13 @@ const STATUS_COLOR: Record<string, string> = {
   rejected:  '#C62828',
 };
 
+interface OrderItem {
+  product_name: string;
+  qty: number;
+  unit_price: number;
+  mods: Record<string, string>;
+}
+
 interface Order {
   id: string;
   status: string;
@@ -39,6 +46,7 @@ interface Order {
   total_paid: number;
   currency: string;
   created_at: string;
+  online_order_items: OrderItem[];
 }
 
 export default function OrderPage() {
@@ -123,6 +131,26 @@ export default function OrderPage() {
         <img src="/co-mascot.png" alt="" style={{ width: 140, display: 'block', margin: '0 auto 24px', transform: 'rotate(-4deg)', filter: 'drop-shadow(0 8px 0 rgba(58,36,20,.15))' }}/>
 
         <div style={{ background: '#fff', borderRadius: R, border: `1.5px solid ${hex(INK, .08)}`, padding: 18 }}>
+          {(order.online_order_items ?? []).map((item, i) => {
+            const mods = Object.entries(item.mods ?? {}).filter(([, v]) => v && v !== 'none' && v !== '');
+            return (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid rgba(58,36,20,.06)` }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>
+                    <span style={{ color: PRI, marginRight: 6 }}>×{item.qty}</span>{item.product_name}
+                  </div>
+                  {mods.length > 0 && (
+                    <div style={{ fontSize: 12, color: hex(INK, .45), marginTop: 2 }}>
+                      {mods.map(([, v]) => v).join(' · ')}
+                    </div>
+                  )}
+                </div>
+                <div style={{ fontSize: 14, color: hex(INK, .55), marginLeft: 12, whiteSpace: 'nowrap' }}>
+                  {order.currency} {(item.unit_price * item.qty).toFixed(2)}
+                </div>
+              </div>
+            );
+          })}
           <Row label="Customer" value={order.customer_name}/>
           <Row label="Total paid" value={`${order.currency} ${Number(order.total_paid).toFixed(2)}`}/>
           <Row label="Pickup" value={order.pickup_type === 'curbside' ? 'Curbside' : 'At counter'}/>

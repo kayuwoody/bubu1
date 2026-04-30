@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/online/supabase';
-import { buildFiuuParams, FIUU_PAYMENT_URL } from '@/lib/online/fiuu';
+import { buildFiuuSeamlessParams } from '@/lib/online/fiuu';
 import type { CartLine } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +19,7 @@ export async function POST(req: Request) {
     pickup: 'counter' | 'curbside';
     items: CartLine[];
     total: number;
+    channel?: string;
     outlet_id?: string;
   };
 
@@ -28,10 +29,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { name, email, phone, pickup, items, total, outlet_id = 'main' } = body;
+  const { name, email, phone, pickup, items, total, channel, outlet_id = 'main' } = body;
 
   if (!name || !phone || !items?.length || total == null) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  }
+
+  if (!channel) {
+    return NextResponse.json({ error: 'Payment method is required' }, { status: 400 });
   }
 
   const { data: settings } = await supabase
@@ -67,18 +72,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 });
   }
 
-  const description = `Coffee Oasis · ${items.length} item${items.length > 1 ? 's' : ''}`;
-
-  let fiuuParams: Record<string, string>;
+  let fiuu: { scriptUrl: string; mpsParams: Record<string, string | boolean | number> };
   try {
-    fiuuParams = buildFiuuParams({
+    fiuu = buildFiuuSeamlessParams({
       sessionId:     session.id,
       amount:        total,
-      customerName:  name,
-      customerEmail: email ?? 'guest@coffeeoa.sis',
-      customerPhone: phone,
-      description,
       baseUrl:       getBaseUrl(),
+      channel,
+      customerName:  name,
+      customerEmail: email ?? '',
+      customerPhone: phone,
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -86,8 +89,8 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({
-    sessionId:    session.id,
-    fiuuUrl:      FIUU_PAYMENT_URL,
-    fiuuParams,
+    sessionId: session.id,
+    scriptUrl: fiuu.scriptUrl,
+    mpsParams: fiuu.mpsParams,
   });
 }

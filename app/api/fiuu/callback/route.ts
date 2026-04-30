@@ -6,38 +6,58 @@ import type { CartLine } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
+// Merchant portal verifies this endpoint with GET before activating callback
+export async function GET() {
+  return new Response('RECEIVEROK', { status: 200 });
+}
+
 export async function POST(req: Request) {
   let body: Record<string, string>;
+  let rawText = '';
   try {
-    const text = await req.text();
-    body = Object.fromEntries(new URLSearchParams(text));
+    rawText = await req.text();
+    body = Object.fromEntries(new URLSearchParams(rawText));
   } catch {
+    console.error('[fiuu/callback] body parse failed, raw:', rawText);
     return new Response('FAILED', { status: 400 });
   }
 
-  const { tranID, orderID, status, amount, currency } = body;
+  console.log('[fiuu/callback] received fields:', JSON.stringify(Object.keys(body)));
+  console.log('[fiuu/callback] body:', JSON.stringify(body));
+
+  // Normalise for required-field check (verifyFiuuCallback re-normalises internally)
+  const tranID   = body.tranID   ?? body.TranID   ?? '';
+  const rawOrder = body.orderID  ?? body.OrderID  ?? body.orderid  ?? '';
+  const status   = body.status   ?? body.Status   ?? body.StatCode ?? '';
+  const amount   = body.amount   ?? body.Amount   ?? '';
+  const currency = body.currency ?? body.Currency ?? 'MYR';
+
+  // Fiuu receives hyphen-free UUID; reconstruct the standard UUID format for Supabase
+  const orderID = rawOrder.length === 32 && /^[0-9a-f]+$/i.test(rawOrder)
+    ? `${rawOrder.slice(0,8)}-${rawOrder.slice(8,12)}-${rawOrder.slice(12,16)}-${rawOrder.slice(16,20)}-${rawOrder.slice(20)}`
+    : rawOrder;
 
   if (!tranID || !orderID || !status) {
-    return new Response('FAILED', { status: 400 });
+    console.error('[fiuu/callback] missing required fields — tranID:', tranID, 'orderID:', orderID, 'status:', status);
+    return new Response('FAILED', { status: 200 });
   }
 
-  // Verify Fiuu callback signature
   let valid = false;
   try {
     valid = verifyFiuuCallback(body);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'sig error';
     console.error('[fiuu/callback] verify error:', msg);
-    return new Response('FAILED', { status: 500 });
+    return new Response('FAILED', { status: 200 });
   }
 
   if (!valid) {
     console.warn('[fiuu/callback] invalid signature for tranID:', tranID);
-    return new Response('FAILED', { status: 400 });
+    return new Response('FAILED', { status: 200 });
   }
 
   // Upsert payment record
-  await supabase.from('fiuu_payments').upsert({
+  const { error: upsertErr } = await supabase.from('fiuu_payments').upsert({
     payment_ref:  tranID,
     order_id:     null,
     amount:       parseFloat(amount),
@@ -45,6 +65,7 @@ export async function POST(req: Request) {
     status_code:  status,
     raw_payload:  body,
   }, { onConflict: 'payment_ref' });
+  if (upsertErr) console.error('[fiuu/callback] fiuu_payments upsert error:', upsertErr.message);
 
   if (!isFiuuSuccess(status)) {
     await supabase
@@ -55,29 +76,32 @@ export async function POST(req: Request) {
   }
 
   // Look up checkout session for cart + customer data
-  const { data: session } = await supabase
+  const { data: session, error: sessionErr } = await supabase
     .from('checkout_sessions')
     .select('*')
     .eq('id', orderID)
     .single();
+  console.log('[fiuu/callback] session lookup — found:', !!session, sessionErr?.message ?? '');
 
   if (!session) {
     console.error('[fiuu/callback] session not found:', orderID);
-    return new Response('FAILED', { status: 404 });
+    return new Response('FAILED', { status: 200 });
   }
 
   // Idempotency: already processed
   if (session.order_id) {
+    console.log('[fiuu/callback] already processed, order:', session.order_id);
     return new Response('RECEIVEROK', { status: 200 });
   }
 
   let orderId: string;
   try {
     orderId = await nextOrderNumber();
+    console.log('[fiuu/callback] generated order number:', orderId);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'order number error';
     console.error('[fiuu/callback] order number error:', msg);
-    return new Response('FAILED', { status: 500 });
+    return new Response('FAILED', { status: 200 });
   }
 
   const now = new Date().toISOString();
@@ -91,15 +115,16 @@ export async function POST(req: Request) {
     customer_name:       session.customer_name,
     customer_phone:      session.customer_phone,
     total_paid:          session.total_amount,
-    currency:            session.currency,
+    currency:            'MYR',
     created_at:          now,
     updated_at:          now,
   });
 
   if (orderErr) {
     console.error('[fiuu/callback] order insert error:', orderErr.message);
-    return new Response('FAILED', { status: 500 });
+    return new Response('FAILED', { status: 200 });
   }
+  console.log('[fiuu/callback] online_orders inserted:', orderId);
 
   const items: CartLine[] = session.items ?? [];
   const productIds = items.map((i) => i.id);
@@ -109,7 +134,7 @@ export async function POST(req: Request) {
     .in('id', productIds);
   const nameMap = Object.fromEntries((catalogue ?? []).map((p) => [p.id, p.name]));
 
-  await supabase.from('online_order_items').insert(
+  const { error: itemsErr } = await supabase.from('online_order_items').insert(
     items.map((line) => ({
       order_id:     orderId,
       product_id:   line.id,
@@ -119,12 +144,19 @@ export async function POST(req: Request) {
       mods:         line.mods ?? {},
     }))
   );
+  if (itemsErr) console.error('[fiuu/callback] order items error:', itemsErr.message);
 
   // Update payment + session records
-  await Promise.all([
+  const [{ error: payErr }, { data: sessData, error: sessErr }] = await Promise.all([
     supabase.from('fiuu_payments').update({ order_id: orderId }).eq('payment_ref', tranID),
-    supabase.from('checkout_sessions').update({ status: 'paid', order_id: orderId }).eq('id', orderID),
+    supabase.from('checkout_sessions')
+      .update({ status: 'paid', order_id: orderId })
+      .eq('id', orderID)
+      .select('id, status, order_id'),
   ]);
+  if (payErr)  console.error('[fiuu/callback] fiuu_payments update error:', payErr.message);
+  if (sessErr) console.error('[fiuu/callback] checkout_sessions update error:', sessErr.message);
+  console.log('[fiuu/callback] done — order:', orderId, 'session rows updated:', sessData?.length ?? 0);
 
   return new Response('RECEIVEROK', { status: 200 });
 }

@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 const INK = '#3A2414';
 const PRI = '#F58220';
 const BG  = '#FFF6E8';
 
-export default function ReturnPage() {
+function ReturnContent() {
   const router      = useRouter();
   const searchParams = useSearchParams();
   const orderID     = searchParams.get('orderID') ?? searchParams.get('orderid') ?? '';
@@ -21,7 +21,8 @@ export default function ReturnPage() {
     if (status && status !== '00') { setFailed(true); setMessage('Payment was not completed.'); return; }
 
     let attempts = 0;
-    const MAX = 12; // ~24 seconds
+    const FAST_MAX  = 15;  // first 30s: poll every 2s
+    const SLOW_MAX  = 55;  // next 160s: poll every 4s (total ~3.2 min)
 
     const poll = async () => {
       attempts++;
@@ -43,13 +44,16 @@ export default function ReturnPage() {
         }
       } catch { /* network blip — keep polling */ }
 
-      if (attempts >= MAX) {
+      if (attempts >= FAST_MAX + SLOW_MAX) {
         setFailed(true);
         setMessage('Taking longer than expected. Please check your email or contact us.');
         return;
       }
 
-      setTimeout(poll, 2000);
+      // Switch to slower polling after the fast window — eWallet callbacks
+      // (TNG, GrabPay, Boost) can take 1-2 minutes to arrive from Fiuu.
+      const delay = attempts < FAST_MAX ? 2000 : 4000;
+      setTimeout(poll, delay);
     };
 
     poll();
@@ -103,5 +107,13 @@ export default function ReturnPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function ReturnPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#FFF6E8' }}/>}>
+      <ReturnContent />
+    </Suspense>
   );
 }
