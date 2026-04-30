@@ -27,7 +27,7 @@ function ReturnContent() {
     const poll = async () => {
       attempts++;
       try {
-        const res  = await fetch(`/api/checkout/${orderID}`);
+        const res  = await fetch(`/api/checkout/${orderID}?t=${Date.now()}`);
         const data = await res.json();
 
         if (data.order_id) {
