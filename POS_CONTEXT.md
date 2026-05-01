@@ -75,19 +75,19 @@ mods          JSONB   -- e.g. {"size":"Large","milk":"Oat","sugar":"Less","ice":
 ### `outlet_settings`
 ```sql
 outlet_id     TEXT PRIMARY KEY   -- 'main'
-intake_paused BOOLEAN            -- when true, customer app blocks new orders
+intake_paused BOOLEAN            -- when true, customer app blocks new orders + shows banner
 updated_at    TIMESTAMPTZ
 ```
 
 ### `online_products`
 ```sql
-id          TEXT PRIMARY KEY
+id          TEXT PRIMARY KEY   -- must match product IDs below
 outlet_id   TEXT
 name        TEXT
 category    TEXT
 price       NUMERIC
-available   BOOLEAN
-stock_count INTEGER   -- null means unlimited; 0 triggers auto sold-out
+available   BOOLEAN            -- false = hidden/greyed in customer menu
+stock_count INTEGER            -- null = unlimited; 0 triggers auto sold-out via DB trigger
 image_url   TEXT
 updated_at  TIMESTAMPTZ
 ```
@@ -105,6 +105,53 @@ created_at   TIMESTAMPTZ
 
 ---
 
+## Product IDs (customer menu → online_products)
+
+The customer menu is static. For `decrement_stock` and sold-out flags to work, `online_products` rows must use these exact IDs:
+
+| ID | Name | Price |
+|---|---|---|
+| `flat` | Flat White | 10.50 |
+| `latte` | Oasis Latte | 11.00 |
+| `kopi` | Kopi-O Gula Melaka | 8.50 |
+| `danish` | Butter Danish | 6.50 |
+| `esp` | Espresso | 7.00 |
+| `ame` | Americano | 8.50 |
+| `cap` | Cappuccino | 10.50 |
+| `moch` | Mocha | 12.00 |
+| `matcha` | Matcha Latte | 12.50 |
+| `choc` | Hot Chocolate | 11.00 |
+| `chai` | Spiced Chai | 10.00 |
+| `icel` | Iced Latte | 11.00 |
+| `frap` | Coffee Frappe | 13.50 |
+| `cold` | Cold Brew | 12.00 |
+| `crois` | Almond Croissant | 7.50 |
+| `muf` | Blueberry Muffin | 6.00 |
+| `kayab` | Kaya Butter Toast | 5.50 |
+| `c1` | Kopi + Toast (combo) | 13.00 |
+| `c2` | Latte + Danish (combo) | 15.00 |
+
+If a product ID has no row in `online_products`, the customer app treats it as available (default open). Only add rows when you need to mark something sold-out or track stock.
+
+---
+
+## Confirmed Integration Points
+
+All items from the integration guide have been verified/implemented on the customer app side:
+
+| Item | Status |
+|---|---|
+| `decrement_stock(p_product_id, p_outlet_id, p_qty)` RPC | ✅ exists in schema |
+| Realtime enabled on `online_orders` | ✅ `ALTER PUBLICATION supabase_realtime ADD TABLE online_orders` in schema |
+| Schema column names match | ✅ confirmed |
+| Mods JSONB format `{size, milk, sugar, ice, notes}` | ✅ confirmed, values are human-readable strings |
+| Order ID format | ✅ `A` + sequential number (e.g. `A1006`) |
+| Rejected order handling | ✅ customer order page shows `reject_reason` + refund note |
+| Intake paused banner | ✅ customer menu shows yellow banner + blocks checkout when `intake_paused = true` |
+| Sold-out items in menu | ✅ `available=false` or `stock_count=0` → "Sold out" badge, add button disabled |
+
+---
+
 ## Supabase Client Setup
 
 ```typescript
@@ -117,6 +164,7 @@ export const supabase = createClient(
   {
     auth: { persistSession: false },
     global: {
+      // Prevent Next.js data cache from serving stale reads
       fetch: (input, init) =>
         fetch(input as RequestInfo, { ...init as RequestInit, cache: 'no-store' }),
     },
@@ -137,7 +185,7 @@ const { data } = await supabase
     customer_name, customer_phone,
     total_paid, currency, reject_reason,
     accepted_at, ready_at, created_at, updated_at,
-    online_order_items ( id, product_name, qty, unit_price, mods )
+    online_order_items ( id, product_id, product_name, qty, unit_price, mods )
   `)
   .eq('outlet_id', 'main')
   .in('status', ['pending', 'accepted', 'ready'])
@@ -146,9 +194,6 @@ const { data } = await supabase
 
 ### Subscribe to new orders via Realtime
 ```typescript
-// online_orders already has Realtime enabled in the shared DB:
-// ALTER PUBLICATION supabase_realtime ADD TABLE online_orders;
-
 const channel = supabase
   .channel('pos-orders')
   .on(
@@ -190,13 +235,28 @@ for (const item of orderItems) {
 }
 ```
 
+### Mark item sold out / toggle availability
+```typescript
+// Sold out (keeps row, hides add button in customer menu)
+await supabase
+  .from('online_products')
+  .upsert({ id: productId, outlet_id: 'main', available: false }, { onConflict: 'id' });
+
+// Back in stock
+await supabase
+  .from('online_products')
+  .upsert({ id: productId, outlet_id: 'main', available: true, stock_count: null }, { onConflict: 'id' });
+```
+
+The customer menu polls `/api/availability` on load — changes are visible on next page load or refresh. Realtime on `online_products` is not yet subscribed on the customer side, so sold-out changes are not instant in the menu (order page status changes are instant).
+
 ### Pause / resume intake
 ```typescript
 await supabase
   .from('outlet_settings')
   .upsert({ outlet_id: 'main', intake_paused: true }, { onConflict: 'outlet_id' });
 ```
-When paused, the customer app blocks new checkouts and shows "temporarily unavailable".
+Customer app: blocks new checkouts at the API level (returns 503) and shows a yellow banner on the menu page.
 
 ### Get average wait time (optional, for display)
 ```typescript
@@ -232,17 +292,19 @@ const avgSeconds = recent?.length
 - Order ID (e.g. **A1006**), time since order placed
 - Customer name, pickup type (counter / curbside 🚗)
 - Every item: `×2 Iced Latte` with mods on the next line (`Oat · Less Sugar · No Ice`)
+- `notes` field shown separately if present (e.g. italicised below the mod line)
 - Total paid
 - Action button(s) appropriate for current status
 
 ### Reject flow
 - Inline: show a text input for optional reject reason before confirming
 - On confirm: update status to `rejected` with the reason
+- Customer sees the reason immediately via Realtime on their order page
 
 ### Header
 - Outlet name + "N new" badge when `pending` count > 0
 - Average wait time (if available)
-- Pause / Resume intake toggle — when paused, show a warning banner
+- Pause / Resume intake toggle — when paused show a warning banner
 
 ### Audio alert
 - Play a short beep/tone when a new `pending` order arrives that wasn't in the previous fetch
@@ -273,6 +335,9 @@ Border radius: 16-22px on cards
 
 - Hosts the menu, checkout, and Fiuu payment flow
 - Receives the Fiuu callback and creates `online_orders` + `online_order_items` rows
-- Customer's `/order/[id]` page subscribes to `online_orders` via Realtime and updates status display instantly when POS writes a status change
+- Customer's `/order/[id]` page subscribes to `online_orders` via Realtime — status label and icon update instantly when POS writes a status change
+- Shows `reject_reason` on the order page when status is `rejected`, with a refund contact note
+- Checks `outlet_settings.intake_paused` on checkout — returns 503 + shows banner if paused
+- Polls `/api/availability` on menu load to show sold-out state for unavailable products
 
-The POS only needs to **read** and **update** `online_orders`. It does not need to create orders or handle payments.
+The POS only needs to **read** and **update** `online_orders` and `online_products`. It does not handle payments or order creation.
