@@ -1,6 +1,6 @@
 # Coffee Oasis POS — Build Context
 
-You are building the **staff-facing POS** for Coffee Oasis, a coffee shop at Shell Seksyen 13, Petaling Jaya. This is a **Next.js app** used in-person by baristas on a tablet or desktop. It shares a Supabase database with the customer-facing ordering app.
+You are building the **staff-facing POS** for Coffee Oasis, a coffee shop at Taman Segar Perdana, 43200 Cheras. This is a **Next.js app** used in-person by baristas on a tablet or desktop. It shares a Supabase database with the customer-facing ordering app.
 
 ---
 
