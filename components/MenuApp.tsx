@@ -210,7 +210,7 @@ function qtyBtn(bg: string, fg: string): React.CSSProperties {
   return { width:30, height:30, borderRadius:'50%', background:bg, color:fg, border:'none', display:'grid', placeItems:'center', cursor:'pointer' };
 }
 
-function ItemCard({ item, qty, onAdd, onSub, onCustomize, viewport }: { item: MenuItem; qty: number; onAdd: () => void; onSub: () => void; onCustomize: () => void; viewport: Viewport }) {
+function ItemCard({ item, qty, onAdd, onSub, onCustomize, viewport, soldOut }: { item: MenuItem; qty: number; onAdd: () => void; onSub: () => void; onCustomize: () => void; viewport: Viewport; soldOut?: boolean }) {
   const isDrink = MENU_DATA.drinkCats.includes(item.cat);
   const compact = viewport === 'mobile';
   return (
@@ -224,7 +224,9 @@ function ItemCard({ item, qty, onAdd, onSub, onCustomize, viewport }: { item: Me
         <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:hex(T.inkColor,.6), marginTop:3, lineHeight:1.3 }}>{item.desc}</div>
         <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?16:17, color:T.inkColor, marginTop:6 }}>RM {item.price.toFixed(2)}</div>
       </div>
-      {qty > 0 && !isDrink ? (
+      {soldOut ? (
+        <div style={{ padding:'8px 12px', borderRadius:999, background:'rgba(58,36,20,.08)', color:'rgba(58,36,20,.4)', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, whiteSpace:'nowrap', flexShrink:0 }}>Sold out</div>
+      ) : qty > 0 && !isDrink ? (
         <div style={{ display:'flex', alignItems:'center', gap:10, background:T.inkColor, color:'#fff', borderRadius:999, padding:4 }}>
           <button onClick={onSub} style={qtyBtn('#fff', T.inkColor)}><Icon.Minus width="16" height="16"/></button>
           <span style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, minWidth:16, textAlign:'center' }}>{qty}</span>
@@ -467,7 +469,19 @@ export default function MenuApp() {
   const [pickup,    setPickup]     = useState<'counter'|'curbside'>('counter');
   const [cartOpen,  setCartOpen]   = useState(false);
   const [sheetItem, setSheetItem]  = useState<MenuItem|null>(null);
+  const [unavailable, setUnavailable] = useState<Set<string>>(new Set());
+  const [intakePaused, setIntakePaused] = useState(false);
   const { lines, addLine, incLine, decLine, qtyFor, incById, decById, count, total } = useCart();
+
+  useEffect(() => {
+    fetch('/api/availability')
+      .then(r => r.json())
+      .then(d => {
+        setIntakePaused(d.intake_paused ?? false);
+        setUnavailable(new Set(d.unavailable ?? []));
+      })
+      .catch(() => {});
+  }, []);
 
   const filtered = MENU_DATA.items.filter(i => i.cat === activeCat);
 
@@ -491,13 +505,18 @@ export default function MenuApp() {
     <div style={{ background:T.bgColor, minHeight:'100vh', color:T.inkColor, fontFamily:"'Nunito',system-ui" }}>
       <Header onCartClick={() => setCartOpen(true)} cartCount={count} viewport={viewport}/>
       <Hero viewport={viewport}/>
+      {intakePaused && (
+        <div style={{ margin:viewport==='mobile'?'12px 16px 0':'16px 28px 0', padding:'12px 16px', background:'#FFF3CD', border:'1px solid #FFE082', borderRadius:T.cornerRadius-4, fontSize:14, fontWeight:600, color:'#7B5800', textAlign:'center' }}>
+          Online ordering is temporarily paused — please try again shortly.
+        </div>
+      )}
       {T.showReorder && <ReorderTile viewport={viewport} onReorder={handleReorder}/>}
       <PickupBar viewport={viewport} pickup={pickup} setPickup={setPickup}/>
       {T.showLoyalty && <LoyaltyStrip viewport={viewport}/>}
       <CatBar cats={MENU_DATA.categories} active={activeCat} setActive={setActiveCat} viewport={viewport}/>
       <main style={{ padding:viewport==='mobile'?'0 16px 100px':'0 28px 40px', display:'grid', gridTemplateColumns:viewport==='desktop'?'1fr 1fr':'1fr', gap:10 }}>
         {filtered.map(it => (
-          <ItemCard key={it.id} item={it} qty={qtyFor(it.id)} onAdd={() => incById(it.id)} onSub={() => decById(it.id)} onCustomize={() => setSheetItem(it)} viewport={viewport}/>
+          <ItemCard key={it.id} item={it} qty={qtyFor(it.id)} onAdd={() => incById(it.id)} onSub={() => decById(it.id)} onCustomize={() => setSheetItem(it)} viewport={viewport} soldOut={unavailable.has(it.id)}/>
         ))}
       </main>
       <CartBar count={count} total={total} onClick={() => setCartOpen(true)} viewport={viewport}/>

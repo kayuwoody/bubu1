@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { createBrowserClient } from '@/lib/online/supabase-browser';
 
 const INK = '#3A2414';
 const PRI = '#F58220';
@@ -31,6 +32,8 @@ const STATUS_COLOR: Record<string, string> = {
   rejected:  '#C62828',
 };
 
+const TERMINAL = new Set(['collected', 'rejected']);
+
 interface OrderItem {
   product_name: string;
   qty: number;
@@ -46,35 +49,58 @@ interface Order {
   total_paid: number;
   currency: string;
   created_at: string;
+  reject_reason: string | null;
   online_order_items: OrderItem[];
 }
 
 export default function OrderPage() {
   const { id } = useParams<{ id: string }>();
-  const [order,  setOrder]  = useState<Order | null>(null);
-  const [error,  setError]  = useState('');
-  const [polled, setPolled] = useState(0);
+  const [order, setOrder] = useState<Order | null>(null);
+  const [error, setError] = useState('');
 
+  // Initial load
+  useEffect(() => {
+    if (!id) return;
+    fetch(`/api/orders/${id}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) setError(data.error);
+        else setOrder(data);
+      })
+      .catch(() => setError('Could not load order.'));
+  }, [id]);
+
+  // Realtime subscription for instant status updates from POS
   useEffect(() => {
     if (!id) return;
 
-    const load = async () => {
-      try {
-        const res  = await fetch(`/api/orders/${id}`);
-        const data = await res.json();
-        if (!res.ok) { setError(data.error ?? 'Order not found'); return; }
-        setOrder(data);
-        // Keep polling if order isn't terminal
-        if (!['collected', 'rejected'].includes(data.status)) {
-          setTimeout(() => setPolled(p => p + 1), 10000);
+    const sb = createBrowserClient();
+    const channel = sb
+      .channel(`order:${id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'online_orders', filter: `id=eq.${id}` },
+        payload => {
+          setOrder(prev => prev ? { ...prev, ...(payload.new as Partial<Order>) } : prev);
         }
-      } catch {
-        setError('Could not load order.');
-      }
-    };
+      )
+      .subscribe();
 
-    load();
-  }, [id, polled]);
+    return () => { sb.removeChannel(channel); };
+  }, [id]);
+
+  // Fallback poll every 30s in case Realtime drops
+  useEffect(() => {
+    if (!id) return;
+    const tick = setInterval(async () => {
+      const data = await fetch(`/api/orders/${id}`).then(r => r.json()).catch(() => null);
+      if (data && !data.error) setOrder(prev => {
+        if (prev && TERMINAL.has(prev.status)) { clearInterval(tick); return prev; }
+        return data;
+      });
+    }, 30_000);
+    return () => clearInterval(tick);
+  }, [id]);
 
   if (error) return (
     <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: BG, fontFamily: "'Nunito', system-ui" }}>
@@ -100,13 +126,14 @@ export default function OrderPage() {
     <div style={{ minHeight: '100vh', background: BG, fontFamily: "'Nunito', system-ui", padding: '32px 16px 60px' }}>
       <div style={{ maxWidth: 420, margin: '0 auto' }}>
 
-        {/* Check circle */}
+        {/* Status icon */}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{
             width: 80, height: 80, borderRadius: '50%',
             background: statusColor, color: '#fff',
             display: 'inline-grid', placeItems: 'center',
             boxShadow: `0 6px 0 ${hex(statusColor, .3)}`,
+            transition: 'background 0.4s, box-shadow 0.4s',
           }}>
             {isReady ? (
               <span style={{ fontSize: 36 }}>🎉</span>
@@ -122,7 +149,9 @@ export default function OrderPage() {
           <div style={{ fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 32, color: INK, lineHeight: 1 }}>
             Order {order.id}
           </div>
-          <div style={{ marginTop: 10, fontSize: 16, color: statusColor, fontWeight: 700 }}>{statusLabel}</div>
+          <div style={{ marginTop: 10, fontSize: 16, color: statusColor, fontWeight: 700, transition: 'color 0.4s' }}>
+            {statusLabel}
+          </div>
           <div style={{ marginTop: 4, fontSize: 13, color: hex(INK, .55) }}>
             {order.pickup_type === 'curbside' ? 'Curbside pickup' : 'Counter pickup'} · Shell Seksyen 13, PJ
           </div>
@@ -156,6 +185,19 @@ export default function OrderPage() {
           <Row label="Pickup" value={order.pickup_type === 'curbside' ? 'Curbside' : 'At counter'}/>
         </div>
 
+        {order.status === 'rejected' && (
+          <div style={{ marginTop: 16, padding: 16, background: '#FFF5F5', borderRadius: R - 4, border: `1.5px solid rgba(198,40,40,.2)` }}>
+            {order.reject_reason && (
+              <div style={{ fontSize: 14, color: '#C62828', fontWeight: 600, marginBottom: 6 }}>
+                Reason: {order.reject_reason}
+              </div>
+            )}
+            <div style={{ fontSize: 13, color: hex(INK, .65), lineHeight: 1.5 }}>
+              Your payment will be refunded. Please contact the store if you have any questions.
+            </div>
+          </div>
+        )}
+
         <div style={{ marginTop: 16, padding: 14, background: '#fff', borderRadius: R - 4, border: `1.5px solid ${hex(INK, .06)}`, display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: INK }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 22s7-7.5 7-13a7 7 0 1 0-14 0c0 5.5 7 13 7 13z"/>
@@ -187,3 +229,4 @@ function Row({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
