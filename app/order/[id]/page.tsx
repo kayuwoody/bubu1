@@ -49,6 +49,7 @@ interface Order {
   total_paid: number;
   currency: string;
   created_at: string;
+  reject_reason: string | null;
   online_order_items: OrderItem[];
 }
 
@@ -183,6 +184,19 @@ export default function OrderPage() {
           <Row label="Total paid" value={`${order.currency} ${Number(order.total_paid).toFixed(2)}`}/>
           <Row label="Pickup" value={order.pickup_type === 'curbside' ? 'Curbside' : 'At counter'}/>
         </div>
+
+        {order.status === 'rejected' && (
+          <div style={{ marginTop: 16, padding: 16, background: '#FFF5F5', borderRadius: R - 4, border: `1.5px solid rgba(198,40,40,.2)` }}>
+            {order.reject_reason && (
+              <div style={{ fontSize: 14, color: '#C62828', fontWeight: 600, marginBottom: 6 }}>
+                Reason: {order.reject_reason}
+              </div>
+            )}
+            <div style={{ fontSize: 13, color: hex(INK, .65), lineHeight: 1.5 }}>
+              Your payment will be refunded. Please contact the store if you have any questions.
+            </div>
+          </div>
+        )}
 
         <div style={{ marginTop: 16, padding: 14, background: '#fff', borderRadius: R - 4, border: `1.5px solid ${hex(INK, .06)}`, display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: INK }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
