@@ -127,18 +127,12 @@ export async function POST(req: Request) {
   console.log('[fiuu/callback] online_orders inserted:', orderId);
 
   const items: CartLine[] = session.items ?? [];
-  const productIds = items.map((i) => i.id);
-  const { data: catalogue } = await supabase
-    .from('online_products')
-    .select('id, name')
-    .in('id', productIds);
-  const nameMap = Object.fromEntries((catalogue ?? []).map((p) => [p.id, p.name]));
 
   const { error: itemsErr } = await supabase.from('online_order_items').insert(
     items.map((line) => ({
       order_id:     orderId,
       product_id:   line.id,
-      product_name: nameMap[line.id] ?? line.id,
+      product_name: line.name ?? line.id,
       qty:          line.qty,
       unit_price:   line.unitPrice,
       mods:         line.mods ?? {},

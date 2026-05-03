@@ -78,9 +78,34 @@ export interface ItemMods {
 export interface CartLine {
   lid: string;
   id: string;
+  name: string;
   qty: number;
-  mods: Partial<ItemMods> | null;
+  mods: Record<string, unknown> | null;
   unitPrice: number;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  category: string;
+  base_price: number;
+  image_url: string | null;
+  combo_price_override: number | null;
+  available_online: boolean;
+  recipe_items: RecipeItem[];
+}
+
+export interface RecipeItem {
+  id: string;
+  product_id: string;
+  item_type: string;
+  linked_product_id: string | null;
+  linked_product_name: string | null;
+  quantity: number;
+  is_optional: boolean;
+  selection_group: string | null;
+  price_adjustment: number;
+  sort_order: number;
 }
 
 export type Viewport = 'mobile' | 'tablet' | 'desktop';

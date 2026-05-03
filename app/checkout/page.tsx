@@ -3,7 +3,6 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { CartLine } from '@/lib/types';
-import MENU_DATA from '@/lib/menu-data';
 
 const INK  = '#3A2414';
 const BG   = '#FFF6E8';
@@ -180,10 +179,7 @@ function CheckoutContent() {
     }
   };
 
-  const itemNames = pending.lines.map(l => {
-    const item = MENU_DATA.items.find(i => i.id === l.id);
-    return `${l.qty}× ${item?.name ?? l.id}`;
-  }).join(', ');
+  const itemNames = pending.lines.map(l => `${l.qty}× ${l.name}`).join(', ');
 
   return (
     <div style={{ minHeight: '100vh', background: BG, fontFamily: "'Nunito', system-ui", padding: '24px 16px 48px' }}>
