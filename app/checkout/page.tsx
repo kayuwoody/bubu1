@@ -65,10 +65,11 @@ function CheckoutContent() {
     try {
       const saved = localStorage.getItem('co_form');
       if (saved) {
-        const { name: n, email: em, phone: ph } = JSON.parse(saved);
+        const { name: n, email: em, phone: ph, channel: ch } = JSON.parse(saved);
         if (n)  setName(n);
         if (em) setEmail(em);
         if (ph) setPhone(ph);
+        if (ch) setChannel(ch);
       }
     } catch { /* ignore */ }
   }, []);
@@ -90,7 +91,7 @@ function CheckoutContent() {
     if (!name.trim() || !phone.trim()) { setError('Name and phone are required.'); return; }
     if (!channel) { setError('Please select a payment method.'); return; }
     // Persist form fields so they survive a cancel/retry cycle
-    try { localStorage.setItem('co_form', JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim() })); } catch { /* ignore */ }
+    try { localStorage.setItem('co_form', JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim(), channel })); } catch { /* ignore */ }
     setLoading(true);
     try {
       const res = await fetch('/api/checkout', {
