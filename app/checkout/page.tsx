@@ -279,9 +279,19 @@ function CheckoutContent() {
           {loading && (
             <a
               href="/checkout?cancelled=1"
-              style={{ display: 'block', textAlign: 'center', marginTop: 12, fontSize: 14, color: hex(INK, .5), textDecoration: 'underline' }}
+              style={{
+                position: 'fixed', top: 16, left: 16, zIndex: 99999,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: '#fff',
+                border: `1.5px solid ${hex(INK, .15)}`,
+                borderRadius: R - 8,
+                padding: '10px 18px',
+                fontSize: 14, fontWeight: 700, color: INK,
+                textDecoration: 'none',
+                boxShadow: '0 2px 16px rgba(0,0,0,.18)',
+              }}
             >
-              ← Cancel payment
+              ← Cancel
             </a>
           )}
 
