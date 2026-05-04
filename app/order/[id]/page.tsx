@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@/lib/online/supabase-browser';
+import type { Branch } from '@/lib/types';
 
 const INK = '#3A2414';
 const PRI = '#F58220';
@@ -57,6 +58,14 @@ export default function OrderPage() {
   const { id } = useParams<{ id: string }>();
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState('');
+  const [branch, setBranch] = useState<Branch | null>(null);
+
+  useEffect(() => {
+    fetch('/api/branch')
+      .then(r => r.json())
+      .then(data => setBranch(data))
+      .catch(() => {});
+  }, []);
 
   // Initial load
   useEffect(() => {
@@ -153,7 +162,7 @@ export default function OrderPage() {
             {statusLabel}
           </div>
           <div style={{ marginTop: 4, fontSize: 13, color: hex(INK, .55) }}>
-            {order.pickup_type === 'curbside' ? 'Curbside pickup' : 'Counter pickup'} · Shell Seksyen 13, PJ
+            {order.pickup_type === 'curbside' ? 'Curbside pickup' : 'Counter pickup'} · {branch?.name ?? 'Coffee Oasis'}
           </div>
         </div>
 
@@ -204,8 +213,8 @@ export default function OrderPage() {
             <circle cx="12" cy="9" r="2.5"/>
           </svg>
           <div>
-            <div style={{ fontWeight: 700 }}>Coffee Oasis · Shell Seksyen 13</div>
-            <div style={{ opacity: .6, fontSize: 12 }}>Jalan Universiti, 46200 Petaling Jaya</div>
+            <div style={{ fontWeight: 700 }}>{branch?.name ?? 'Coffee Oasis'}</div>
+            {branch?.address && <div style={{ opacity: .6, fontSize: 12 }}>{branch.address}</div>}
           </div>
         </div>
 

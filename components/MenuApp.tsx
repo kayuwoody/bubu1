@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { CartLine, Product, RecipeItem, Viewport } from '@/lib/types';
+import type { Branch, CartLine, Product, SelectionConfig, Viewport, XorGroup } from '@/lib/types';
 
 interface Category { id: string; label: string }
 
@@ -40,7 +40,7 @@ function hex(h: string, a = 1) {
 }
 
 function isDrink(cat: string) { return DRINK_CATS.has(cat); }
-function needsSheet(p: Product) { return isDrink(p.category) || p.category === 'combo' || p.recipe_items.length > 0; }
+function needsSheet(p: Product) { return isDrink(p.category) || p.selection_config != null; }
 function catSwatch(cat: string) { return CAT_SWATCHES[cat] ?? '#C88A54'; }
 
 function useViewport(): Viewport {
@@ -133,7 +133,7 @@ function useCart() {
     });
   };
   const incLine = (lid: string) => setLines(prev => prev.map(l => l.lid === lid ? { ...l, qty: l.qty + 1 } : l));
-  const decLine = (lid: string) => setLines(prev => prev.flatMap(l => l.lid === lid ? (l.qty - 1 <= 0 ? [] : [{ ...l, qty: l.qty - 1 }]) : [l]));
+  const decLine = (lid: string) => setLines(prev => prev.flatMap(l => l.lid === lid ? (l.qty <= 1 ? [] : [{ ...l, qty: l.qty - 1 }]) : [l]));
   const qtyFor  = (id: string) => lines.filter(l => l.id === id).reduce((s, l) => s + l.qty, 0);
   const incById = (id: string, name: string, unitPrice: number) => {
     const idx = lines.findIndex(l => l.id === id);
@@ -147,14 +147,14 @@ function useCart() {
 }
 
 // ── Header ─────────────────────────────────────────────────────────────────
-function Header({ onCartClick, cartCount, viewport }: { onCartClick: () => void; cartCount: number; viewport: Viewport }) {
+function Header({ onCartClick, cartCount, viewport, branch }: { onCartClick: () => void; cartCount: number; viewport: Viewport; branch: Branch | null }) {
   const compact = viewport === 'mobile';
   return (
     <header style={{ position:'sticky', top:0, zIndex:20, background:T.bgColor, borderBottom:`1px solid ${hex(T.inkColor,.08)}`, padding:compact?'12px 16px':'16px 28px', display:'flex', alignItems:'center', gap:12 }}>
       <img src="/co-logo.png" alt="Coffee Oasis" style={{ height:compact?36:44, width:'auto', objectFit:'contain' }}/>
       {!compact && (
         <div style={{ marginLeft:12, fontFamily:"'Nunito',system-ui", color:T.inkColor, fontSize:13, display:'flex', alignItems:'center', gap:6, opacity:.75 }}>
-          <Icon.Pin width="14" height="14"/> Shell Seksyen 13, PJ · Open till 10pm
+          <Icon.Pin width="14" height="14"/> {branch?.address ?? 'Shell Seksyen 13, PJ'} · Open till 10pm
         </div>
       )}
       <div style={{ marginLeft:'auto' }}>
@@ -193,7 +193,7 @@ function Hero({ viewport }: { viewport: Viewport }) {
 }
 
 // ── Pickup Bar ─────────────────────────────────────────────────────────────
-function PickupBar({ viewport, pickup, setPickup }: { viewport: Viewport; pickup: string; setPickup: (v: 'counter'|'curbside') => void }) {
+function PickupBar({ viewport, pickup, setPickup, branch }: { viewport: Viewport; pickup: string; setPickup: (v: 'counter'|'curbside') => void; branch: Branch | null }) {
   const compact = viewport === 'mobile';
   const opts = [
     { id:'counter',  label:'At counter', Ico:Icon.Walk },
@@ -202,7 +202,7 @@ function PickupBar({ viewport, pickup, setPickup }: { viewport: Viewport; pickup
   return (
     <div style={{ margin:compact?'12px 16px 0':'16px 28px 0', background:'#fff', border:`1.5px solid ${hex(T.inkColor,.08)}`, borderRadius:T.cornerRadius, padding:compact?10:12, display:'flex', alignItems:'center', gap:10, flexWrap:compact?'wrap':'nowrap' }}>
       <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:13, color:T.inkColor, whiteSpace:'nowrap' }}>
-        <Icon.Clock width="16" height="16"/> Pickup in ~4 min
+        <Icon.Clock width="16" height="16"/> {branch?.name ?? 'Coffee Oasis'} · ~4 min
       </div>
       <div style={{ display:'flex', gap:6, flex:1, minWidth:compact?'100%':0 }}>
         {opts.map(o => {
@@ -292,7 +292,85 @@ function CartBar({ count, total, onClick, viewport }: { count: number; total: nu
 
 // ── Customize Sheet ────────────────────────────────────────────────────────
 type DrinkSel = { size: string; milk: string; sugar: string; ice: string; notes: string };
-type ComboGroupSel = { recipe_item_id: string; linked_product_id: string | null; name: string; price_adjustment: number };
+
+function pillStyle(on: boolean): React.CSSProperties {
+  return { padding:'8px 14px', borderRadius:999, border:on?`2px solid ${T.inkColor}`:`1.5px solid ${hex(T.inkColor,.12)}`, background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5 };
+}
+
+function ComboSection({ cfg, selections, selectedOptionals, onSelect, onToggleOptional }: {
+  cfg: SelectionConfig;
+  selections: Record<string, string>;
+  selectedOptionals: Set<string>;
+  onSelect: (groupKey: string, itemId: string, parentGroupKey?: string) => void;
+  onToggleOptional: (id: string) => void;
+}) {
+  const topLevel = cfg.xorGroups.filter((g: XorGroup) => !g.parentProductId);
+  const nested   = cfg.xorGroups.filter((g: XorGroup) => !!g.parentProductId);
+  const hasOverride = true; // combos always have override in practice; show +RM / Included
+
+  return (
+    <>
+      {topLevel.map(group => {
+        const selectedId = selections[group.uniqueKey];
+        const childGroups = nested.filter(ng => ng.parentProductId === selectedId);
+        return (
+          <div key={group.uniqueKey} style={{ marginTop:14 }}>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8, display:'flex', gap:6, alignItems:'baseline' }}>
+              {group.groupName} <span style={{ fontSize:11, color:'#D9402F', fontWeight:800 }}>Required</span>
+            </div>
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              {group.items.map(item => {
+                const on = selectedId === item.id;
+                const priceLabel = hasOverride
+                  ? (item.priceAdjustment > 0 ? `+RM${item.priceAdjustment.toFixed(2)}` : 'Included')
+                  : `RM${item.basePrice.toFixed(2)}`;
+                return (
+                  <button key={item.id} onClick={() => onSelect(group.uniqueKey, item.id)} style={pillStyle(on)}>
+                    {item.name}
+                    {!on && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>{priceLabel}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Nested groups appear below the parent group, only when their parent item is selected */}
+            {childGroups.map(ng => (
+              <div key={ng.uniqueKey} style={{ marginTop:10, paddingLeft:12, borderLeft:`2px solid ${hex(T.inkColor,.08)}` }}>
+                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:T.inkColor, marginBottom:6 }}>{ng.groupName}</div>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                  {ng.items.map(ni => {
+                    const non = selections[ng.uniqueKey] === ni.id;
+                    return (
+                      <button key={ni.id} onClick={() => onSelect(ng.uniqueKey, ni.id)} style={pillStyle(non)}>
+                        {ni.name}
+                        {ni.priceAdjustment > 0 && !non && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>+RM{ni.priceAdjustment.toFixed(2)}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+      {cfg.optionalItems.length > 0 && (
+        <div style={{ marginTop:14 }}>
+          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Add-ons</div>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            {cfg.optionalItems.map(opt => {
+              const checked = selectedOptionals.has(opt.id);
+              return (
+                <button key={opt.id} onClick={() => onToggleOptional(opt.id)} style={{ ...pillStyle(checked), outline: checked ? `2px solid ${T.primaryColor}` : 'none' }}>
+                  {opt.name}
+                  {!checked && opt.priceAdjustment > 0 && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>+RM{opt.priceAdjustment.toFixed(2)}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 function CustomizeSheet({ product, open, onClose, onConfirm }: {
   product: Product | null;
@@ -302,52 +380,86 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
 }) {
   const drinkDefaults: DrinkSel = useMemo(() => ({ size:'s', milk:'whole', sugar:'std', ice:'std', notes:'' }), []);
   const [drinkSel, setDrinkSel] = useState<DrinkSel>({ ...drinkDefaults });
-  const [comboSel, setComboSel] = useState<Record<string, ComboGroupSel>>({});
+  // combo state
+  const [selections, setSelections] = useState<Record<string, string>>({});
+  const [selectedOptionals, setSelectedOptionals] = useState<Set<string>>(new Set());
   const [notes, setNotes] = useState('');
   const [qty, setQty] = useState(1);
 
-  const selectionGroups = useMemo(() => {
-    if (!product) return [];
-    const groups = new Map<string, RecipeItem[]>();
-    for (const ri of product.recipe_items) {
-      if (ri.selection_group) {
-        const arr = groups.get(ri.selection_group) ?? [];
-        arr.push(ri);
-        groups.set(ri.selection_group, arr);
+  const cfg = product?.selection_config ?? null;
+  const drink = !!product && isDrink(product.category) && !cfg;
+
+  // derive nested groups once
+  const nestedGroups = useMemo(() => cfg?.xorGroups.filter(g => !!g.parentProductId) ?? [], [cfg]);
+
+  const initComboSelections = (c: SelectionConfig) => {
+    const init: Record<string, string> = {};
+    const nested = c.xorGroups.filter(g => !!g.parentProductId);
+    for (const group of c.xorGroups.filter(g => !g.parentProductId)) {
+      if (group.items.length > 0) {
+        const firstId = group.items[0].id;
+        init[group.uniqueKey] = firstId;
+        for (const ng of nested.filter(ng => ng.parentProductId === firstId)) {
+          if (ng.items.length > 0) init[ng.uniqueKey] = ng.items[0].id;
+        }
       }
     }
-    return Array.from(groups.entries()).map(([group, items]) => ({ group, items }));
-  }, [product]);
+    return init;
+  };
 
   useEffect(() => {
     if (!open || !product) return;
     setQty(1);
     setNotes('');
-    if (isDrink(product.category)) {
+    if (drink) {
       setDrinkSel({ ...drinkDefaults });
-    } else {
-      const init: Record<string, ComboGroupSel> = {};
-      for (const { group, items } of selectionGroups) {
-        if (items.length > 0) {
-          const first = items[0];
-          init[group] = { recipe_item_id: first.id, linked_product_id: first.linked_product_id, name: first.linked_product_name ?? '', price_adjustment: first.price_adjustment };
+    } else if (cfg) {
+      setSelections(initComboSelections(cfg));
+      setSelectedOptionals(new Set());
+    }
+  }, [open, product?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSelect = (groupKey: string, itemId: string) => {
+    setSelections(prev => {
+      const prevId = prev[groupKey];
+      const next = { ...prev, [groupKey]: itemId };
+      // remove stale nested selections for previous choice
+      if (prevId) {
+        for (const ng of nestedGroups.filter(ng => ng.parentProductId === prevId)) {
+          delete next[ng.uniqueKey];
         }
       }
-      setComboSel(init);
-    }
-  }, [open, product?.id, drinkDefaults, selectionGroups]);
+      // auto-select defaults for new choice's nested groups
+      for (const ng of nestedGroups.filter(ng => ng.parentProductId === itemId)) {
+        if (ng.items.length > 0) next[ng.uniqueKey] = ng.items[0].id;
+      }
+      return next;
+    });
+  };
+
+  const toggleOptional = (id: string) =>
+    setSelectedOptionals(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
 
   if (!open || !product) return null;
 
-  const drink = isDrink(product.category);
-  const col = catSwatch(product.category);
-
-  const unitPrice = drink
-    ? product.base_price
-      + (DRINK_MODS.size.options.find(o => o.id === drinkSel.size)?.delta ?? 0)
-      + (DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.delta ?? 0)
-    : (product.combo_price_override ?? product.base_price)
-      + Object.values(comboSel).reduce((s, v) => s + v.price_adjustment, 0);
+  // price
+  const unitPrice = (() => {
+    if (drink) {
+      return product.base_price
+        + (DRINK_MODS.size.options.find(o => o.id === drinkSel.size)?.delta ?? 0)
+        + (DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.delta ?? 0);
+    }
+    if (!cfg) return product.base_price;
+    let adj = 0;
+    for (const g of cfg.xorGroups) {
+      const item = g.items.find(i => i.id === selections[g.uniqueKey]);
+      if (item) adj += item.priceAdjustment;
+    }
+    for (const opt of cfg.optionalItems) {
+      if (selectedOptionals.has(opt.id)) adj += opt.priceAdjustment;
+    }
+    return (product.combo_price_override ?? product.base_price) + adj;
+  })();
 
   const handleConfirm = () => {
     let mods: Record<string, unknown>;
@@ -359,15 +471,28 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
         ...(product.category === 'cold' ? { ice: DRINK_MODS.ice.options.find(o => o.id === drinkSel.ice)?.label } : {}),
         ...(drinkSel.notes ? { notes: drinkSel.notes } : {}),
       };
-    } else {
+    } else if (cfg) {
       const combo_selections: Record<string, { id: string; name: string }> = {};
-      for (const [group, sel] of Object.entries(comboSel)) {
-        combo_selections[group] = { id: sel.linked_product_id ?? '', name: sel.name };
+      for (const g of cfg.xorGroups) {
+        const selId = selections[g.uniqueKey];
+        if (selId) {
+          const item = g.items.find(i => i.id === selId);
+          if (item) combo_selections[g.uniqueKey] = { id: selId, name: item.name };
+        }
       }
-      mods = { combo_selections, ...(notes ? { notes } : {}) };
+      const sel_opts = cfg.optionalItems.filter(o => selectedOptionals.has(o.id)).map(o => ({ id: o.id, name: o.name }));
+      mods = {
+        combo_selections,
+        ...(sel_opts.length > 0 ? { selected_optionals: sel_opts } : {}),
+        ...(notes ? { notes } : {}),
+      };
+    } else {
+      mods = {};
     }
     onConfirm(mods, qty, unitPrice);
   };
+
+  const col = catSwatch(product.category);
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:60, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
@@ -397,8 +522,8 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
                     {mod.options.map(o => {
                       const on = drinkSel[key] === o.id;
                       return (
-                        <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, [key]: o.id }))} style={{ padding:'8px 14px', borderRadius:999, border:on?`2px solid ${T.inkColor}`:`1.5px solid ${hex(T.inkColor,.12)}`, background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5 }}>
-                          {o.label}{(o.delta ?? 0) > 0 && !on && <span style={{ opacity:.7, fontWeight:600, fontSize:11 }}>+RM{(o.delta ?? 0).toFixed(2)}</span>}
+                        <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, [key]: o.id }))} style={pillStyle(on)}>
+                          {o.label}{(o.delta ?? 0) > 0 && !on && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>+RM{(o.delta ?? 0).toFixed(2)}</span>}
                         </button>
                       );
                     })}
@@ -411,7 +536,7 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                     {DRINK_MODS.ice.options.map(o => {
                       const on = drinkSel.ice === o.id;
-                      return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, ice: o.id }))} style={{ padding:'8px 14px', borderRadius:999, border:on?`2px solid ${T.inkColor}`:`1.5px solid ${hex(T.inkColor,.12)}`, background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, cursor:'pointer' }}>{o.label}</button>;
+                      return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, ice: o.id }))} style={pillStyle(on)}>{o.label}</button>;
                     })}
                   </div>
                 </div>
@@ -421,32 +546,15 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
                 <input value={drinkSel.notes} onChange={e => setDrinkSel(s => ({ ...s, notes: e.target.value }))} placeholder="e.g. extra hot, no foam" style={{ width:'100%', padding:'12px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius-8, outline:'none', boxSizing:'border-box' }}/>
               </div>
             </>
-          ) : (
+          ) : cfg ? (
             <>
-              {selectionGroups.map(({ group, items }) => (
-                <div key={group} style={{ marginTop:14 }}>
-                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8, display:'flex', gap:6, alignItems:'baseline' }}>
-                    {group} <span style={{ fontSize:11, color:'#D9402F', fontWeight:800 }}>Required</span>
-                  </div>
-                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                    {items.map(item => {
-                      const on = comboSel[group]?.recipe_item_id === item.id;
-                      return (
-                        <button key={item.id} onClick={() => setComboSel(s => ({ ...s, [group]: { recipe_item_id: item.id, linked_product_id: item.linked_product_id, name: item.linked_product_name ?? '', price_adjustment: item.price_adjustment } }))} style={{ padding:'8px 14px', borderRadius:999, border:on?`2px solid ${T.inkColor}`:`1.5px solid ${hex(T.inkColor,.12)}`, background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5 }}>
-                          {item.linked_product_name ?? 'Option'}
-                          {item.price_adjustment > 0 && !on && <span style={{ opacity:.7, fontWeight:600, fontSize:11 }}>+RM{item.price_adjustment.toFixed(2)}</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+              <ComboSection cfg={cfg} selections={selections} selectedOptionals={selectedOptionals} onSelect={handleSelect} onToggleOptional={toggleOptional}/>
               <div style={{ marginTop:14 }}>
-                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Notes to barista</div>
-                <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. extra sauce, allergies" style={{ width:'100%', padding:'12px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius-8, outline:'none', boxSizing:'border-box' }}/>
+                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Notes</div>
+                <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. allergies, special requests" style={{ width:'100%', padding:'12px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius-8, outline:'none', boxSizing:'border-box' }}/>
               </div>
             </>
-          )}
+          ) : null}
         </div>
 
         <div style={{ padding:'14px 20px 20px', borderTop:`1px solid ${hex(T.inkColor,.08)}`, background:'#fff', display:'flex', alignItems:'center', gap:12 }}>
@@ -470,7 +578,7 @@ function LoyaltyStrip({ viewport }: { viewport: Viewport }) {
   const compact = viewport === 'mobile';
   const goal = 10, current = 7;
   return (
-    <section style={{ margin:compact?'12px 16px 0':'16px 28px 0', background:T.inkColor, color:'#fff', borderRadius:T.cornerRadius, padding:compact?14:16, overflow:'hidden', position:'relative' }}>
+    <section style={{ margin:compact?'12px 16px 0':'16px 28px 0', background:T.inkColor, color:'#fff', borderRadius:T.cornerRadius, padding:compact?14:16, overflow:'hidden' }}>
       <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
         <span style={{ background:T.secondaryColor, color:T.inkColor, padding:'3px 10px', borderRadius:999, fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:11, textTransform:'uppercase', letterSpacing:'.05em' }}>Oasis Stamps</span>
         <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, opacity:.85 }}><b>{goal - current}</b> more for a free drink</div>
@@ -481,10 +589,8 @@ function LoyaltyStrip({ viewport }: { viewport: Viewport }) {
           return (
             <div key={i} style={{ flex:1, aspectRatio:'1', borderRadius:'50%', border:`1.5px dashed ${stamped?'transparent':'rgba(255,255,255,.3)'}`, background:stamped?(i===goal-1?T.accentColor:T.primaryColor):'transparent', display:'grid', placeItems:'center', transition:'all .3s' }}>
               {stamped
-                ? (i === goal-1
-                  ? <span style={{ fontSize:compact?14:16 }}>★</span>
-                  : <svg width="60%" height="60%" viewBox="0 0 24 24" fill="#fff"><ellipse cx="12" cy="12" rx="6" ry="9" transform="rotate(-20 12 12)"/><path d="M8 6 Q13 12 14 18" stroke="#3A2414" strokeWidth="1.3" fill="none" strokeLinecap="round" transform="rotate(-20 12 12)" opacity=".7"/></svg>)
-                : <span style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:11, opacity:.5 }}>{i === goal-1 ? '★' : i+1}</span>}
+                ? (i===goal-1 ? <span style={{fontSize:compact?14:16}}>★</span> : <svg width="60%" height="60%" viewBox="0 0 24 24" fill="#fff"><ellipse cx="12" cy="12" rx="6" ry="9" transform="rotate(-20 12 12)"/><path d="M8 6 Q13 12 14 18" stroke="#3A2414" strokeWidth="1.3" fill="none" strokeLinecap="round" transform="rotate(-20 12 12)" opacity=".7"/></svg>)
+                : <span style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:11, opacity:.5 }}>{i===goal-1?'★':i+1}</span>}
             </div>
           );
         })}
@@ -494,10 +600,10 @@ function LoyaltyStrip({ viewport }: { viewport: Viewport }) {
 }
 
 // ── Cart Drawer ────────────────────────────────────────────────────────────
-function CartDrawer({ open, onClose, lines, incLine, decLine, total, pickup }: {
+function CartDrawer({ open, onClose, lines, incLine, decLine, total, pickup, branch }: {
   open: boolean; onClose: () => void; lines: CartLine[];
   incLine: (lid: string) => void; decLine: (lid: string) => void;
-  total: number; pickup: 'counter'|'curbside';
+  total: number; pickup: 'counter'|'curbside'; branch: Branch | null;
 }) {
   const router = useRouter();
   if (!open) return null;
@@ -516,6 +622,11 @@ function CartDrawer({ open, onClose, lines, incLine, decLine, total, pickup }: {
       if (m.sugar && m.sugar !== 'Normal') parts.push((m.sugar as string) + ' sugar');
       if (m.ice)   parts.push(m.ice as string);
     }
+    if (Array.isArray(m.selected_optionals)) {
+      for (const o of m.selected_optionals as Array<{ name: string }>) {
+        if (o?.name) parts.push(`+ ${o.name}`);
+      }
+    }
     if (m.notes) parts.push(`"${m.notes}"`);
     return parts.filter(Boolean).join(' · ') || null;
   };
@@ -524,6 +635,8 @@ function CartDrawer({ open, onClose, lines, incLine, decLine, total, pickup }: {
     try { localStorage.setItem('co_pending', JSON.stringify({ lines, pickup, total })); } catch { /* ignore */ }
     router.push('/checkout');
   };
+
+  const locationLabel = branch?.address ?? 'Shell Seksyen 13, PJ';
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:50, display:'flex', justifyContent:'flex-end' }}>
@@ -558,7 +671,7 @@ function CartDrawer({ open, onClose, lines, incLine, decLine, total, pickup }: {
             {pickup === 'curbside' ? <Icon.Car width="20" height="20"/> : <Icon.Walk width="20" height="20"/>}
             <div>
               <div style={{ fontWeight:700 }}>{pickup === 'curbside' ? 'Curbside pickup' : 'Counter pickup'}</div>
-              <div style={{ opacity:.65, fontSize:12 }}>Shell Seksyen 13, PJ</div>
+              <div style={{ opacity:.65, fontSize:12 }}>{locationLabel}</div>
             </div>
           </div>
         </div>
@@ -586,7 +699,7 @@ function SkeletonCard({ viewport }: { viewport: Viewport }) {
       <div style={{ width:compact?72:84, height:compact?72:84, flexShrink:0, background:hex(T.inkColor,.06), borderRadius:T.cornerRadius-4 }}/>
       <div style={{ flex:1, display:'flex', flexDirection:'column', gap:8 }}>
         <div style={{ height:18, width:'60%', background:hex(T.inkColor,.06), borderRadius:6 }}/>
-        <div style={{ height:14, width:'40%', background:hex(T.inkColor,.04), borderRadius:6 }}/>
+        <div style={{ height:14, width:'35%', background:hex(T.inkColor,.04), borderRadius:6 }}/>
       </div>
     </div>
   );
@@ -601,6 +714,7 @@ export default function MenuApp() {
   const [sheetProduct, setSheetProduct] = useState<Product | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [branch, setBranch] = useState<Branch | null>(null);
   const [intakePaused, setIntakePaused] = useState(false);
   const [menuLoading, setMenuLoading] = useState(true);
   const { lines, addLine, incLine, decLine, qtyFor, incById, decById, count, total } = useCart();
@@ -612,6 +726,7 @@ export default function MenuApp() {
         setProducts(d.products ?? []);
         setCategories(d.categories ?? []);
         setIntakePaused(d.intake_paused ?? false);
+        setBranch(d.branch ?? null);
         if (d.categories?.length) setActiveCat(d.categories[0].id);
       })
       .catch(() => {})
@@ -622,14 +737,14 @@ export default function MenuApp() {
 
   return (
     <div style={{ background:T.bgColor, minHeight:'100vh', color:T.inkColor, fontFamily:"'Nunito',system-ui" }}>
-      <Header onCartClick={() => setCartOpen(true)} cartCount={count} viewport={viewport}/>
+      <Header onCartClick={() => setCartOpen(true)} cartCount={count} viewport={viewport} branch={branch}/>
       <Hero viewport={viewport}/>
       {intakePaused && (
         <div style={{ margin:viewport==='mobile'?'12px 16px 0':'16px 28px 0', padding:'12px 16px', background:'#FFF3CD', border:'1px solid #FFE082', borderRadius:T.cornerRadius-4, fontSize:14, fontWeight:600, color:'#7B5800', textAlign:'center' }}>
           Online ordering is temporarily paused — please try again shortly.
         </div>
       )}
-      <PickupBar viewport={viewport} pickup={pickup} setPickup={setPickup}/>
+      <PickupBar viewport={viewport} pickup={pickup} setPickup={setPickup} branch={branch}/>
       <LoyaltyStrip viewport={viewport}/>
       <CatBar cats={categories} active={activeCat} setActive={setActiveCat} viewport={viewport}/>
       <main style={{ padding:viewport==='mobile'?'0 16px 100px':'0 28px 40px', display:'grid', gridTemplateColumns:viewport==='desktop'?'1fr 1fr':'1fr', gap:10 }}>
@@ -649,7 +764,7 @@ export default function MenuApp() {
         }
       </main>
       <CartBar count={count} total={total} onClick={() => setCartOpen(true)} viewport={viewport}/>
-      <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} lines={lines} incLine={incLine} decLine={decLine} total={total} pickup={pickup}/>
+      <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} lines={lines} incLine={incLine} decLine={decLine} total={total} pickup={pickup} branch={branch}/>
       <CustomizeSheet
         product={sheetProduct}
         open={!!sheetProduct}

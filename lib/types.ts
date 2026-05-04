@@ -84,6 +84,35 @@ export interface CartLine {
   unitPrice: number;
 }
 
+export interface XorGroupItem {
+  id: string;
+  name: string;
+  basePrice: number;
+  priceAdjustment: number;
+}
+
+export interface XorGroup {
+  uniqueKey: string;
+  displayName: string;
+  parentProductId?: string;
+  parentProductName?: string;
+  groupName: string;
+  items: XorGroupItem[];
+}
+
+export interface OptionalItem {
+  id: string;
+  name: string;
+  basePrice: number;
+  priceAdjustment: number;
+  parentProductId?: string;
+}
+
+export interface SelectionConfig {
+  xorGroups: XorGroup[];
+  optionalItems: OptionalItem[];
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -91,21 +120,17 @@ export interface Product {
   base_price: number;
   image_url: string | null;
   combo_price_override: number | null;
+  selection_config: SelectionConfig | null;
   available_online: boolean;
-  recipe_items: RecipeItem[];
 }
 
-export interface RecipeItem {
+export interface Branch {
   id: string;
-  product_id: string;
-  item_type: string;
-  linked_product_id: string | null;
-  linked_product_name: string | null;
-  quantity: number;
-  is_optional: boolean;
-  selection_group: string | null;
-  price_adjustment: number;
-  sort_order: number;
+  name: string;
+  code: string;
+  address: string | null;
+  phone: string | null;
+  is_active: boolean;
 }
 
 export type Viewport = 'mobile' | 'tablet' | 'desktop';

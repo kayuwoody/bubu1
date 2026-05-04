@@ -13,35 +13,27 @@ const CAT_LABELS: Record<string, string> = {
 };
 
 export async function GET() {
-  const [productsRes, recipeRes, settingsRes] = await Promise.all([
+  const [productsRes, settingsRes, branchRes] = await Promise.all([
     supabase
       .from('products')
-      .select('id, name, category, base_price, image_url, combo_price_override, available_online')
+      .select('id, name, category, base_price, image_url, combo_price_override, selection_config, available_online')
       .eq('available_online', true)
       .order('category')
       .order('name'),
-    supabase
-      .from('product_recipe_items')
-      .select('id, product_id, item_type, linked_product_id, linked_product_name, quantity, is_optional, selection_group, price_adjustment, sort_order')
-      .eq('item_type', 'product')
-      .order('product_id')
-      .order('sort_order'),
     supabase
       .from('outlet_settings')
       .select('intake_paused')
       .eq('outlet_id', 'main')
       .single(),
+    supabase
+      .from('branches')
+      .select('id, name, code, address, phone, is_active')
+      .eq('is_active', true)
+      .limit(1)
+      .single(),
   ]);
 
   const products = productsRes.data ?? [];
-  const recipeItems = recipeRes.data ?? [];
-
-  const recipeByProduct = new Map<string, typeof recipeItems>();
-  for (const item of recipeItems) {
-    const arr = recipeByProduct.get(item.product_id) ?? [];
-    arr.push(item);
-    recipeByProduct.set(item.product_id, arr);
-  }
 
   const seenCats = new Set<string>();
   const categories: Array<{ id: string; label: string }> = [];
@@ -58,14 +50,10 @@ export async function GET() {
     }
   }
 
-  const enriched = products.map(p => ({
-    ...p,
-    recipe_items: recipeByProduct.get(p.id) ?? [],
-  }));
-
   return NextResponse.json({
     categories,
-    products: enriched,
+    products,
     intake_paused: settingsRes.data?.intake_paused ?? false,
+    branch: branchRes.data ?? null,
   });
 }

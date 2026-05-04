@@ -60,6 +60,19 @@ function CheckoutContent() {
     } catch { /* ignore */ }
   }, []);
 
+  // Restore saved form data (populated on prior submit; survives cancel/retry)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('co_form');
+      if (saved) {
+        const { name: n, email: em, phone: ph } = JSON.parse(saved);
+        if (n)  setName(n);
+        if (em) setEmail(em);
+        if (ph) setPhone(ph);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   if (!pending) {
     return (
       <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: BG, fontFamily: "'Nunito', system-ui" }}>
@@ -76,6 +89,8 @@ function CheckoutContent() {
     setError('');
     if (!name.trim() || !phone.trim()) { setError('Name and phone are required.'); return; }
     if (!channel) { setError('Please select a payment method.'); return; }
+    // Persist form fields so they survive a cancel/retry cycle
+    try { localStorage.setItem('co_form', JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim() })); } catch { /* ignore */ }
     setLoading(true);
     try {
       const res = await fetch('/api/checkout', {
@@ -259,6 +274,15 @@ function CheckoutContent() {
           >
             {loading ? 'Loading payment…' : `Pay RM ${pending.total.toFixed(2)} →`}
           </button>
+
+          {loading && (
+            <a
+              href="/checkout?cancelled=1"
+              style={{ display: 'block', textAlign: 'center', marginTop: 12, fontSize: 14, color: hex(INK, .5), textDecoration: 'underline' }}
+            >
+              ← Cancel payment
+            </a>
+          )}
 
           <div style={{ textAlign: 'center', marginTop: 10, fontSize: 12, color: hex(INK, .5) }}>
             FPX · GrabPay · Boost · Touch 'n Go
