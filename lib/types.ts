@@ -122,7 +122,7 @@ export interface Product {
   combo_price_override: number | null;
   selection_config: SelectionConfig | null;
   available_online: boolean;
-  in_stock: boolean;
+  in_stock?: boolean;
 }
 
 export interface Branch {
