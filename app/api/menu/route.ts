@@ -13,10 +13,10 @@ const CAT_LABELS: Record<string, string> = {
 };
 
 export async function GET() {
-  const [productsRes, settingsRes, branchRes] = await Promise.all([
+  const [productsRes, settingsRes, branchRes, privCatsRes] = await Promise.all([
     supabase
       .from('products')
-      .select('id, name, category, base_price, image_url, combo_price_override, selection_config, available_online')
+      .select('id, name, category, base_price, image_url, combo_price_override, selection_config, available_online, in_stock')
       .eq('available_online', true)
       .order('category')
       .order('name'),
@@ -31,9 +31,14 @@ export async function GET() {
       .eq('is_active', true)
       .limit(1)
       .single(),
+    supabase
+      .from('product_categories')
+      .select('id')
+      .eq('is_private', true),
   ]);
 
-  const products = productsRes.data ?? [];
+  const privCatIds = new Set((privCatsRes.data ?? []).map((c: { id: string }) => c.id));
+  const products = (productsRes.data ?? []).filter(p => !privCatIds.has(p.category));
 
   const seenCats = new Set<string>();
   const categories: Array<{ id: string; label: string }> = [];

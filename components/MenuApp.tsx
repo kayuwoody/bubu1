@@ -244,16 +244,20 @@ function ItemCard({ product, qty, onAdd, onSub, onCustomize, viewport }: { produ
   const sheet = needsSheet(product);
   const compact = viewport === 'mobile';
   const col = catSwatch(product.category);
+  const soldOut = product.in_stock === false;
   return (
-    <div style={{ background:'#fff', borderRadius:T.cornerRadius, padding:compact?14:16, display:'flex', gap:compact?12:14, alignItems:'center', border:`1.5px solid ${hex(T.inkColor,.06)}`, boxShadow:`0 4px 0 ${hex(T.inkColor,.05)}` }}>
+    <div style={{ background:'#fff', borderRadius:T.cornerRadius, padding:compact?14:16, display:'flex', gap:compact?12:14, alignItems:'center', border:`1.5px solid ${hex(T.inkColor,.06)}`, boxShadow:`0 4px 0 ${hex(T.inkColor,.05)}`, ...(soldOut ? { opacity:.45, pointerEvents:'none' } : {}) }}>
       <div style={{ width:compact?72:84, height:compact?72:84, flexShrink:0, background:`radial-gradient(circle at 50% 55%,${hex(col,.22)},${hex(col,.05)} 65%)`, borderRadius:T.cornerRadius-4, display:'grid', placeItems:'center', overflow:'hidden' }}>
         <ItemThumb product={product} size={compact?64:74}/>
       </div>
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?17:18, color:T.inkColor, lineHeight:1.1 }}>{product.name}</div>
-        <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?16:17, color:T.inkColor, marginTop:6 }}>RM {product.base_price.toFixed(2)}</div>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:6 }}>
+          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?16:17, color:T.inkColor }}>RM {product.base_price.toFixed(2)}</div>
+          {soldOut && <span style={{ fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:11, background:hex(T.inkColor,.08), color:T.inkColor, borderRadius:6, padding:'2px 7px' }}>Sold out</span>}
+        </div>
       </div>
-      {qty > 0 && !sheet ? (
+      {!soldOut && (qty > 0 && !sheet ? (
         <div style={{ display:'flex', alignItems:'center', gap:10, background:T.inkColor, color:'#fff', borderRadius:999, padding:4 }}>
           <button onClick={onSub} style={qtyBtn('#fff', T.inkColor)}><Icon.Minus width="16" height="16"/></button>
           <span style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, minWidth:16, textAlign:'center' }}>{qty}</span>
@@ -268,7 +272,7 @@ function ItemCard({ product, qty, onAdd, onSub, onCustomize, viewport }: { produ
         <button onClick={onAdd} style={{ width:44, height:44, borderRadius:'50%', border:'none', background:T.primaryColor, color:'#fff', display:'grid', placeItems:'center', cursor:'pointer', boxShadow:`0 4px 0 ${hex(T.primaryColor,.4)}`, flexShrink:0 }}>
           <Icon.Plus width="20" height="20"/>
         </button>
-      )}
+      ))}
     </div>
   );
 }
