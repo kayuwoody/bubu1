@@ -196,7 +196,7 @@ function ItemCard({ product, qty, onAdd, onSub, onCustomize, viewport }: { produ
   const sheet = needsSheet(product);
   const compact = viewport === 'mobile';
   const col = catSwatch(product.category);
-  const soldOut = product.in_stock === false;
+  const soldOut = product.stock_quantity !== null && product.stock_quantity <= 0;
   return (
     <div style={{ background:'#fff', borderRadius:T.cornerRadius, padding:compact?14:16, display:'flex', gap:compact?12:14, alignItems:'center', border:`1.5px solid ${hex(T.inkColor,.06)}`, boxShadow:`0 4px 0 ${hex(T.inkColor,.05)}`, ...(soldOut ? { opacity:.45, pointerEvents:'none' } : {}) }}>
       <div style={{ width:compact?72:84, height:compact?72:84, flexShrink:0, background:`radial-gradient(circle at 50% 55%,${hex(col,.22)},${hex(col,.05)} 65%)`, borderRadius:T.cornerRadius-4, display:'grid', placeItems:'center', overflow:'hidden' }}>
