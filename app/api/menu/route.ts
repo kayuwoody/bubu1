@@ -16,7 +16,7 @@ export async function GET() {
   const [productsRes, settingsRes, branchRes, privCatsRes] = await Promise.all([
     supabase
       .from('products')
-      .select('id, name, category, base_price, image_url, combo_price_override, selection_config, available_online')
+      .select('id, name, category, base_price, image_url, combo_price_override, selection_config, available_online, in_stock')
       .eq('available_online', true)
       .order('category')
       .order('name'),
@@ -38,9 +38,7 @@ export async function GET() {
   ]);
 
   const privCatIds = new Set((privCatsRes.data ?? []).map((c: { id: string }) => c.id));
-  const products = (productsRes.data ?? [])
-    .filter(p => !privCatIds.has(p.category))
-    .map(p => ({ ...p, in_stock: (p as Record<string, unknown>).in_stock ?? true }));
+  const products = (productsRes.data ?? []).filter(p => !privCatIds.has(p.category));
 
   const seenCats = new Set<string>();
   const categories: Array<{ id: string; label: string }> = [];
