@@ -154,7 +154,7 @@ function Header({ onCartClick, cartCount, viewport, branch }: { onCartClick: () 
       <img src="/co-logo.png" alt="Coffee Oasis" style={{ height:compact?36:44, width:'auto', objectFit:'contain' }}/>
       {!compact && (
         <div style={{ marginLeft:12, fontFamily:"'Nunito',system-ui", color:T.inkColor, fontSize:13, display:'flex', alignItems:'center', gap:6, opacity:.75 }}>
-          <Icon.Pin width="14" height="14"/> {branch?.address ?? 'Shell Seksyen 13, PJ'} · Open till 10pm
+          <Icon.Pin width="14" height="14"/> {branch?.address ?? ''} · Open till 10pm
         </div>
       )}
       <div style={{ marginLeft:'auto' }}>
@@ -636,7 +636,7 @@ function CartDrawer({ open, onClose, lines, incLine, decLine, total, pickup, bra
     router.push('/checkout');
   };
 
-  const locationLabel = branch?.address ?? 'Shell Seksyen 13, PJ';
+  const locationLabel = branch?.address ?? '';
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:50, display:'flex', justifyContent:'flex-end' }}>
