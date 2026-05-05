@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/online/supabase';
 import { verifyFiuuCallback, isFiuuSuccess } from '@/lib/online/fiuu';
 import { nextOrderNumber } from '@/lib/online/orderNumber';
-import type { CartLine } from '@/lib/types';
+import type { CartLine, CheckoutSession } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -152,5 +152,60 @@ export async function POST(req: Request) {
   if (sessErr) console.error('[fiuu/callback] checkout_sessions update error:', sessErr.message);
   console.log('[fiuu/callback] done — order:', orderId, 'session rows updated:', sessData?.length ?? 0);
 
+  // Award loyalty points — non-blocking, never fails the callback
+  try { await awardLoyaltyPoints(session, orderId, now); }
+  catch (e: unknown) { console.error('[loyalty] uncaught error:', e instanceof Error ? e.message : e); }
+
   return new Response('RECEIVEROK', { status: 200 });
+}
+
+async function awardLoyaltyPoints(
+  session: CheckoutSession,
+  orderId: string,
+  now: string,
+) {
+  const { data: settings } = await supabase
+    .from('loyalty_settings')
+    .select('points_per_rm, min_spend_for_points, is_active')
+    .eq('id', 'main')
+    .single();
+
+  if (!settings?.is_active) return;
+  if (session.total_amount < (settings.min_spend_for_points ?? 0)) return;
+
+  const points = Math.floor(session.total_amount * settings.points_per_rm);
+  if (points <= 0) return;
+
+  const phone = session.customer_phone.replace(/\D/g, '');
+  if (!phone) return;
+
+  // Upsert customer by phone — only touches name/email/updated_at, not points_balance
+  const { data: customer, error: custErr } = await supabase
+    .from('customers')
+    .upsert(
+      { phone, name: session.customer_name, email: session.customer_email || null, updated_at: now },
+      { onConflict: 'phone' },
+    )
+    .select('id, points_balance')
+    .single();
+
+  if (custErr || !customer) {
+    console.error('[loyalty] customer upsert error:', custErr?.message);
+    return;
+  }
+
+  const { error: ledgerErr } = await supabase.from('customer_points_ledger').insert({
+    customer_id:  customer.id,
+    order_id:     orderId,
+    points_delta: points,
+    reason:       'order_earn',
+  });
+  if (ledgerErr) { console.error('[loyalty] ledger insert error:', ledgerErr.message); return; }
+
+  const { error: balErr } = await supabase
+    .from('customers')
+    .update({ points_balance: customer.points_balance + points, updated_at: now })
+    .eq('id', customer.id);
+  if (balErr) console.error('[loyalty] balance update error:', balErr.message);
+  else console.log('[loyalty] awarded', points, 'pts → customer:', customer.id, 'order:', orderId);
 }

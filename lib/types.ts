@@ -157,3 +157,37 @@ export interface CheckoutSession {
   status: 'pending' | 'paid' | 'failed';
   created_at: string;
 }
+
+export interface Customer {
+  id: string;
+  phone: string;
+  name: string | null;
+  email: string | null;
+  points_balance: number;
+  credit_balance: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LoyaltySettings {
+  id: string;
+  points_per_rm: number;
+  min_spend_for_points: number;
+  is_active: boolean;
+  updated_at: string;
+}
+
+export interface LoyaltyRedemption {
+  id: string;
+  name: string;
+  description: string | null;
+  points_required: number;
+  reward_type: 'free_item' | 'discount_percent' | 'discount_fixed' | 'credit';
+  reward_value: number;
+  reward_item_id: string | null;
+  is_active: boolean;
+  valid_from: string | null;
+  valid_until: string | null;
+  sort_order: number;
+  created_at: string;
+}
