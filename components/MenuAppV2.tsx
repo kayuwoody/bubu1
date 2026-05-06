@@ -685,7 +685,7 @@ export default function MenuAppV2() {
 
       <CatBar cats={categories} active={activeCat} setActive={setActiveCat} viewport={viewport}/>
 
-      <main style={{ padding:compact?'0 10px 120px':'0 24px 60px', display:'grid', gridTemplateColumns:viewport==='tablet'?'1fr':'minmax(0,1fr) minmax(0,1fr)', gap:compact?6:8 }}>
+      <main style={{ padding:compact?'0 10px 120px':'0 24px 60px', display:'grid',gridTemplateColumns: viewport === 'mobile' ? 'minmax(0,1fr) minmax(0,1fr)' : 'repeat(4, minmax(0,1fr))'', gap:compact?6:8 }}>
         {filtered.map(p => (
           <ItemCard
             key={p.id} product={p} qty={qtyFor(p.id)}
