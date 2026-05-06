@@ -211,7 +211,7 @@ function ItemCard({ product, qty, onAdd, onCustomize, viewport }: { product: Pro
     <div onClick={handleClick} style={{ background:'#fff', borderRadius:T.cornerRadius, border:`1.5px solid ${hex(T.inkColor,.06)}`, boxShadow:`0 4px 0 ${hex(T.inkColor,.05)}`, cursor:soldOut?'default':'pointer', opacity:soldOut?.45:1, display:'flex', flexDirection:'column', overflow:'hidden', userSelect:'none' }}>
       {/* Image */}
       <div style={{ width:'100%', aspectRatio:'1.5', background:`radial-gradient(circle at 50% 55%,${hex(col,.22)},${hex(col,.05)} 65%)`, display:'grid', placeItems:'center', position:'relative', overflow:'hidden' }}>
-        <ItemThumb product={product}/>
+        <ItemThumb product={product} size={compact?125:240}/>
         {soldOut && (
           <div style={{ position:'absolute', inset:0, background:'rgba(255,255,255,.6)', display:'grid', placeItems:'center' }}>
             <span style={{ fontFamily:"'Nunito',system-ui", fontWeight:800, fontSize:11, background:hex(T.inkColor,.85), color:'#fff', borderRadius:6, padding:'3px 8px' }}>Sold out</span>
@@ -685,7 +685,7 @@ export default function MenuAppV2() {
 
       <CatBar cats={categories} active={activeCat} setActive={setActiveCat} viewport={viewport}/>
 
-      <main style={{ padding:compact?'0 10px 120px':'0 24px 60px', display:'grid',gridTemplateColumns: viewport === 'mobile' ? 'minmax(0,1fr) minmax(0,1fr)' : 'repeat(4, minmax(0,1fr))'', gap:compact?6:8 }}>
+      <main style={{ padding:compact?'0 10px 120px':'0 24px 60px', display:'grid', gridTemplateColumns:viewport==='mobile'?'minmax(0,1fr) minmax(0,1fr)':viewport==='tablet'?'repeat(3,minmax(0,1fr))':'repeat(4,minmax(0,1fr))', gap:compact?6:8 }}>
         {filtered.map(p => (
           <ItemCard
             key={p.id} product={p} qty={qtyFor(p.id)}
