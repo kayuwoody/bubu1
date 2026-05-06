@@ -164,20 +164,29 @@ async function awardLoyaltyPoints(
   orderId: string,
   now: string,
 ) {
-  const { data: settings } = await supabase
+  console.log('[loyalty] start — phone:', session.customer_phone, 'amount:', session.total_amount, 'order:', orderId);
+
+  const { data: settings, error: settingsErr } = await supabase
     .from('loyalty_settings')
     .select('points_per_rm, min_spend_for_points, is_active')
     .eq('id', 'main')
     .single();
 
-  if (!settings?.is_active) return;
-  if (session.total_amount < (settings.min_spend_for_points ?? 0)) return;
+  if (settingsErr) { console.error('[loyalty] settings fetch error:', settingsErr.message); return; }
+  if (!settings) { console.warn('[loyalty] no loyalty_settings row with id=main — run the loyalty_schema.sql seed'); return; }
+  if (!settings.is_active) { console.log('[loyalty] loyalty disabled'); return; }
+  if (session.total_amount < (settings.min_spend_for_points ?? 0)) {
+    console.log('[loyalty] below min spend:', session.total_amount, '<', settings.min_spend_for_points);
+    return;
+  }
 
   const points = Math.floor(session.total_amount * settings.points_per_rm);
-  if (points <= 0) return;
+  if (points <= 0) { console.log('[loyalty] 0 pts calculated, skipping'); return; }
 
   const phone = session.customer_phone.replace(/\D/g, '');
-  if (!phone) return;
+  if (!phone) { console.warn('[loyalty] empty phone after stripping, skipping'); return; }
+
+  console.log('[loyalty] awarding', points, 'pts to phone:', phone);
 
   // Upsert customer by phone — only touches name/email/updated_at, not points_balance
   const { data: customer, error: custErr } = await supabase
