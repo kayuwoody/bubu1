@@ -88,8 +88,8 @@ function PastrySVG({ col, size = 72 }: { col: string; size?: number }) {
     </svg>
   );
 }
-function ItemThumb({ product, size = 72 }: { product: Product; size?: number }) {
-  if (product.image_url) return <img src={product.image_url} alt="" style={{ width: size, height: size, objectFit: 'cover', borderRadius: 10 }}/>;
+function ItemThumb({ product, size = 150 }: { product: Product; size?: number }) {
+  if (product.image_url) return <img src={product.image_url} alt="" style={{ width: size, height: size, objectFit: 'cover', position: 'relative', inset: 0, borderRadius: 0 }}/>;
   const col = catSwatch(product.category);
   return product.category === 'food' ? <PastrySVG col={col} size={size}/> : <DrinkSVG col={col} size={size}/>;
 }
@@ -127,7 +127,7 @@ function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyAc
   const PickupIcon = pickup === 'curbside' ? Icon.Car : Icon.Walk;
   return (
     <header style={{ position:'sticky', top:0, zIndex:20, background:T.bgColor, borderBottom:`1px solid ${hex(T.inkColor,.08)}`, padding:compact?'10px 12px':'14px 24px', display:'flex', alignItems:'center', gap:8 }}>
-      <img src="/co-logo.png" alt="Coffee Oasis" style={{ height:compact?28:40, maxWidth:compact?90:160, width:'auto', objectFit:'contain', flexShrink:0 }}/>
+      <img src="/co-logo.png" alt="Coffee Oasis" style={{ height:compact?60:80, maxWidth:compact?150:300, width:'auto', objectFit:'contain', flexShrink:0 }}/>
 
       {/* Pickup pill — tap to toggle; ETA hidden on mobile to save space */}
       <button onClick={toggle} style={{ marginLeft:compact?2:10, display:'flex', alignItems:'center', gap:5, padding:compact?'5px 8px 5px 7px':'8px 14px 8px 10px', borderRadius:999, border:`1.5px solid ${hex(T.inkColor,.12)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?11:13, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
@@ -210,8 +210,8 @@ function ItemCard({ product, qty, onAdd, onCustomize, viewport }: { product: Pro
   return (
     <div onClick={handleClick} style={{ background:'#fff', borderRadius:T.cornerRadius, border:`1.5px solid ${hex(T.inkColor,.06)}`, boxShadow:`0 4px 0 ${hex(T.inkColor,.05)}`, cursor:soldOut?'default':'pointer', opacity:soldOut?.45:1, display:'flex', flexDirection:'column', overflow:'hidden', userSelect:'none' }}>
       {/* Image */}
-      <div style={{ width:'100%', aspectRatio:'1', background:`radial-gradient(circle at 50% 55%,${hex(col,.22)},${hex(col,.05)} 65%)`, display:'grid', placeItems:'center', position:'relative', overflow:'hidden' }}>
-        <ItemThumb product={product} size={compact?80:96}/>
+      <div style={{ width:'100%', aspectRatio:'1.5', background:`radial-gradient(circle at 50% 55%,${hex(col,.22)},${hex(col,.05)} 65%)`, display:'grid', placeItems:'center', position:'relative', overflow:'hidden' }}>
+        <ItemThumb product={product}/>
         {soldOut && (
           <div style={{ position:'absolute', inset:0, background:'rgba(255,255,255,.6)', display:'grid', placeItems:'center' }}>
             <span style={{ fontFamily:"'Nunito',system-ui", fontWeight:800, fontSize:11, background:hex(T.inkColor,.85), color:'#fff', borderRadius:6, padding:'3px 8px' }}>Sold out</span>
@@ -222,7 +222,7 @@ function ItemCard({ product, qty, onAdd, onCustomize, viewport }: { product: Pro
         )}
       </div>
       {/* Text */}
-      <div style={{ padding:compact?'8px 10px 10px':'10px 12px 12px', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
+      <div style={{ padding:compact?'8px 8px 8px':'8px 8px 8px', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
         <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?12:14, color:T.inkColor, lineHeight:1.25, wordBreak:'break-word' }}>{product.name}</div>
         <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?12:14, color:T.primaryColor, marginTop:'auto', paddingTop:4 }}>RM {product.base_price.toFixed(2)}</div>
       </div>
