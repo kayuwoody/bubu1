@@ -199,47 +199,33 @@ function qtyBtn(bg: string, fg: string): React.CSSProperties {
   return { width:30, height:30, borderRadius:'50%', background:bg, color:fg, border:'none', display:'grid', placeItems:'center', cursor:'pointer' };
 }
 
-function ItemCard({ product, qty, onAdd, onSub, onCustomize, viewport }: { product: Product; qty: number; onAdd: () => void; onSub: () => void; onCustomize: () => void; viewport: Viewport }) {
+function ItemCard({ product, qty, onAdd, onCustomize, viewport }: { product: Product; qty: number; onAdd: () => void; onCustomize: () => void; viewport: Viewport }) {
   const sheet = needsSheet(product);
   const compact = viewport === 'mobile';
   const col = catSwatch(product.category);
   const soldOut = product.stock_quantity !== null && product.stock_quantity <= 0;
-  const thumb = compact ? 56 : 84;
+
+  const handleClick = () => { if (!soldOut) { if (sheet) onCustomize(); else onAdd(); } };
+
   return (
-    <div style={{ background:'#fff', borderRadius:T.cornerRadius, padding:compact?10:16, display:'flex', gap:compact?8:14, alignItems:'center', border:`1.5px solid ${hex(T.inkColor,.06)}`, boxShadow:`0 4px 0 ${hex(T.inkColor,.05)}`, ...(soldOut ? { opacity:.45, pointerEvents:'none' } : {}) }}>
-      <div style={{ width:thumb, height:thumb, flexShrink:0, background:`radial-gradient(circle at 50% 55%,${hex(col,.22)},${hex(col,.05)} 65%)`, borderRadius:T.cornerRadius-4, display:'grid', placeItems:'center', overflow:'hidden' }}>
-        <ItemThumb product={product} size={compact?48:74}/>
-      </div>
-      <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?14:18, color:T.inkColor, lineHeight:1.2 }}>{product.name}</div>
-        <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4, flexWrap:'wrap' }}>
-          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?13:17, color:T.inkColor }}>RM {product.base_price.toFixed(2)}</div>
-          {soldOut && <span style={{ fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:10, background:hex(T.inkColor,.08), color:T.inkColor, borderRadius:6, padding:'2px 6px' }}>Sold out</span>}
-        </div>
-      </div>
-      {(() => {
-        if (soldOut) return null;
-        const btnSz = compact ? 34 : 44;
-        const icSz  = compact ? '14' : '20';
-        if (qty > 0 && !sheet) return (
-          <div style={{ display:'flex', alignItems:'center', gap:compact?4:10, background:T.inkColor, color:'#fff', borderRadius:999, padding:3, flexShrink:0 }}>
-            <button onClick={onSub} style={qtyBtn('#fff',T.inkColor)}><Icon.Minus width="14" height="14"/></button>
-            <span style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, minWidth:12, textAlign:'center', fontSize:13 }}>{qty}</span>
-            <button onClick={onAdd} style={qtyBtn('#fff',T.inkColor)}><Icon.Plus width="14" height="14"/></button>
+    <div onClick={handleClick} style={{ background:'#fff', borderRadius:T.cornerRadius, border:`1.5px solid ${hex(T.inkColor,.06)}`, boxShadow:`0 4px 0 ${hex(T.inkColor,.05)}`, cursor:soldOut?'default':'pointer', opacity:soldOut?.45:1, display:'flex', flexDirection:'column', overflow:'hidden', userSelect:'none' }}>
+      {/* Image */}
+      <div style={{ width:'100%', aspectRatio:'1', background:`radial-gradient(circle at 50% 55%,${hex(col,.22)},${hex(col,.05)} 65%)`, display:'grid', placeItems:'center', position:'relative', overflow:'hidden' }}>
+        <ItemThumb product={product} size={compact?80:96}/>
+        {soldOut && (
+          <div style={{ position:'absolute', inset:0, background:'rgba(255,255,255,.6)', display:'grid', placeItems:'center' }}>
+            <span style={{ fontFamily:"'Nunito',system-ui", fontWeight:800, fontSize:11, background:hex(T.inkColor,.85), color:'#fff', borderRadius:6, padding:'3px 8px' }}>Sold out</span>
           </div>
-        );
-        if (sheet) return (
-          <button onClick={onCustomize} style={{ position:'relative', width:btnSz, height:btnSz, borderRadius:'50%', border:'none', background:T.primaryColor, color:'#fff', display:'grid', placeItems:'center', cursor:'pointer', boxShadow:`0 4px 0 ${hex(T.primaryColor,.4)}`, flexShrink:0 }}>
-            <Icon.Plus width={icSz} height={icSz}/>
-            {qty > 0 && <span style={{ position:'absolute', top:-4, right:-4, background:T.inkColor, color:'#fff', borderRadius:999, padding:'1px 5px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:10, border:'2px solid #fff' }}>{qty}</span>}
-          </button>
-        );
-        return (
-          <button onClick={onAdd} style={{ width:btnSz, height:btnSz, borderRadius:'50%', border:'none', background:T.primaryColor, color:'#fff', display:'grid', placeItems:'center', cursor:'pointer', boxShadow:`0 4px 0 ${hex(T.primaryColor,.4)}`, flexShrink:0 }}>
-            <Icon.Plus width={icSz} height={icSz}/>
-          </button>
-        );
-      })()}
+        )}
+        {qty > 0 && !soldOut && (
+          <span style={{ position:'absolute', top:6, right:6, background:T.inkColor, color:'#fff', borderRadius:999, padding:'2px 7px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:12, border:'2px solid #fff', lineHeight:1.4 }}>{qty}</span>
+        )}
+      </div>
+      {/* Text */}
+      <div style={{ padding:compact?'8px 10px 10px':'10px 12px 12px', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
+        <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?12:14, color:T.inkColor, lineHeight:1.25, wordBreak:'break-word' }}>{product.name}</div>
+        <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?12:14, color:T.primaryColor, marginTop:'auto', paddingTop:4 }}>RM {product.base_price.toFixed(2)}</div>
+      </div>
     </div>
   );
 }
@@ -704,7 +690,6 @@ export default function MenuAppV2() {
           <ItemCard
             key={p.id} product={p} qty={qtyFor(p.id)}
             onAdd={() => incById(p.id, p.name, p.base_price)}
-            onSub={() => decById(p.id)}
             onCustomize={() => setSheetProduct(p)}
             viewport={viewport}
           />
