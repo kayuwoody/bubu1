@@ -155,7 +155,10 @@ function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyAc
 }
 
 // ── v2 Greeting Band (slim gradient, replaces hero) ────────────────────────
-function GreetingBand({ viewport, isReturning }: { viewport: Viewport; isReturning: boolean }) {
+function GreetingBand({ viewport, isReturning, hasReorder, onReorder, lastSummary }: {
+  viewport: Viewport; isReturning: boolean;
+  hasReorder: boolean; onReorder: () => void; lastSummary: string;
+}) {
   const compact = viewport === 'mobile';
   return (
     <section style={{ margin:compact?'8px 14px 0':'12px 24px 0', background:`linear-gradient(135deg,${T.primaryColor} 0%,#FF9A3D 100%)`, borderRadius:T.cornerRadius, padding:compact?'10px 12px':'12px 16px', display:'flex', alignItems:'center', gap:compact?10:14, color:'#fff', overflow:'hidden' }}>
@@ -164,10 +167,15 @@ function GreetingBand({ viewport, isReturning }: { viewport: Viewport; isReturni
         <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?16:18, lineHeight:1.1 }}>
           {isReturning ? 'Welcome back ✨' : 'Coffee, sorted.'}
         </div>
-        <div style={{ fontFamily:"'Nunito',system-ui", fontSize:compact?12:13, opacity:.92, marginTop:2 }}>
-          {isReturning ? 'Ready to order again?' : 'Order ahead, skip the line.'}
+        <div style={{ fontFamily:"'Nunito',system-ui", fontSize:compact?12:13, opacity:.92, marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+          {hasReorder ? lastSummary : 'Order ahead, skip the line.'}
         </div>
       </div>
+      {hasReorder && (
+        <button onClick={onReorder} style={{ background:'#fff', color:T.primaryColor, border:'none', borderRadius:999, padding:compact?'7px 12px':'9px 16px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?12:13, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, display:'flex', alignItems:'center', gap:5 }}>
+          <Icon.Bolt width="12" height="12"/> Reorder
+        </button>
+      )}
     </section>
   );
 }
@@ -603,6 +611,7 @@ export default function MenuAppV2() {
   const [sheetProduct, setSheetProduct] = useState<Product | null>(null);
   const [loading,     setLoading]     = useState(true);
   const [isReturning, setIsReturning] = useState(false);
+  const [lastOrder,   setLastOrder]   = useState<{ items: CartLine[]; when: string } | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -619,10 +628,12 @@ export default function MenuAppV2() {
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  // Customer lookup from saved phone + returning-user detection
+  // Customer lookup, returning-user detection, last order
   useEffect(() => {
     try {
       setIsReturning(!!localStorage.getItem('co_session'));
+      const lo = localStorage.getItem('co_last_order');
+      if (lo) setLastOrder(JSON.parse(lo));
       const saved = localStorage.getItem('co_form');
       if (!saved) return;
       const { phone } = JSON.parse(saved);
@@ -636,6 +647,14 @@ export default function MenuAppV2() {
   const handlePay = () => {
     try { localStorage.setItem('co_pending', JSON.stringify({ lines, pickup, total })); } catch { /* ignore */ }
     router.push('/checkout');
+  };
+
+  const handleReorder = () => {
+    if (!lastOrder) return;
+    lastOrder.items.forEach(line => {
+      addLine(line.id, line.name, line.qty, line.mods ?? null, line.unitPrice);
+    });
+    setCartOpen(true);
   };
 
   const compact  = viewport === 'mobile';
@@ -665,7 +684,11 @@ export default function MenuAppV2() {
         onLoyaltyClick={() => setLoyaltyOpen(true)}
       />
 
-      <GreetingBand viewport={viewport} isReturning={isReturning}/>
+      <GreetingBand
+        viewport={viewport} isReturning={isReturning}
+        hasReorder={!!lastOrder} onReorder={handleReorder}
+        lastSummary={lastOrder?.items.map(l => `${l.qty}× ${l.name}`).join(', ') ?? ''}
+      />
 
       <CatBar cats={categories} active={activeCat} setActive={setActiveCat} viewport={viewport}/>
 

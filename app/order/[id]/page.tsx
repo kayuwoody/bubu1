@@ -73,8 +73,18 @@ export default function OrderPage() {
     fetch(`/api/orders/${id}`)
       .then(r => r.json())
       .then(data => {
-        if (data.error) setError(data.error);
-        else setOrder(data);
+        if (data.error) { setError(data.error); return; }
+        setOrder(data);
+        // Persist last order for reorder feature
+        try {
+          const pending = localStorage.getItem('co_pending');
+          if (pending) {
+            const { lines } = JSON.parse(pending);
+            localStorage.setItem('co_last_order', JSON.stringify({ items: lines, when: 'Last order' }));
+            localStorage.setItem('co_session', 'true');
+            localStorage.removeItem('co_pending');
+          }
+        } catch { /* ignore */ }
       })
       .catch(() => setError('Could not load order.'));
   }, [id]);
