@@ -68,7 +68,7 @@ function TweaksPanel({ tweaks, setTweaks, open, setOpen }) {
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <div style={{ fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 18, color: "#3A2414" }}>Tweaks</div>
-        <button onClick={()=>setOpen(false)} style={{ marginLeft: "auto", background: "transparent", border: "none", cursor: "pointer", color: "#3A2414", fontSize: 20, lineHeight: 1 }}>×</button>
+        <button onClick={()=>setOpen(false)} style={{ marginLeft: "auto", background: "transparent", border: "none", cursor: "pointer", color: "#3A2414", fontSize: 20, lineHeight: 1 }}>Tweaks</button>
       </div>
 
       <TweakRow label="Primary color">
