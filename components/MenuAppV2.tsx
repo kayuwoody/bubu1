@@ -205,34 +205,42 @@ function ItemCard({ product, qty, onAdd, onSub, onCustomize, viewport }: { produ
   const compact = viewport === 'mobile';
   const col = catSwatch(product.category);
   const soldOut = product.stock_quantity !== null && product.stock_quantity <= 0;
+  const thumb = compact ? 56 : 84;
   return (
-    <div style={{ background:'#fff', borderRadius:T.cornerRadius, padding:compact?14:16, display:'flex', gap:compact?12:14, alignItems:'center', border:`1.5px solid ${hex(T.inkColor,.06)}`, boxShadow:`0 4px 0 ${hex(T.inkColor,.05)}`, ...(soldOut ? { opacity:.45, pointerEvents:'none' } : {}) }}>
-      <div style={{ width:compact?72:84, height:compact?72:84, flexShrink:0, background:`radial-gradient(circle at 50% 55%,${hex(col,.22)},${hex(col,.05)} 65%)`, borderRadius:T.cornerRadius-4, display:'grid', placeItems:'center', overflow:'hidden' }}>
-        <ItemThumb product={product} size={compact?64:74}/>
+    <div style={{ background:'#fff', borderRadius:T.cornerRadius, padding:compact?10:16, display:'flex', gap:compact?8:14, alignItems:'center', border:`1.5px solid ${hex(T.inkColor,.06)}`, boxShadow:`0 4px 0 ${hex(T.inkColor,.05)}`, ...(soldOut ? { opacity:.45, pointerEvents:'none' } : {}) }}>
+      <div style={{ width:thumb, height:thumb, flexShrink:0, background:`radial-gradient(circle at 50% 55%,${hex(col,.22)},${hex(col,.05)} 65%)`, borderRadius:T.cornerRadius-4, display:'grid', placeItems:'center', overflow:'hidden' }}>
+        <ItemThumb product={product} size={compact?48:74}/>
       </div>
       <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?17:18, color:T.inkColor, lineHeight:1.1 }}>{product.name}</div>
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:6 }}>
-          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?16:17, color:T.inkColor }}>RM {product.base_price.toFixed(2)}</div>
-          {soldOut && <span style={{ fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:11, background:hex(T.inkColor,.08), color:T.inkColor, borderRadius:6, padding:'2px 7px' }}>Sold out</span>}
+        <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?14:18, color:T.inkColor, lineHeight:1.2 }}>{product.name}</div>
+        <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4, flexWrap:'wrap' }}>
+          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?13:17, color:T.inkColor }}>RM {product.base_price.toFixed(2)}</div>
+          {soldOut && <span style={{ fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:10, background:hex(T.inkColor,.08), color:T.inkColor, borderRadius:6, padding:'2px 6px' }}>Sold out</span>}
         </div>
       </div>
-      {!soldOut && (qty > 0 && !sheet ? (
-        <div style={{ display:'flex', alignItems:'center', gap:10, background:T.inkColor, color:'#fff', borderRadius:999, padding:4 }}>
-          <button onClick={onSub} style={qtyBtn('#fff',T.inkColor)}><Icon.Minus width="16" height="16"/></button>
-          <span style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, minWidth:16, textAlign:'center' }}>{qty}</span>
-          <button onClick={onAdd} style={qtyBtn('#fff',T.inkColor)}><Icon.Plus width="16" height="16"/></button>
-        </div>
-      ) : sheet ? (
-        <button onClick={onCustomize} style={{ position:'relative', width:44, height:44, borderRadius:'50%', border:'none', background:T.primaryColor, color:'#fff', display:'grid', placeItems:'center', cursor:'pointer', boxShadow:`0 4px 0 ${hex(T.primaryColor,.4)}`, flexShrink:0 }}>
-          <Icon.Plus width="20" height="20"/>
-          {qty > 0 && <span style={{ position:'absolute', top:-4, right:-4, background:T.inkColor, color:'#fff', borderRadius:999, padding:'1px 6px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:11, border:'2px solid #fff' }}>{qty}</span>}
-        </button>
-      ) : (
-        <button onClick={onAdd} style={{ width:44, height:44, borderRadius:'50%', border:'none', background:T.primaryColor, color:'#fff', display:'grid', placeItems:'center', cursor:'pointer', boxShadow:`0 4px 0 ${hex(T.primaryColor,.4)}`, flexShrink:0 }}>
-          <Icon.Plus width="20" height="20"/>
-        </button>
-      ))}
+      {(() => {
+        if (soldOut) return null;
+        const btnSz = compact ? 34 : 44;
+        const icSz  = compact ? '14' : '20';
+        if (qty > 0 && !sheet) return (
+          <div style={{ display:'flex', alignItems:'center', gap:compact?4:10, background:T.inkColor, color:'#fff', borderRadius:999, padding:3, flexShrink:0 }}>
+            <button onClick={onSub} style={qtyBtn('#fff',T.inkColor)}><Icon.Minus width="14" height="14"/></button>
+            <span style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, minWidth:12, textAlign:'center', fontSize:13 }}>{qty}</span>
+            <button onClick={onAdd} style={qtyBtn('#fff',T.inkColor)}><Icon.Plus width="14" height="14"/></button>
+          </div>
+        );
+        if (sheet) return (
+          <button onClick={onCustomize} style={{ position:'relative', width:btnSz, height:btnSz, borderRadius:'50%', border:'none', background:T.primaryColor, color:'#fff', display:'grid', placeItems:'center', cursor:'pointer', boxShadow:`0 4px 0 ${hex(T.primaryColor,.4)}`, flexShrink:0 }}>
+            <Icon.Plus width={icSz} height={icSz}/>
+            {qty > 0 && <span style={{ position:'absolute', top:-4, right:-4, background:T.inkColor, color:'#fff', borderRadius:999, padding:'1px 5px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:10, border:'2px solid #fff' }}>{qty}</span>}
+          </button>
+        );
+        return (
+          <button onClick={onAdd} style={{ width:btnSz, height:btnSz, borderRadius:'50%', border:'none', background:T.primaryColor, color:'#fff', display:'grid', placeItems:'center', cursor:'pointer', boxShadow:`0 4px 0 ${hex(T.primaryColor,.4)}`, flexShrink:0 }}>
+            <Icon.Plus width={icSz} height={icSz}/>
+          </button>
+        );
+      })()}
     </div>
   );
 }
@@ -692,7 +700,7 @@ export default function MenuAppV2() {
 
       <CatBar cats={categories} active={activeCat} setActive={setActiveCat} viewport={viewport}/>
 
-      <main style={{ padding:compact?'0 14px 120px':'0 24px 60px', display:'grid', gridTemplateColumns:viewport==='desktop'?'1fr 1fr':'1fr', gap:8 }}>
+      <main style={{ padding:compact?'0 10px 120px':'0 24px 60px', display:'grid', gridTemplateColumns:viewport==='tablet'?'1fr':'1fr 1fr', gap:compact?6:8 }}>
         {filtered.map(p => (
           <ItemCard
             key={p.id} product={p} qty={qtyFor(p.id)}
