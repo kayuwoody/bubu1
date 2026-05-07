@@ -2,8 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { CartLine } from '@/lib/types';
-import MENU_DATA from '@/lib/menu-data';
+import type { CartLine, LoyaltySettings } from '@/lib/types';
 
 const INK  = '#3A2414';
 const BG   = '#FFF6E8';
@@ -34,6 +33,59 @@ function loadScript(src: string): Promise<void> {
   });
 }
 
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: 13, fontWeight: 700,
+  color: `rgba(58,36,20,.65)`, marginBottom: 6,
+  textTransform: 'uppercase', letterSpacing: '.04em',
+};
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '14px 16px', fontSize: 16,
+  color: INK, background: '#fff',
+  border: `1.5px solid rgba(58,36,20,.12)`,
+  borderRadius: R - 8, outline: 'none',
+  fontFamily: "'Nunito', system-ui",
+};
+
+function LoyaltyChip({
+  settings, customer, lookingUp, total,
+}: {
+  settings: LoyaltySettings | null;
+  customer: { name: string | null; points_balance: number } | null;
+  lookingUp: boolean;
+  total: number;
+}) {
+  if (!settings?.is_active) return null;
+  const toEarn = Math.floor(total * settings.points_per_rm);
+  if (toEarn <= 0 && !customer && !lookingUp) return null;
+
+  const hasCustomer = !!customer;
+  return (
+    <div style={{
+      marginTop: 8, padding: '9px 13px',
+      borderRadius: R - 10,
+      background: hasCustomer ? '#FFFBEB' : `rgba(58,36,20,.03)`,
+      border: `1px solid ${hasCustomer ? '#FDE68A' : `rgba(58,36,20,.07)`}`,
+      fontSize: 13, display: 'flex', alignItems: 'center', gap: 7,
+    }}>
+      <span style={{ fontSize: 15 }}>⭐</span>
+      {lookingUp ? (
+        <span style={{ color: `rgba(58,36,20,.45)` }}>Checking loyalty…</span>
+      ) : hasCustomer ? (
+        <span style={{ color: '#92400E' }}>
+          Hi {customer!.name ?? 'there'}!{' '}
+          <strong>{customer!.points_balance.toLocaleString()} pts</strong> balance
+          {toEarn > 0 && <> · +{toEarn} pts on this order</>}
+        </span>
+      ) : (
+        <span style={{ color: `rgba(58,36,20,.55)` }}>
+          Earn <strong>{toEarn} pts</strong> on this order
+        </span>
+      )}
+    </div>
+  );
+}
+
 function CheckoutContent() {
   const searchParams = useSearchParams();
   const cancelled    = searchParams.get('cancelled') === '1';
@@ -45,6 +97,10 @@ function CheckoutContent() {
   const [channel, setChannel] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySettings | null>(null);
+  const [customer, setCustomer] = useState<{ name: string | null; points_balance: number } | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
 
   const CHANNELS = [
     { value: 'fpx',          label: 'Online Banking (FPX)' },
@@ -60,6 +116,43 @@ function CheckoutContent() {
       if (raw) setPending(JSON.parse(raw));
     } catch { /* ignore */ }
   }, []);
+
+  // Restore saved form data (populated on prior submit; survives cancel/retry)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('co_form');
+      if (saved) {
+        const { name: n, email: em, phone: ph, channel: ch } = JSON.parse(saved);
+        if (n)  setName(n);
+        if (em) setEmail(em);
+        if (ph) setPhone(ph);
+        if (ch) setChannel(ch);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // Fetch loyalty config once on mount
+  useEffect(() => {
+    fetch('/api/loyalty')
+      .then(r => r.json())
+      .then(d => setLoyaltySettings(d.settings ?? null))
+      .catch(() => {});
+  }, []);
+
+  // Debounced customer lookup by phone
+  useEffect(() => {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 8) { setCustomer(null); return; }
+    setLookingUp(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/customer?phone=${digits}`);
+        setCustomer(res.ok ? await res.json() : null);
+      } catch { setCustomer(null); }
+      finally  { setLookingUp(false); }
+    }, 700);
+    return () => { clearTimeout(timer); setLookingUp(false); };
+  }, [phone]);
 
   if (!pending) {
     return (
@@ -77,6 +170,8 @@ function CheckoutContent() {
     setError('');
     if (!name.trim() || !phone.trim()) { setError('Name and phone are required.'); return; }
     if (!channel) { setError('Please select a payment method.'); return; }
+    // Persist form fields so they survive a cancel/retry cycle
+    try { localStorage.setItem('co_form', JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim(), channel })); } catch { /* ignore */ }
     setLoading(true);
     try {
       const res = await fetch('/api/checkout', {
@@ -180,10 +275,7 @@ function CheckoutContent() {
     }
   };
 
-  const itemNames = pending.lines.map(l => {
-    const item = MENU_DATA.items.find(i => i.id === l.id);
-    return `${l.qty}× ${item?.name ?? l.id}`;
-  }).join(', ');
+  const itemNames = pending.lines.map(l => `${l.qty}× ${l.name}`).join(', ');
 
   return (
     <div style={{ minHeight: '100vh', background: BG, fontFamily: "'Nunito', system-ui", padding: '24px 16px 48px' }}>
@@ -212,23 +304,31 @@ function CheckoutContent() {
 
         <form onSubmit={handleSubmit}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {[
-              { label: 'Name', value: name, set: setName, type: 'text', placeholder: 'Your name', required: true },
-              { label: 'Phone', value: phone, set: setPhone, type: 'tel', placeholder: 'e.g. 0123456789', required: true },
-              { label: 'Email (optional)', value: email, set: setEmail, type: 'email', placeholder: 'For receipt', required: false },
-            ].map(({ label, value, set, type, placeholder, required }) => (
-              <div key={label}>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: hex(INK, .65), marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</label>
-                <input
-                  type={type}
-                  value={value}
-                  onChange={e => set(e.target.value)}
-                  placeholder={placeholder}
-                  required={required}
-                  style={{ width: '100%', padding: '14px 16px', fontSize: 16, color: INK, background: '#fff', border: `1.5px solid ${hex(INK, .12)}`, borderRadius: R - 8, outline: 'none', fontFamily: "'Nunito', system-ui" }}
-                />
-              </div>
-            ))}
+
+            {/* Name */}
+            <div>
+              <label style={labelStyle}>Name</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" required style={inputStyle} />
+            </div>
+
+            {/* Phone + loyalty chip */}
+            <div>
+              <label style={labelStyle}>Phone</label>
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. 0123456789" required style={inputStyle} />
+              <LoyaltyChip
+                settings={loyaltySettings}
+                customer={customer}
+                lookingUp={lookingUp}
+                total={pending.total}
+              />
+            </div>
+
+            {/* Email */}
+            <div>
+              <label style={labelStyle}>Email (optional)</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="For receipt" style={inputStyle} />
+            </div>
+
           </div>
 
           <div style={{ marginTop: 14 }}>
@@ -263,6 +363,25 @@ function CheckoutContent() {
           >
             {loading ? 'Loading payment…' : `Pay RM ${pending.total.toFixed(2)} →`}
           </button>
+
+          {loading && (
+            <a
+              href="/checkout?cancelled=1"
+              style={{
+                position: 'fixed', top: 16, left: 16, zIndex: 99999,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: '#fff',
+                border: `1.5px solid ${hex(INK, .15)}`,
+                borderRadius: R - 8,
+                padding: '10px 18px',
+                fontSize: 14, fontWeight: 700, color: INK,
+                textDecoration: 'none',
+                boxShadow: '0 2px 16px rgba(0,0,0,.18)',
+              }}
+            >
+              ← Cancel
+            </a>
+          )}
 
           <div style={{ textAlign: 'center', marginTop: 10, fontSize: 12, color: hex(INK, .5) }}>
             FPX · GrabPay · Boost · Touch 'n Go

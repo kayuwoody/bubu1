@@ -16,7 +16,7 @@ const nunito = Nunito({
 
 export const metadata: Metadata = {
   title: 'Coffee Oasis — Order Ahead',
-  description: 'Skip the line. Order your coffee ahead at Shell Seksyen 13.',
+  description: 'Skip the line. Order your coffee ahead.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
