@@ -400,12 +400,11 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
 
   const comboHasCoffee = useMemo(() => {
     if (!cfg) return false;
-    if (product?.category === 'coffee') return true;
     return cfg.xorGroups.some(g => {
       const selId = selections[g.uniqueKey];
       return !!g.items.find(i => i.id === selId)?.isCoffee;
     });
-  }, [cfg, selections, product]);
+  }, [cfg, selections]);
 
   useEffect(() => {
     if (!open || !product) return;
