@@ -545,20 +545,25 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
 }
 
 // ── Loyalty Sheet ─────────────────────────────────────────────────────────
-function LoyaltySheet({ open, onClose, config, phone }: {
+function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   open: boolean; onClose: () => void;
   config: LoyaltyConfig | null;
   phone: string | null;
+  onPhoneSave: (phone: string) => void;
 }) {
   const [member,       setMember]       = useState<LoyaltyMember | null>(null);
   const [vouchers,     setVouchers]     = useState<Voucher[]>([]);
   const [transactions, setTransactions] = useState<LoyaltyTransaction[]>([]);
   const [fetching,     setFetching]     = useState(false);
+  const [phoneInput,   setPhoneInput]   = useState('');
+  const [phoneErr,     setPhoneErr]     = useState('');
+
+  const activePhone = phone;
+  const digits = (activePhone ?? '').replace(/\D/g, '');
+  const hasPhone = digits.length >= 8;
 
   useEffect(() => {
-    if (!open) return;
-    const digits = (phone ?? '').replace(/\D/g, '');
-    if (!digits || digits.length < 8) return;
+    if (!open || !hasPhone) return;
     setFetching(true);
     fetch(`/api/loyalty/member?phone=${digits}`)
       .then(r => r.json())
@@ -569,14 +574,31 @@ function LoyaltySheet({ open, onClose, config, phone }: {
       })
       .catch(() => {})
       .finally(() => setFetching(false));
-  }, [open, phone]);
+  }, [open, digits, hasPhone]);
+
+  const handlePhoneLookup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const d = phoneInput.replace(/\D/g, '');
+    if (d.length < 8) { setPhoneErr('Enter a valid phone number'); return; }
+    setPhoneErr('');
+    setFetching(true);
+    try {
+      const res = await fetch(`/api/loyalty/member?phone=${d}`);
+      const data = await res.json();
+      if (!data.member) { setPhoneErr('No loyalty account found for this number'); setFetching(false); return; }
+      onPhoneSave(d);
+      setMember(data.member);
+      setVouchers(data.vouchers ?? []);
+      setTransactions(data.transactions ?? []);
+    } catch { setPhoneErr('Could not look up account. Try again.'); }
+    finally  { setFetching(false); }
+  };
 
   if (!open) return null;
 
   const bal = member?.points_balance ?? 0;
   const threshold = config?.points_threshold ?? 10;
   const ptsToNext = threshold - (bal % threshold);
-  const hasPhone = !!(phone && phone.replace(/\D/g,'').length >= 8);
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:60, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
@@ -588,20 +610,45 @@ function LoyaltySheet({ open, onClose, config, phone }: {
           <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', cursor:'pointer', color:T.inkColor, fontSize:24, lineHeight:1 }}>×</button>
         </div>
 
-        {/* QR / no-phone prompt */}
+        {/* QR / phone lookup */}
         {hasPhone ? (
           <div style={{ background:T.inkColor, borderRadius:T.cornerRadius, padding:'18px 18px 14px', marginBottom:14, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
             <div style={{ background:'#fff', borderRadius:12, padding:10, display:'inline-flex' }}>
-              <QRCodeSVG value={phone!.replace(/\D/g,'')} size={140} />
+              <QRCodeSVG value={digits} size={140} />
             </div>
             <div style={{ color:'#fff', fontFamily:"'Nunito',system-ui", fontSize:13, opacity:.8, textAlign:'center' }}>
               Show this QR at the counter to earn points
             </div>
+            <button
+              onClick={() => { onPhoneSave(''); setMember(null); setVouchers([]); setTransactions([]); setPhoneInput(''); }}
+              style={{ background:'transparent', border:`1px solid rgba(255,255,255,.3)`, borderRadius:999, padding:'4px 12px', color:'rgba(255,255,255,.65)', fontSize:12, cursor:'pointer', fontFamily:"'Nunito',system-ui" }}
+            >
+              Not you?
+            </button>
           </div>
         ) : (
-          <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'14px 16px', marginBottom:14, border:`1.5px solid ${hex(T.inkColor,.08)}`, fontFamily:"'Nunito',system-ui", fontSize:14, color:hex(T.inkColor,.65), textAlign:'center' }}>
-            Complete a checkout to get your loyalty QR code
-          </div>
+          <form onSubmit={handlePhoneLookup} style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'16px', marginBottom:14, border:`1.5px solid ${hex(T.inkColor,.08)}` }}>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:10 }}>
+              Enter your phone to see your QR
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <input
+                type="tel"
+                value={phoneInput}
+                onChange={e => { setPhoneInput(e.target.value); setPhoneErr(''); }}
+                placeholder="e.g. 0123456789"
+                style={{ flex:1, padding:'11px 14px', fontSize:15, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, outline:'none', fontFamily:"'Nunito',system-ui" }}
+              />
+              <button
+                type="submit"
+                disabled={fetching}
+                style={{ padding:'11px 16px', borderRadius:T.cornerRadius-10, border:'none', background:T.primaryColor, color:'#fff', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Nunito',system-ui", opacity:fetching?.6:1 }}
+              >
+                {fetching ? '…' : 'Find'}
+              </button>
+            </div>
+            {phoneErr && <div style={{ marginTop:7, fontSize:13, color:'#C0392B', fontWeight:600 }}>{phoneErr}</div>}
+          </form>
         )}
 
         {/* Balance */}
@@ -808,6 +855,19 @@ export default function MenuAppV2() {
       <LoyaltySheet
         open={loyaltyOpen} onClose={() => setLoyaltyOpen(false)}
         config={loyaltyConfig} phone={savedPhone}
+        onPhoneSave={p => {
+          setSavedPhone(p || null);
+          try {
+            if (p) {
+              const existing = JSON.parse(localStorage.getItem('co_form') ?? '{}');
+              localStorage.setItem('co_form', JSON.stringify({ ...existing, phone: p }));
+            } else {
+              const existing = JSON.parse(localStorage.getItem('co_form') ?? '{}');
+              delete existing.phone;
+              localStorage.setItem('co_form', JSON.stringify(existing));
+            }
+          } catch { /* ignore */ }
+        }}
       />
 
       {/* Version switcher */}
