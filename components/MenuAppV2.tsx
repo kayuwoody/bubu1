@@ -473,6 +473,8 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:22, color:T.inkColor, lineHeight:1.1 }}>{product.name}</div>
             <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:16, color:T.inkColor, marginTop:4 }}>RM {unitPrice.toFixed(2)}</div>
+            {/* DEBUG — remove before launch */}
+            <div style={{ fontSize:10, color:'#999', marginTop:2 }}>cat:{product.category} drink:{String(drink)} cfg:{String(!!cfg)} coffee:{String(comboHasCoffee)}</div>
           </div>
           <button onClick={onClose} style={{ background:'transparent', border:'none', cursor:'pointer', color:T.inkColor, alignSelf:'flex-start' }}><Icon.X width="22" height="22"/></button>
         </div>
