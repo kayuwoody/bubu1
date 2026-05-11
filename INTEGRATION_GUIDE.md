@@ -364,7 +364,7 @@ Currently, stock for online orders is tracked via `online_products.stock_count` 
 
 ---
 
-## 6. Summary Checklist for Customer App
+## 6. Summary Checklist for Customer App (bubu1)
 
 ### Must Have
 - [ ] Read menu from `products` table (not mock data)
@@ -390,7 +390,7 @@ Currently, stock for online orders is tracked via `online_products.stock_count` 
 
 ---
 
-## 7. Supabase Setup SQL
+## 7. Supabase Setup SQL (Core Tables)
 
 Run this in the Supabase SQL Editor if the tables don't exist yet:
 
@@ -482,7 +482,7 @@ Or use the "Catalog Sync" button on the POS admin dashboard.
 
 ---
 
-## 6. Loyalty & Vouchers
+## 8. Loyalty & Vouchers
 
 Supabase is the source of truth for all loyalty data. Both the POS and customer app read/write directly — no API calls between them.
 
@@ -507,14 +507,16 @@ One row per counter type. Staff manage this via POS admin.
 
 ```sql
 CREATE TABLE IF NOT EXISTS loyalty_programs (
-  id TEXT PRIMARY KEY,                        -- slug, e.g. 'visit_stamps', 'purchase_points'
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,                         -- display name shown to customer
   description TEXT,
-  trigger_type TEXT NOT NULL,                 -- 'scan' | 'purchase' | 'manual'
+  trigger_type TEXT NOT NULL                  -- 'scan' | 'purchase' | 'manual'
+    CHECK (trigger_type IN ('scan', 'purchase', 'manual')),
   points_per_trigger INTEGER NOT NULL DEFAULT 1,  -- points awarded per event (flat)
   points_per_rm NUMERIC,                      -- if set, awards floor(total * points_per_rm) instead of flat (purchase only)
   threshold INTEGER NOT NULL,                 -- points needed to earn a voucher
-  voucher_type TEXT NOT NULL DEFAULT 'fixed', -- 'fixed' | 'percent'
+  voucher_type TEXT NOT NULL DEFAULT 'fixed'  -- 'fixed' | 'percent'
+    CHECK (voucher_type IN ('fixed', 'percent')),
   voucher_discount_value NUMERIC NOT NULL,    -- RM amount or percent
   voucher_validity_days INTEGER NOT NULL DEFAULT 90,
   voucher_min_order NUMERIC,                  -- minimum order total to redeem (null = no minimum)
@@ -544,7 +546,7 @@ Tracks each member's balance for each program separately.
 CREATE TABLE IF NOT EXISTS loyalty_member_programs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   member_id UUID NOT NULL REFERENCES loyalty_members(id) ON DELETE CASCADE,
-  program_id TEXT NOT NULL REFERENCES loyalty_programs(id),
+  program_id UUID NOT NULL REFERENCES loyalty_programs(id) ON DELETE CASCADE,
   points_balance INTEGER NOT NULL DEFAULT 0,   -- current balance toward threshold
   total_earned INTEGER NOT NULL DEFAULT 0,     -- lifetime points earned
   enrolled_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -563,7 +565,7 @@ Audit log — one row per points event, linked to the specific program.
 CREATE TABLE IF NOT EXISTS loyalty_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   member_id UUID NOT NULL REFERENCES loyalty_members(id) ON DELETE CASCADE,
-  program_id TEXT NOT NULL REFERENCES loyalty_programs(id),
+  program_id UUID REFERENCES loyalty_programs(id),  -- nullable for legacy rows
   type TEXT NOT NULL,           -- 'earn' | 'redeem' | 'expire' | 'manual'
   points INTEGER NOT NULL,      -- positive = earn, negative = redeem/expire
   description TEXT,             -- human-readable, shown in customer app
@@ -581,16 +583,18 @@ Auto-generated when a member hits a program's threshold. Can also be created man
 ```sql
 CREATE TABLE IF NOT EXISTS vouchers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code TEXT UNIQUE NOT NULL,            -- e.g. 'CO-A1B2C3'
+  code TEXT UNIQUE NOT NULL,            -- e.g. 'VCH-A1B2C3-XY12'
   member_id UUID REFERENCES loyalty_members(id),
-  program_id TEXT REFERENCES loyalty_programs(id),  -- which program generated this
+  program_id UUID REFERENCES loyalty_programs(id),  -- which program generated this
   is_active BOOLEAN NOT NULL DEFAULT true,
   expires_at TIMESTAMPTZ,
   times_used INTEGER NOT NULL DEFAULT 0,
   max_uses INTEGER NOT NULL DEFAULT 1,
   discount_amount NUMERIC NOT NULL,
-  type TEXT NOT NULL DEFAULT 'fixed',   -- 'fixed' | 'percent'
+  type TEXT NOT NULL DEFAULT 'fixed'    -- 'fixed' | 'percent'
+    CHECK (type IN ('fixed', 'percent')),
   min_order NUMERIC,
+  reference_id TEXT,                    -- order_id or scan_id that triggered issuance
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -602,84 +606,68 @@ CREATE INDEX IF NOT EXISTS idx_vouchers_code ON vouchers(code);
 
 ### POS Responsibilities
 
-#### 1. Seeding programs (one-time, via admin UI or SQL)
+#### 1. Seeding programs (one-time, run in Supabase SQL editor)
 
 ```sql
--- Visit stamp program: 10 scans = RM2 voucher
+-- Visit stamp program: 10 scans = RM5 voucher
 INSERT INTO loyalty_programs
-  (id, name, description, trigger_type, points_per_trigger, threshold,
+  (name, description, trigger_type, points_per_trigger, threshold,
    voucher_type, voucher_discount_value, voucher_validity_days, sort_order)
 VALUES
-  ('visit_stamps', 'Visit Stamps', 'Earn 1 stamp per visit. 10 stamps = RM2 off.',
-   'scan', 1, 10, 'fixed', 2.00, 90, 1);
+  ('Visit Stamps', 'Earn 1 stamp per visit. 10 stamps = RM5 off.',
+   'scan', 1, 10, 'fixed', 5.00, 90, 1);
 
 -- Purchase program: 1 point per order = RM5 voucher at 10 orders
 INSERT INTO loyalty_programs
-  (id, name, description, trigger_type, points_per_trigger, threshold,
+  (name, description, trigger_type, points_per_trigger, threshold,
    voucher_type, voucher_discount_value, voucher_validity_days, sort_order)
 VALUES
-  ('purchase_points', 'Purchase Rewards', 'Earn 1 point per order. 10 orders = RM5 off.',
+  ('Purchase Rewards', 'Earn 1 point per order. 10 orders = RM5 off.',
    'purchase', 1, 10, 'fixed', 5.00, 90, 2);
+
+-- Spend-based program: 1pt per RM1 spent, RM10 voucher at 100pts
+INSERT INTO loyalty_programs
+  (name, description, trigger_type, points_per_trigger, points_per_rm, threshold,
+   voucher_type, voucher_discount_value, voucher_validity_days, sort_order)
+VALUES
+  ('Spend & Earn', 'Earn 1 point per RM1 spent. 100 points = RM10 off.',
+   'purchase', 1, 1.0, 100, 'fixed', 10.00, 90, 3);
 ```
 
-#### 2. Awarding points on QR scan (`POST /api/loyalty/scan`)
+Adjust thresholds and reward values to match your actual programs before inserting. You only need to seed the programs you want to run — delete any rows above that don't apply.
 
-When staff scan a customer QR code at the POS, the POS should:
+#### 2. Division of responsibility: bubu1 vs POS
+
+| Trigger | Who handles it |
+|---|---|
+| `purchase` — online payment via Fiuu | **bubu1** (Fiuu callback in `app/api/fiuu/callback/route.ts`) |
+| `scan` — staff scan customer QR at counter | **POS** (ren1) |
+| `manual` — staff manually add/deduct points | **POS** (ren1) |
+
+bubu1 already awards points for all active `purchase`-trigger programs automatically when a payment succeeds. **The POS only needs to implement the `scan` handler.**
+
+#### 3. Awarding points on QR scan (POS responsibility)
+
+The customer QR code encodes the customer's phone number (digits only). When staff scan it at the POS:
 
 ```typescript
 async function handleLoyaltyScan(phone: string) {
-  // 1. Upsert member
+  const now = new Date().toISOString();
   const member = await upsertMember(phone);
 
-  // 2. Find all active 'scan' programs
   const { data: programs } = await supabase
     .from('loyalty_programs')
     .select('*')
     .eq('trigger_type', 'scan')
-    .eq('is_active', true);
+    .eq('is_active', true)
+    .order('sort_order');
 
   for (const program of programs ?? []) {
     await awardPoints(member, program, {
       type: 'earn',
       description: 'Visit scan',
       reference_id: null,
-    });
-  }
-}
-```
-
-#### 3. Awarding points on purchase (Fiuu payment callback)
-
-After a successful payment, loop over active `purchase` programs:
-
-```typescript
-async function awardPurchasePoints(
-  phone: string,
-  name: string,
-  orderId: string,
-  totalAmount: number,
-) {
-  const member = await upsertMember(phone, name);
-
-  const { data: programs } = await supabase
-    .from('loyalty_programs')
-    .select('*')
-    .eq('trigger_type', 'purchase')
-    .eq('is_active', true);
-
-  for (const program of programs ?? []) {
-    // Flat per order, or spend-based if points_per_rm is set
-    const points = program.points_per_rm
-      ? Math.floor(totalAmount * program.points_per_rm)
-      : program.points_per_trigger;
-
-    if (points <= 0) continue;
-
-    await awardPoints(member, program, {
-      type: 'earn',
-      description: `Order ${orderId}`,
-      reference_id: orderId,
-      pointsOverride: points,
+      now,
     });
   }
 }
@@ -691,9 +679,10 @@ Shared by both scan and purchase flows. Handles balance update, transaction log,
 
 ```typescript
 async function upsertMember(phone: string, name?: string) {
+  const now = new Date().toISOString();
   const { data } = await supabase
     .from('loyalty_members')
-    .upsert({ phone, ...(name ? { name } : {}), updated_at: new Date().toISOString() }, { onConflict: 'phone' })
+    .upsert({ phone, ...(name ? { name } : {}), updated_at: now }, { onConflict: 'phone' })
     .select('id')
     .single();
   return data!;
@@ -702,16 +691,23 @@ async function upsertMember(phone: string, name?: string) {
 async function awardPoints(
   member: { id: string },
   program: LoyaltyProgram,
-  opts: { type: string; description: string; reference_id: string | null; pointsOverride?: number },
+  opts: {
+    type: string;
+    description: string;
+    reference_id: string | null;
+    pointsOverride?: number;  // used for purchase programs (points_per_rm calculation)
+    now?: string;
+  },
 ) {
+  const now = opts.now ?? new Date().toISOString();
   const points = opts.pointsOverride ?? program.points_per_trigger;
 
-  // Upsert program enrollment
+  // Upsert program enrollment row (creates it on first visit)
   const { data: enrollment } = await supabase
     .from('loyalty_member_programs')
     .upsert(
-      { member_id: member.id, program_id: program.id, updated_at: new Date().toISOString() },
-      { onConflict: 'member_id,program_id' },
+      { member_id: member.id, program_id: program.id, updated_at: now },
+      { onConflict: 'member_id,program_id', ignoreDuplicates: false },
     )
     .select('id, points_balance, total_earned')
     .single();
@@ -722,17 +718,17 @@ async function awardPoints(
   const vouchersToIssue = Math.floor(newBalance / program.threshold);
   const remainder = newBalance % program.threshold;
 
-  // Update balance
+  // Update balance — deduct spent threshold multiples, carry remainder
   await supabase
     .from('loyalty_member_programs')
     .update({
       points_balance: remainder,
       total_earned: enrollment.total_earned + points,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     })
     .eq('id', enrollment.id);
 
-  // Log transaction
+  // Audit log
   await supabase.from('loyalty_transactions').insert({
     member_id: member.id,
     program_id: program.id,
@@ -740,18 +736,24 @@ async function awardPoints(
     points,
     description: opts.description,
     reference_id: opts.reference_id,
+    created_at: now,
   });
 
-  // Issue voucher(s) if threshold crossed
+  // Issue a voucher for each threshold crossed in this event
   for (let i = 0; i < vouchersToIssue; i++) {
-    await issueVoucher(member, program);
+    await issueVoucher(member, program, opts.reference_id, now);
   }
 }
 
-async function issueVoucher(member: { id: string }, program: LoyaltyProgram) {
-  const code = 'CO-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+async function issueVoucher(
+  member: { id: string },
+  program: LoyaltyProgram,
+  referenceId: string | null,
+  now: string,
+) {
+  const code = `VCH-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   const expiresAt = program.voucher_validity_days
-    ? new Date(Date.now() + program.voucher_validity_days * 86400000).toISOString()
+    ? new Date(Date.now() + program.voucher_validity_days * 86_400_000).toISOString()
     : null;
 
   await supabase.from('vouchers').insert({
@@ -762,10 +764,12 @@ async function issueVoucher(member: { id: string }, program: LoyaltyProgram) {
     type: program.voucher_type,
     min_order: program.voucher_min_order,
     expires_at: expiresAt,
+    reference_id: referenceId,
     max_uses: 1,
+    times_used: 0,
+    is_active: true,
+    created_at: now,
   });
-
-  console.log(`[loyalty] issued voucher ${code} for member ${member.id} (program: ${program.id})`);
 }
 ```
 
@@ -847,13 +851,27 @@ The QR code shown in the customer app encodes the customer's **phone number** (d
 
 ---
 
-### Checklist for POS Implementation
+### Checklist for POS (ren1) Implementation
 
-- [ ] Create `loyalty_programs`, `loyalty_member_programs`, `loyalty_transactions`, `vouchers` tables (SQL above)
-- [ ] Create `increment_voucher_usage` RPC function
-- [ ] Seed initial programs (visit stamps + purchase rewards)
-- [ ] Update `/api/loyalty/scan` to loop over active `scan` programs using `awardPoints`
-- [ ] Update payment callback to loop over active `purchase` programs using `awardPoints`
-- [ ] Add voucher validation endpoint (`POST /api/vouchers/validate`)
-- [ ] Add admin UI to manage programs (toggle active, adjust threshold/reward)
-- [ ] Add admin UI to view member balances and manually award/deduct points
+#### One-time setup
+- [ ] Run the SQL above to create `loyalty_programs`, `loyalty_member_programs`, `loyalty_transactions`, `vouchers` tables
+- [ ] Create the `increment_voucher_usage` RPC function
+- [ ] Seed initial programs via the SQL in Section 8.1
+
+#### Scan handler (POS must implement)
+- [ ] When staff scan a customer QR, decode the phone number and call `handleLoyaltyScan`
+- [ ] Loop over all active `scan`-trigger programs using `awardPoints` helper
+- [ ] Show staff confirmation: member name, points awarded, current balance, any voucher issued
+
+#### Purchase handler (already done in bubu1)
+- [ ] ~~Loop over purchase programs in payment callback~~ — bubu1's Fiuu callback handles this automatically for all active `purchase`-trigger programs. No POS action needed.
+
+#### Admin UI
+- [ ] Program management: list programs, toggle `is_active`, edit threshold / reward values
+- [ ] Member lookup: search by phone, view per-program balances and transaction history
+- [ ] Manual points adjustment: award or deduct points with a description (sets `type = 'manual'`)
+- [ ] Voucher management: list active vouchers per member, mark as used, create manual vouchers
+
+#### Optional
+- [ ] Push notification or receipt print when a voucher is issued during scan
+- [ ] Dashboard showing total members, points issued, vouchers redeemed
