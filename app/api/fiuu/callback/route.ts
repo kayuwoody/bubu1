@@ -156,7 +156,27 @@ export async function POST(req: Request) {
   try { await awardLoyaltyPoints(session, orderId, now); }
   catch (e: unknown) { console.error('[loyalty] uncaught error:', e instanceof Error ? e.message : e); }
 
+  // Increment voucher usage if one was applied — non-blocking
+  if (session.voucher_code) {
+    try { await incrementVoucherUsage(session.voucher_code); }
+    catch (e: unknown) { console.error('[voucher] uncaught error:', e instanceof Error ? e.message : e); }
+  }
+
   return new Response('RECEIVEROK', { status: 200 });
+}
+
+async function incrementVoucherUsage(voucherCode: string) {
+  const { error } = await supabase.rpc('increment_voucher_usage', { voucher_code: voucherCode });
+  if (error) {
+    // Fallback: manual increment if RPC doesn't exist yet
+    console.warn('[voucher] RPC failed, trying manual increment:', error.message);
+    const { data: v } = await supabase.from('vouchers').select('times_used').eq('code', voucherCode).single();
+    if (v) {
+      await supabase.from('vouchers').update({ times_used: v.times_used + 1 }).eq('code', voucherCode);
+    }
+  } else {
+    console.log('[voucher] incremented usage for:', voucherCode);
+  }
 }
 
 async function awardLoyaltyPoints(
@@ -166,55 +186,59 @@ async function awardLoyaltyPoints(
 ) {
   console.log('[loyalty] start — phone:', session.customer_phone, 'amount:', session.total_amount, 'order:', orderId);
 
-  const { data: settings, error: settingsErr } = await supabase
-    .from('loyalty_settings')
-    .select('points_per_rm, min_spend_for_points, is_active')
+  const { data: config, error: configErr } = await supabase
+    .from('loyalty_config')
+    .select('is_active, points_per_scan, min_order_for_voucher')
     .eq('id', 'main')
     .single();
 
-  if (settingsErr) { console.error('[loyalty] settings fetch error:', settingsErr.message); return; }
-  if (!settings) { console.warn('[loyalty] no loyalty_settings row with id=main — run the loyalty_schema.sql seed'); return; }
-  if (!settings.is_active) { console.log('[loyalty] loyalty disabled'); return; }
-  if (session.total_amount < (settings.min_spend_for_points ?? 0)) {
-    console.log('[loyalty] below min spend:', session.total_amount, '<', settings.min_spend_for_points);
+  if (configErr || !config) {
+    console.warn('[loyalty] no loyalty_config row with id=main — skipping');
     return;
   }
-
-  const points = Math.floor(session.total_amount * settings.points_per_rm);
-  if (points <= 0) { console.log('[loyalty] 0 pts calculated, skipping'); return; }
+  if (!config.is_active) { console.log('[loyalty] loyalty disabled'); return; }
+  if (config.min_order_for_voucher != null && session.total_amount < config.min_order_for_voucher) {
+    console.log('[loyalty] below min order:', session.total_amount, '<', config.min_order_for_voucher);
+  }
 
   const phone = session.customer_phone.replace(/\D/g, '');
   if (!phone) { console.warn('[loyalty] empty phone after stripping, skipping'); return; }
 
-  console.log('[loyalty] awarding', points, 'pts to phone:', phone);
-
-  // Upsert customer by phone — only touches name/email/updated_at, not points_balance
-  const { data: customer, error: custErr } = await supabase
-    .from('customers')
+  // Upsert loyalty member
+  const { data: member, error: memberErr } = await supabase
+    .from('loyalty_members')
     .upsert(
-      { phone, name: session.customer_name, email: session.customer_email || null, updated_at: now },
+      { phone, name: session.customer_name || null, updated_at: now },
       { onConflict: 'phone' },
     )
-    .select('id, points_balance')
+    .select('id, points_balance, total_points_earned')
     .single();
 
-  if (custErr || !customer) {
-    console.error('[loyalty] customer upsert error:', custErr?.message);
+  if (memberErr || !member) {
+    console.error('[loyalty] member upsert error:', memberErr?.message);
     return;
   }
 
-  const { error: ledgerErr } = await supabase.from('customer_points_ledger').insert({
-    customer_id:  customer.id,
-    order_id:     orderId,
-    points_delta: points,
-    reason:       'order_earn',
+  // Record transaction (1 point per order)
+  const points = 1;
+  const { error: txErr } = await supabase.from('loyalty_transactions').insert({
+    member_id:    member.id,
+    type:         'earn_order',
+    points,
+    description:  `Order ${orderId}`,
+    reference_id: orderId,
+    created_at:   now,
   });
-  if (ledgerErr) { console.error('[loyalty] ledger insert error:', ledgerErr.message); return; }
+  if (txErr) { console.error('[loyalty] transaction insert error:', txErr.message); return; }
 
   const { error: balErr } = await supabase
-    .from('customers')
-    .update({ points_balance: customer.points_balance + points, updated_at: now })
-    .eq('id', customer.id);
+    .from('loyalty_members')
+    .update({
+      points_balance:      member.points_balance + points,
+      total_points_earned: member.total_points_earned + points,
+      updated_at:          now,
+    })
+    .eq('id', member.id);
   if (balErr) console.error('[loyalty] balance update error:', balErr.message);
-  else console.log('[loyalty] awarded', points, 'pts → customer:', customer.id, 'order:', orderId);
+  else console.log('[loyalty] awarded', points, 'pt → member:', member.id, 'order:', orderId);
 }

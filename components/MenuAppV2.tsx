@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Branch, CartLine, LoyaltyRedemption, LoyaltySettings, Product, SelectionConfig, Viewport, XorGroup } from '@/lib/types';
+import { QRCodeSVG } from 'qrcode.react';
+import type { Branch, CartLine, LoyaltyConfig, LoyaltyMember, LoyaltyTransaction, Voucher, Product, SelectionConfig, Viewport, XorGroup } from '@/lib/types';
 
 interface Category { id: string; label: string }
 
@@ -543,62 +544,134 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   );
 }
 
-// ── Loyalty Sheet (slide-up, shows points program) ─────────────────────────
-function LoyaltySheet({ open, onClose, settings, redemptions, customer }: {
+// ── Loyalty Sheet ─────────────────────────────────────────────────────────
+function LoyaltySheet({ open, onClose, config, phone }: {
   open: boolean; onClose: () => void;
-  settings: LoyaltySettings | null;
-  redemptions: LoyaltyRedemption[];
-  customer: { name: string | null; points_balance: number } | null;
+  config: LoyaltyConfig | null;
+  phone: string | null;
 }) {
-  if (!open || !settings) return null;
-  const bal = customer?.points_balance ?? 0;
-  const nextRedemption = redemptions.find(r => r.points_required > bal);
-  const ptsToNext = nextRedemption ? nextRedemption.points_required - bal : null;
+  const [member,       setMember]       = useState<LoyaltyMember | null>(null);
+  const [vouchers,     setVouchers]     = useState<Voucher[]>([]);
+  const [transactions, setTransactions] = useState<LoyaltyTransaction[]>([]);
+  const [fetching,     setFetching]     = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const digits = (phone ?? '').replace(/\D/g, '');
+    if (!digits || digits.length < 8) return;
+    setFetching(true);
+    fetch(`/api/loyalty/member?phone=${digits}`)
+      .then(r => r.json())
+      .then(d => {
+        setMember(d.member ?? null);
+        setVouchers(d.vouchers ?? []);
+        setTransactions(d.transactions ?? []);
+      })
+      .catch(() => {})
+      .finally(() => setFetching(false));
+  }, [open, phone]);
+
+  if (!open) return null;
+
+  const bal = member?.points_balance ?? 0;
+  const threshold = config?.points_threshold ?? 10;
+  const ptsToNext = threshold - (bal % threshold);
+  const hasPhone = !!(phone && phone.replace(/\D/g,'').length >= 8);
+
   return (
     <div style={{ position:'fixed', inset:0, zIndex:60, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
       <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(58,36,20,.45)' }}/>
-      <div style={{ position:'relative', width:'min(460px,100%)', background:T.bgColor, borderTopLeftRadius:28, borderTopRightRadius:28, padding:'10px 22px 32px', animation:'coSheetIn .25s ease-out', boxShadow:'0 -10px 40px rgba(58,36,20,.25)' }}>
+      <div style={{ position:'relative', width:'min(460px,100%)', background:T.bgColor, borderTopLeftRadius:28, borderTopRightRadius:28, padding:'10px 22px 32px', animation:'coSheetIn .25s ease-out', boxShadow:'0 -10px 40px rgba(58,36,20,.25)', maxHeight:'90vh', overflowY:'auto' }}>
         <div style={{ width:40, height:4, background:hex(T.inkColor,.2), borderRadius:999, margin:'0 auto 16px' }}/>
         <div style={{ display:'flex', alignItems:'center', marginBottom:14 }}>
-          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:20, color:T.inkColor }}>Loyalty Points</div>
+          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:20, color:T.inkColor }}>Loyalty</div>
           <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', cursor:'pointer', color:T.inkColor, fontSize:24, lineHeight:1 }}>×</button>
         </div>
 
-        {/* Balance */}
-        <div style={{ background:T.inkColor, color:'#fff', borderRadius:T.cornerRadius, padding:'16px 18px', marginBottom:14, display:'flex', alignItems:'center', gap:14 }}>
-          <div style={{ width:48, height:48, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:22 }}>★</div>
-          <div>
-            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:26, lineHeight:1 }}>{bal.toLocaleString()} pts</div>
-            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, opacity:.75, marginTop:3 }}>
-              {customer ? `Hi ${customer.name ?? 'there'}!` : 'Earn points with every order'}
-              {ptsToNext != null && ` · ${ptsToNext} pts to next reward`}
+        {/* QR / no-phone prompt */}
+        {hasPhone ? (
+          <div style={{ background:T.inkColor, borderRadius:T.cornerRadius, padding:'18px 18px 14px', marginBottom:14, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+            <div style={{ background:'#fff', borderRadius:12, padding:10, display:'inline-flex' }}>
+              <QRCodeSVG value={phone!.replace(/\D/g,'')} size={140} />
+            </div>
+            <div style={{ color:'#fff', fontFamily:"'Nunito',system-ui", fontSize:13, opacity:.8, textAlign:'center' }}>
+              Show this QR at the counter to earn points
             </div>
           </div>
-        </div>
+        ) : (
+          <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'14px 16px', marginBottom:14, border:`1.5px solid ${hex(T.inkColor,.08)}`, fontFamily:"'Nunito',system-ui", fontSize:14, color:hex(T.inkColor,.65), textAlign:'center' }}>
+            Complete a checkout to get your loyalty QR code
+          </div>
+        )}
 
-        {/* Rate */}
-        <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'12px 16px', marginBottom:14, border:`1.5px solid ${hex(T.inkColor,.08)}`, fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor }}>
-          <span style={{ fontWeight:700 }}>Earn {settings.points_per_rm} pt{settings.points_per_rm !== 1 ? 's' : ''} per RM spent</span>
-          {settings.min_spend_for_points > 0 && <span style={{ opacity:.6 }}> · min RM{settings.min_spend_for_points.toFixed(2)}</span>}
-        </div>
-
-        {/* Redemptions */}
-        {redemptions.length > 0 && (
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:hex(T.inkColor,.6), textTransform:'uppercase', letterSpacing:'.05em', marginBottom:2 }}>Rewards</div>
-            {redemptions.map(r => {
-              const unlocked = bal >= r.points_required;
-              return (
-                <div key={r.id} style={{ display:'flex', alignItems:'center', gap:12, background:'#fff', borderRadius:T.cornerRadius-6, padding:'12px 14px', border:`1.5px solid ${unlocked?T.primaryColor:hex(T.inkColor,.08)}` }}>
-                  <div style={{ width:36, height:36, borderRadius:'50%', background:unlocked?T.primaryColor:hex(T.inkColor,.06), display:'grid', placeItems:'center', flexShrink:0, fontSize:16 }}>{unlocked ? '🎉' : '★'}</div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor }}>{r.name}</div>
-                    {r.description && <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.6), marginTop:2 }}>{r.description}</div>}
+        {/* Balance */}
+        {config?.is_active && (
+          <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'13px 16px', marginBottom:14, border:`1.5px solid ${hex(T.inkColor,.08)}`, display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ width:40, height:40, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:18, color:'#fff' }}>★</div>
+            <div>
+              {fetching ? (
+                <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:hex(T.inkColor,.45) }}>Loading…</div>
+              ) : member ? (
+                <>
+                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:22, color:T.inkColor, lineHeight:1 }}>{bal.toLocaleString()} pts</div>
+                  <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.6), marginTop:2 }}>
+                    {ptsToNext < threshold ? `${ptsToNext} more to next voucher` : `${threshold} pts = 1 voucher`}
                   </div>
-                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:13, color:unlocked?T.primaryColor:hex(T.inkColor,.5), whiteSpace:'nowrap' }}>{r.points_required.toLocaleString()} pts</div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:18, color:T.inkColor }}>Earn 1 pt per visit</div>
+                  <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.6), marginTop:2 }}>
+                    Get a voucher every {threshold} visits
+                    {config.voucher_value > 0 && ` · RM${config.voucher_value.toFixed(2)} off`}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Available vouchers */}
+        {vouchers.length > 0 && (
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:hex(T.inkColor,.6), textTransform:'uppercase', letterSpacing:'.05em', marginBottom:6 }}>Your Vouchers</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {vouchers.map(v => (
+                <div key={v.id} style={{ display:'flex', alignItems:'center', gap:12, background:'#fff', borderRadius:T.cornerRadius-6, padding:'11px 14px', border:`1.5px solid ${T.primaryColor}` }}>
+                  <div style={{ width:36, height:36, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:14, color:'#fff', fontWeight:700 }}>
+                    {v.type === 'percent' ? `${v.discount_amount}%` : `RM${v.discount_amount}`}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor }}>
+                      {v.type === 'percent' ? `${v.discount_amount}% off` : `RM ${v.discount_amount.toFixed(2)} off`}
+                    </div>
+                    <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.55), marginTop:1, letterSpacing:'.03em' }}>{v.code}</div>
+                  </div>
+                  {v.expires_at && (
+                    <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, color:hex(T.inkColor,.45), whiteSpace:'nowrap' }}>
+                      exp {new Date(v.expires_at).toLocaleDateString('en-MY', { day:'numeric', month:'short' })}
+                    </div>
+                  )}
                 </div>
-              );
-            })}
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Recent transactions */}
+        {transactions.length > 0 && (
+          <div>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:hex(T.inkColor,.6), textTransform:'uppercase', letterSpacing:'.05em', marginBottom:6 }}>Recent Activity</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              {transactions.slice(0,5).map(tx => (
+                <div key={tx.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 12px', background:'#fff', borderRadius:T.cornerRadius-8, border:`1px solid ${hex(T.inkColor,.07)}` }}>
+                  <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:T.inkColor }}>{tx.description ?? tx.type}</div>
+                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:tx.points >= 0 ? '#16A34A' : '#DC2626' }}>
+                    {tx.points >= 0 ? '+' : ''}{tx.points} pt
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -617,9 +690,8 @@ export default function MenuAppV2() {
   const [categories,  setCategories]  = useState<Category[]>([]);
   const [branch,      setBranch]      = useState<Branch | null>(null);
   const [intakePaused, setIntakePaused] = useState(false);
-  const [loyaltySettings,   setLoyaltySettings]   = useState<LoyaltySettings | null>(null);
-  const [loyaltyRedemptions, setLoyaltyRedemptions] = useState<LoyaltyRedemption[]>([]);
-  const [customer,    setCustomer]    = useState<{ name: string | null; points_balance: number } | null>(null);
+  const [loyaltyConfig, setLoyaltyConfig] = useState<LoyaltyConfig | null>(null);
+  const [savedPhone,  setSavedPhone]  = useState<string | null>(null);
   const [activeCat,   setActiveCat]   = useState('');
   const [pickup,      setPickup]      = useState<'counter'|'curbside'>('counter');
   const [cartOpen,    setCartOpen]    = useState(false);
@@ -638,24 +710,21 @@ export default function MenuAppV2() {
       setCategories(menu.categories ?? []);
       setBranch(menu.branch ?? null);
       setIntakePaused(menu.intake_paused ?? false);
-      setLoyaltySettings(loyalty.settings ?? null);
-      setLoyaltyRedemptions(loyalty.redemptions ?? []);
+      setLoyaltyConfig(loyalty.config ?? null);
       if (menu.categories?.length) setActiveCat(menu.categories[0].id);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  // Customer lookup, returning-user detection, last order
+  // Returning-user detection, last order, saved phone
   useEffect(() => {
     try {
       setIsReturning(!!localStorage.getItem('co_session'));
       const lo = localStorage.getItem('co_last_order');
       if (lo) setLastOrder(JSON.parse(lo));
       const saved = localStorage.getItem('co_form');
-      if (!saved) return;
-      const { phone } = JSON.parse(saved);
-      const digits = (phone ?? '').replace(/\D/g, '');
-      if (digits.length >= 8) {
-        fetch(`/api/customer?phone=${digits}`).then(r => r.json()).then(d => setCustomer(d)).catch(() => {});
+      if (saved) {
+        const { phone } = JSON.parse(saved);
+        if (phone) setSavedPhone(phone);
       }
     } catch { /* ignore */ }
   }, []);
@@ -695,8 +764,8 @@ export default function MenuAppV2() {
         viewport={viewport}
         pickup={pickup} setPickup={setPickup}
         cartCount={count} onCartClick={() => setCartOpen(true)}
-        loyaltyActive={loyaltySettings?.is_active ?? false}
-        customerPoints={customer?.points_balance ?? null}
+        loyaltyActive={loyaltyConfig?.is_active ?? false}
+        customerPoints={null}
         onLoyaltyClick={() => setLoyaltyOpen(true)}
       />
 
@@ -738,7 +807,7 @@ export default function MenuAppV2() {
 
       <LoyaltySheet
         open={loyaltyOpen} onClose={() => setLoyaltyOpen(false)}
-        settings={loyaltySettings} redemptions={loyaltyRedemptions} customer={customer}
+        config={loyaltyConfig} phone={savedPhone}
       />
 
       {/* Version switcher */}

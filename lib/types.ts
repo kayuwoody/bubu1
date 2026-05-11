@@ -158,6 +158,7 @@ export interface CheckoutSession {
   total_amount: number;
   outlet_id: string;
   order_id: string | null;
+  voucher_code: string | null;
   status: 'pending' | 'paid' | 'failed';
   created_at: string;
 }
@@ -173,25 +174,47 @@ export interface Customer {
   updated_at: string;
 }
 
-export interface LoyaltySettings {
+export interface LoyaltyConfig {
   id: string;
-  points_per_rm: number;
-  min_spend_for_points: number;
+  points_per_scan: number;
+  points_threshold: number;
+  voucher_type: 'fixed' | 'percent';
+  voucher_value: number;
+  voucher_validity_days: number;
+  min_order_for_voucher: number | null;
   is_active: boolean;
   updated_at: string;
 }
 
-export interface LoyaltyRedemption {
+export interface LoyaltyMember {
   id: string;
-  name: string;
+  phone: string;
+  name: string | null;
+  points_balance: number;
+  total_points_earned: number;
+  enrolled_at: string;
+}
+
+export interface LoyaltyTransaction {
+  id: string;
+  member_id: string;
+  type: string;
+  points: number;
   description: string | null;
-  points_required: number;
-  reward_type: 'free_item' | 'discount_percent' | 'discount_fixed' | 'credit';
-  reward_value: number;
-  reward_item_id: string | null;
+  reference_id: string | null;
+  created_at: string;
+}
+
+export interface Voucher {
+  id: string;
+  code: string;
+  member_id: string | null;
   is_active: boolean;
-  valid_from: string | null;
-  valid_until: string | null;
-  sort_order: number;
+  expires_at: string | null;
+  times_used: number;
+  max_uses: number;
+  discount_amount: number;
+  type: 'fixed' | 'percent';
+  min_order: number | null;
   created_at: string;
 }

@@ -21,6 +21,7 @@ export async function POST(req: Request) {
     total: number;
     channel?: string;
     outlet_id?: string;
+    voucher_code?: string;
   };
 
   try {
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { name, email, phone, pickup, items, total, channel, outlet_id = 'main' } = body;
+  const { name, email, phone, pickup, items, total, channel, outlet_id = 'main', voucher_code } = body;
 
   if (!name || !phone || !items?.length || total == null) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -63,6 +64,7 @@ export async function POST(req: Request) {
       total_amount:   total,
       outlet_id,
       status: 'pending',
+      ...(voucher_code ? { voucher_code: voucher_code.trim().toUpperCase() } : {}),
     })
     .select('id')
     .single();
