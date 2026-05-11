@@ -7,7 +7,8 @@ export async function GET() {
   const { data: config, error } = await supabase
     .from('loyalty_config')
     .select('*')
-    .eq('id', 'main')
+    .eq('is_active', true)
+    .limit(1)
     .single();
 
   if (error) console.error('[loyalty] config fetch error:', error.message, error.code);
