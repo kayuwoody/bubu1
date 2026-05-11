@@ -20,7 +20,7 @@ export async function GET(req: Request) {
 
   const now = new Date().toISOString();
 
-  const [{ data: vouchers }, { data: transactions }] = await Promise.all([
+  const [{ data: vouchers }, { data: transactions }, { data: programBalances }] = await Promise.all([
     supabase
       .from('vouchers')
       .select('*')
@@ -33,15 +33,19 @@ export async function GET(req: Request) {
       .select('*')
       .eq('member_id', member.id)
       .order('created_at', { ascending: false })
-      .limit(10),
+      .limit(20),
+    supabase
+      .from('loyalty_member_programs')
+      .select('points_balance, total_earned, enrolled_at, updated_at, loyalty_programs(id, name, trigger_type, threshold, voucher_type, voucher_discount_value)')
+      .eq('member_id', member.id),
   ]);
 
-  // Filter out fully-used vouchers
   const activeVouchers = (vouchers ?? []).filter(v => v.times_used < v.max_uses);
 
   return NextResponse.json({
     member,
     vouchers: activeVouchers,
     transactions: transactions ?? [],
+    programBalances: programBalances ?? [],
   });
 }

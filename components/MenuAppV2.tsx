@@ -558,12 +558,17 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   phone: string | null;
   onPhoneSave: (phone: string) => void;
 }) {
-  const [member,       setMember]       = useState<LoyaltyMember | null>(null);
-  const [vouchers,     setVouchers]     = useState<Voucher[]>([]);
-  const [transactions, setTransactions] = useState<LoyaltyTransaction[]>([]);
-  const [fetching,     setFetching]     = useState(false);
-  const [phoneInput,   setPhoneInput]   = useState('');
-  const [phoneErr,     setPhoneErr]     = useState('');
+  type ProgramBalance = {
+    points_balance: number; total_earned: number; enrolled_at: string; updated_at: string;
+    loyalty_programs: { id: string; name: string; trigger_type: string; threshold: number; voucher_type: string; voucher_discount_value: number } | null;
+  };
+  const [member,          setMember]          = useState<LoyaltyMember | null>(null);
+  const [vouchers,        setVouchers]        = useState<Voucher[]>([]);
+  const [transactions,    setTransactions]    = useState<LoyaltyTransaction[]>([]);
+  const [programBalances, setProgramBalances] = useState<ProgramBalance[]>([]);
+  const [fetching,        setFetching]        = useState(false);
+  const [phoneInput,      setPhoneInput]      = useState('');
+  const [phoneErr,        setPhoneErr]        = useState('');
 
   const activePhone = phone;
   const digits = (activePhone ?? '').replace(/\D/g, '');
@@ -578,6 +583,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
         setMember(d.member ?? null);
         setVouchers(d.vouchers ?? []);
         setTransactions(d.transactions ?? []);
+        setProgramBalances(d.programBalances ?? []);
       })
       .catch(() => {})
       .finally(() => setFetching(false));
@@ -597,15 +603,12 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
       setMember(data.member);
       setVouchers(data.vouchers ?? []);
       setTransactions(data.transactions ?? []);
+      setProgramBalances(data.programBalances ?? []);
     } catch { setPhoneErr('Could not look up account. Try again.'); }
     finally  { setFetching(false); }
   };
 
   if (!open) return null;
-
-  const bal = member?.points_balance ?? 0;
-  const threshold = config?.threshold ?? 10;
-  const ptsToNext = threshold - (bal % threshold);
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:60, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
@@ -627,7 +630,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
               Show this QR at the counter to earn points
             </div>
             <button
-              onClick={() => { onPhoneSave(''); setMember(null); setVouchers([]); setTransactions([]); setPhoneInput(''); }}
+              onClick={() => { onPhoneSave(''); setMember(null); setVouchers([]); setTransactions([]); setProgramBalances([]); setPhoneInput(''); }}
               style={{ background:'transparent', border:`1px solid rgba(255,255,255,.3)`, borderRadius:999, padding:'4px 12px', color:'rgba(255,255,255,.65)', fontSize:12, cursor:'pointer', fontFamily:"'Nunito',system-ui" }}
             >
               Not you?
@@ -658,32 +661,41 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
           </form>
         )}
 
-        {/* Balance */}
-        {config?.is_active && (
+        {/* Per-program balances */}
+        {fetching ? (
+          <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'13px 16px', marginBottom:14, border:`1.5px solid ${hex(T.inkColor,.08)}`, fontFamily:"'Nunito',system-ui", fontSize:13, color:hex(T.inkColor,.45) }}>Loading…</div>
+        ) : member && programBalances.length > 0 ? (
+          <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:14 }}>
+            {programBalances.map((pb, i) => {
+              const prog = pb.loyalty_programs;
+              if (!prog) return null;
+              const ptsToNext = prog.threshold - (pb.points_balance % prog.threshold);
+              return (
+                <div key={i} style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'13px 16px', border:`1.5px solid ${hex(T.inkColor,.08)}`, display:'flex', alignItems:'center', gap:12 }}>
+                  <div style={{ width:40, height:40, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:18, color:'#fff' }}>★</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, fontWeight:700, color:hex(T.inkColor,.5), textTransform:'uppercase', letterSpacing:'.05em', marginBottom:2 }}>{prog.name}</div>
+                    <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:20, color:T.inkColor, lineHeight:1 }}>{pb.points_balance.toLocaleString()} pts</div>
+                    <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.6), marginTop:2 }}>
+                      {ptsToNext} more to next {prog.voucher_type === 'percent' ? `${prog.voucher_discount_value}%` : `RM${prog.voucher_discount_value.toFixed(2)}`} voucher
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : config?.is_active && !member ? (
           <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'13px 16px', marginBottom:14, border:`1.5px solid ${hex(T.inkColor,.08)}`, display:'flex', alignItems:'center', gap:12 }}>
             <div style={{ width:40, height:40, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:18, color:'#fff' }}>★</div>
             <div>
-              {fetching ? (
-                <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:hex(T.inkColor,.45) }}>Loading…</div>
-              ) : member ? (
-                <>
-                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:22, color:T.inkColor, lineHeight:1 }}>{bal.toLocaleString()} pts</div>
-                  <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.6), marginTop:2 }}>
-                    {ptsToNext < threshold ? `${ptsToNext} more to next voucher` : `${threshold} pts = 1 voucher`}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:18, color:T.inkColor }}>Earn 1 pt per visit</div>
-                  <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.6), marginTop:2 }}>
-                    Get a voucher every {threshold} visits
-                    {config.voucher_discount_value > 0 && ` · RM${config.voucher_discount_value.toFixed(2)} off`}
-                  </div>
-                </>
-              )}
+              <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:18, color:T.inkColor }}>Earn points with every purchase</div>
+              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.6), marginTop:2 }}>
+                Redeem for vouchers
+                {config.voucher_discount_value > 0 && ` · RM${config.voucher_discount_value.toFixed(2)} off`}
+              </div>
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* Available vouchers */}
         {vouchers.length > 0 && (
