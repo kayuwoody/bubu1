@@ -434,6 +434,8 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   const toggleOpt = (id: string) => setSelOpts(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
 
   if (!open || !product) return null;
+  // DEBUG — remove before launch
+  console.log('[sheet]', product.name, '| cat:', product.category, '| drink:', drink, '| cfg:', !!cfg, '| coffee:', comboHasCoffee);
 
   const unitPrice = (() => {
     if (drink) return product.base_price;
