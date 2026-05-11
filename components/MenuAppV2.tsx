@@ -32,7 +32,7 @@ function hex(h: string, a = 1) {
   const r = parseInt(h.slice(1,3),16), g = parseInt(h.slice(3,5),16), b = parseInt(h.slice(5,7),16);
   return `rgba(${r},${g},${b},${a})`;
 }
-function isDrink(cat: string) { return DRINK_CATS.has(cat); }
+function isDrink(cat: string) { return DRINK_CATS.has(cat.toLowerCase()); }
 function needsSheet(p: Product) { return isDrink(p.category) || p.selection_config != null; }
 function catSwatch(cat: string) { return CAT_SWATCHES[cat] ?? '#C88A54'; }
 
@@ -401,7 +401,7 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
 
   const comboHasCoffee = useMemo(() => {
     if (!cfg) return false;
-    if (product?.category === 'coffee') return true;
+    if (product?.category.toLowerCase() === 'coffee') return true;
     return cfg.xorGroups.some(g => {
       const selId = selections[g.uniqueKey];
       return !!g.items.find(i => i.id === selId)?.isCoffee;
@@ -441,8 +441,8 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
     let mods: Record<string,unknown>;
     if (drink) {
       mods = {
-        ...(product.category === 'coffee' ? { sugar: DRINK_MODS.sugar.options.find(o => o.id === drinkSel.sugar)?.label } : {}),
-        // ...(product.category === 'coffee' ? { milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label } : {}),
+        ...(product.category.toLowerCase() === 'coffee' ? { sugar: DRINK_MODS.sugar.options.find(o => o.id === drinkSel.sugar)?.label } : {}),
+        // ...(product.category.toLowerCase() === 'coffee' ? { milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label } : {}),
         ...(drinkSel.notes ? { notes: drinkSel.notes } : {}),
       };
     } else if (cfg) {
@@ -479,7 +479,7 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
         <div style={{ flex:1, overflow:'auto', padding:'4px 20px 12px' }}>
           {drink ? (
             <>
-              {product.category === 'coffee' && (
+              {product.category.toLowerCase() === 'coffee' && (
                 <div style={{ marginTop:14 }}>
                   <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Sugar</div>
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
@@ -488,7 +488,7 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
                 </div>
               )}
               {/* milk — coffee only, not offered yet
-              {product.category === 'coffee' && (
+              {product.category.toLowerCase() === 'coffee' && (
                 <div style={{ marginTop:14 }}>
                   <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Milk</div>
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
