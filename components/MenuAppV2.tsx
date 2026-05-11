@@ -16,14 +16,13 @@ const T = {
   cornerRadius:   22,
 };
 
-const DRINK_CATS = new Set(['coffee', 'non-coffee', 'cold']);
+const DRINK_CATS = new Set(['coffee', 'non-coffee']);
 const CAT_SWATCHES: Record<string, string> = {
   coffee: '#C88A54', 'non-coffee': '#8CA86A', cold: '#C9A07A', food: '#E3B876', combo: '#D9A977',
 };
 const DRINK_MODS = {
-  size:  { label: 'Size',  required: true,  options: [{ id: 's', label: 'Regular', delta: 0 }, { id: 'm', label: 'Large', delta: 2.00 }] },
-  milk:  { label: 'Milk',  required: false, options: [{ id: 'whole', label: 'Whole', delta: 0 }, { id: 'skim', label: 'Skim', delta: 0 }, { id: 'oat', label: 'Oat', delta: 2.00 }, { id: 'almond', label: 'Almond', delta: 2.00 }, { id: 'soy', label: 'Soy', delta: 1.50 }] },
-  sugar: { label: 'Sugar', required: false, options: [{ id: 'none', label: 'None', delta: 0 }, { id: 'less', label: 'Less', delta: 0 }, { id: 'std', label: 'Normal', delta: 0 }, { id: 'extra', label: 'Extra', delta: 0 }] },
+  sugar: { label: 'Sugar', options: [{ id: 'zero', label: 'Zero', delta: 0 }, { id: 'less', label: 'Less', delta: 0 }, { id: 'medium', label: 'Medium', delta: 0 }, { id: 'sweet', label: 'Sweet', delta: 0 }] },
+  /* milk: { label: 'Milk', options: [{ id: 'full', label: 'Full', delta: 0 }, { id: 'skim', label: 'Skim', delta: 0 }, { id: 'oat', label: 'Oat', delta: 2.00 }, { id: 'almond', label: 'Almond', delta: 2.00 }] }, */
   ice:   { label: 'Ice', options: [{ id: 'none', label: 'No ice' }, { id: 'less', label: 'Less' }, { id: 'std', label: 'Normal' }] },
 };
 
@@ -88,8 +87,8 @@ function PastrySVG({ col, size = 72 }: { col: string; size?: number }) {
     </svg>
   );
 }
-function ItemThumb({ product, size = 150 }: { product: Product; size?: number }) {
-  if (product.image_url) return <img src={product.image_url} alt="" style={{ width: size, height: size, objectFit: 'cover', position: 'relative', inset: 0, borderRadius: 0 }}/>;
+function ItemThumb({ product, size = 100 }: { product: Product; size?: number }) {
+  if (product.image_url) return <img src={product.image_url} alt="" style={{ width: size, height: size, objectFit: 'contain', position: 'relative', inset: 0, borderRadius: 0 }}/>;
   const col = catSwatch(product.category);
   return product.category === 'food' ? <PastrySVG col={col} size={size}/> : <DrinkSVG col={col} size={size}/>;
 }
@@ -126,8 +125,8 @@ function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyAc
   const toggle  = () => setPickup(pickup === 'curbside' ? 'counter' : 'curbside');
   const PickupIcon = pickup === 'curbside' ? Icon.Car : Icon.Walk;
   return (
-    <header style={{ position:'sticky', top:0, zIndex:20, background:T.bgColor, borderBottom:`1px solid ${hex(T.inkColor,.08)}`, padding:compact?'10px 12px':'14px 24px', display:'flex', alignItems:'center', gap:8 }}>
-      <img src="/co-logo.png" alt="Coffee Oasis" style={{ height:compact?60:80, maxWidth:compact?150:300, width:'auto', objectFit:'contain', flexShrink:0 }}/>
+    <header style={{ position:'sticky', top:0, zIndex:20, background:T.bgColor, borderBottom:`1px solid ${hex(T.inkColor,.08)}`, padding:compact?'5px 12px':'5px 15px', display:'flex', alignItems:'center', gap:8 }}>
+      <img src="/co-logo.png" alt="Coffee Oasis" style={{ height:compact?40:80, maxWidth:compact?200:400, width:'auto', objectFit:'contain', flexShrink:0 }}/>
 
       {/* Pickup pill — tap to toggle; ETA hidden on mobile to save space */}
       <button onClick={toggle} style={{ marginLeft:compact?2:10, display:'flex', alignItems:'center', gap:5, padding:compact?'5px 8px 5px 7px':'8px 14px 8px 10px', borderRadius:999, border:`1.5px solid ${hex(T.inkColor,.12)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?11:13, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
@@ -145,7 +144,7 @@ function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyAc
           </button>
         )}
         <button onClick={onCartClick} aria-label="Cart" style={{ position:'relative', background:T.inkColor, color:'#fff', border:'none', borderRadius:999, padding:compact?'7px 10px':'10px 16px', display:'flex', alignItems:'center', gap:6, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?13:14, cursor:'pointer' }}>
-          <Icon.Cart width={compact?16:18} height={compact?16:18}/>
+          <Icon.Cart width={compact?22:26} height={compact?22:26}/>
           {cartCount > 0 && <span style={{ background:T.primaryColor, color:'#fff', borderRadius:999, padding:'1px 6px', fontSize:11, fontWeight:800, border:'2px solid #fff', position:'absolute', top:-5, right:-5, minWidth:18, textAlign:'center' }}>{cartCount}</span>}
         </button>
       </div>
@@ -160,18 +159,18 @@ function GreetingBand({ viewport, isReturning, hasReorder, onReorder, lastSummar
 }) {
   const compact = viewport === 'mobile';
   return (
-    <section style={{ margin:compact?'8px 14px 0':'12px 24px 0', background:`linear-gradient(135deg,${T.primaryColor} 0%,#FF9A3D 100%)`, borderRadius:T.cornerRadius, padding:compact?'10px 12px':'12px 16px', display:'flex', alignItems:'center', gap:compact?10:14, color:'#fff', overflow:'hidden' }}>
-      <img src="/co-mascot.png" alt="" style={{ width:compact?44:56, height:compact?44:56, objectFit:'contain', flexShrink:0, transform:'rotate(-4deg)', filter:'drop-shadow(0 4px 0 rgba(58,36,20,.18))' }}/>
+    <section style={{ margin:compact?'8px 14px 10px':'12px 24px 10px', background:`linear-gradient(135deg,${T.primaryColor} 0%,#FF9A3D 100%)`, borderRadius:T.cornerRadius, padding:compact?'10px 12px':'12px 16px', display:'flex', alignItems:'center', gap:compact?10:14, color:'#fff', overflow:'hidden' }}>
+      <img src="/co-mascot.png" alt="" style={{ width:compact?60:120, height:compact?60:120, objectFit:'contain', flexShrink:0, transform:'rotate(-4deg)', filter:'drop-shadow(0 4px 0 rgba(58,36,20,.18))' }}/>
       <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?16:18, lineHeight:1.1 }}>
+        <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?22:32, lineHeight:1.1 }}>
           {isReturning ? 'Welcome back ✨' : 'Coffee, sorted.'}
         </div>
-        <div style={{ fontFamily:"'Nunito',system-ui", fontSize:compact?12:13, opacity:.92, marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+        <div style={{ fontFamily:"'Nunito',system-ui", fontSize:compact?16:18, opacity:.92, marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
           {hasReorder ? lastSummary : 'Order ahead, skip the line.'}
         </div>
       </div>
       {hasReorder && (
-        <button onClick={onReorder} style={{ background:'#fff', color:T.primaryColor, border:'none', borderRadius:999, padding:compact?'7px 12px':'9px 16px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?12:13, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, display:'flex', alignItems:'center', gap:5 }}>
+        <button onClick={onReorder} style={{ background:'#fff', color:T.primaryColor, border:'none', borderRadius:999, padding:compact?'10px 12px':'12px 16px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?22:32, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, display:'flex', alignItems:'center', gap:5 }}>
           <Icon.Bolt width="12" height="12"/> Reorder
         </button>
       )}
@@ -183,11 +182,11 @@ function GreetingBand({ viewport, isReturning, hasReorder, onReorder, lastSummar
 function CatBar({ cats, active, setActive, viewport }: { cats: Category[]; active: string; setActive: (id: string) => void; viewport: Viewport }) {
   const compact = viewport === 'mobile';
   return (
-    <div style={{ position:'sticky', top:compact?52:68, zIndex:10, background:`linear-gradient(to bottom,${T.bgColor} 70%,transparent)`, padding:compact?'10px 14px 8px':'12px 24px 10px' }}>
-      <div className="hide-scroll" style={{ display:'flex', gap:6, overflowX:'auto', scrollbarWidth:'none' }}>
+    <div style={{ position:'sticky', top:compact?12:18, zIndex:10, background:`linear-gradient(to bottom,${T.bgColor} 70%,transparent)`, padding:compact?'10px 12px 10px':'10px 24px 13px' }}>
+      <div className="hide-scroll" style={{ display:'flex', gap:3, overflowX:'auto', scrollbarWidth:'thin' }}>
         {cats.map(c => {
           const on = active === c.id;
-          return <button key={c.id} onClick={() => setActive(c.id)} style={{ flexShrink:0, padding:'7px 14px', borderRadius:999, border:'none', background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, cursor:'pointer', boxShadow:on?`0 3px 0 ${hex(T.inkColor,.25)}`:`0 1px 0 ${hex(T.inkColor,.06)}`, transition:'all .12s' }}>{c.label}</button>;
+          return <button key={c.id} onClick={() => setActive(c.id)} style={{ flexShrink:0, padding:'10px 16px', borderRadius:999, border:'none', background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?14:18, cursor:'pointer', boxShadow:on?`0 3px 0 ${hex(T.inkColor,.25)}`:`0 1px 0 ${hex(T.inkColor,.06)}`, transition:'all .12s' }}>{c.label}</button>;
         })}
       </div>
     </div>
@@ -210,8 +209,8 @@ function ItemCard({ product, qty, onAdd, onCustomize, viewport }: { product: Pro
   return (
     <div onClick={handleClick} style={{ background:'#fff', borderRadius:T.cornerRadius, border:`1.5px solid ${hex(T.inkColor,.06)}`, boxShadow:`0 4px 0 ${hex(T.inkColor,.05)}`, cursor:soldOut?'default':'pointer', opacity:soldOut?.45:1, display:'flex', flexDirection:'column', overflow:'hidden', userSelect:'none' }}>
       {/* Image */}
-      <div style={{ width:'100%', aspectRatio:'1.5', background:`radial-gradient(circle at 50% 55%,${hex(col,.22)},${hex(col,.05)} 65%)`, display:'grid', placeItems:'center', position:'relative', overflow:'hidden' }}>
-        <ItemThumb product={product} size={compact?125:240}/>
+      <div style={{ width:'100%', aspectRatio:'1', background:`radial-gradient(circle at 50% 55%,${hex(col,.22)},${hex(col,.05)} 65%)`, display:'grid', placeItems:'center', position:'relative', overflow:'hidden' }}>
+        <ItemThumb product={product} size={compact?200:400}/>
         {soldOut && (
           <div style={{ position:'absolute', inset:0, background:'rgba(255,255,255,.6)', display:'grid', placeItems:'center' }}>
             <span style={{ fontFamily:"'Nunito',system-ui", fontWeight:800, fontSize:11, background:hex(T.inkColor,.85), color:'#fff', borderRadius:6, padding:'3px 8px' }}>Sold out</span>
@@ -261,12 +260,9 @@ function CartDrawer({ open, onClose, lines, incLine, decLine, total, pickup, bra
     const parts: string[] = [];
     if (m.combo_selections && typeof m.combo_selections === 'object') {
       for (const v of Object.values(m.combo_selections as Record<string, { name: string }>)) { if (v?.name) parts.push(v.name); }
-    } else {
-      if (m.size && m.size !== 'Regular') parts.push(m.size as string);
-      if (m.milk && m.milk !== 'Whole')   parts.push(m.milk as string);
-      if (m.sugar && m.sugar !== 'Normal') parts.push((m.sugar as string) + ' sugar');
-      if (m.ice)   parts.push(m.ice as string);
     }
+    if (m.sugar && m.sugar !== 'Zero') parts.push((m.sugar as string) + ' sugar');
+    // if (m.milk) parts.push(m.milk as string);
     if (Array.isArray(m.selected_optionals)) {
       for (const o of m.selected_optionals as Array<{ name: string }>) { if (o?.name) parts.push(`+ ${o.name}`); }
     }
@@ -326,7 +322,7 @@ function CartDrawer({ open, onClose, lines, incLine, decLine, total, pickup, bra
 }
 
 // ── Customize Sheet ────────────────────────────────────────────────────────
-type DrinkSel = { size: string; milk: string; sugar: string; ice: string; notes: string };
+type DrinkSel = { sugar: string; milk: string; notes: string };
 function pillStyle(on: boolean): React.CSSProperties {
   return { padding:'8px 14px', borderRadius:999, border:on?`2px solid ${T.inkColor}`:`1.5px solid ${hex(T.inkColor,.12)}`, background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5 };
 }
@@ -391,7 +387,7 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   product: Product | null; open: boolean; onClose: () => void;
   onConfirm: (mods: Record<string,unknown>, qty: number, unitPrice: number) => void;
 }) {
-  const drinkDefaults: DrinkSel = useMemo(() => ({ size:'s', milk:'whole', sugar:'std', ice:'std', notes:'' }), []);
+  const drinkDefaults: DrinkSel = useMemo(() => ({ sugar: 'zero', milk: '', notes: '' }), []);
   const [drinkSel, setDrinkSel]           = useState<DrinkSel>({ ...drinkDefaults });
   const [selections, setSelections]       = useState<Record<string,string>>({});
   const [selectedOptionals, setSelOpts]   = useState<Set<string>>(new Set());
@@ -402,23 +398,23 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   const drink = !!product && isDrink(product.category) && !cfg;
   const nestedGroups = useMemo(() => cfg?.xorGroups.filter(g => !!g.parentProductId) ?? [], [cfg]);
 
-  const initCombo = (c: SelectionConfig) => {
-    const init: Record<string,string> = {};
-    const nested = c.xorGroups.filter(g => !!g.parentProductId);
-    for (const g of c.xorGroups.filter(g => !g.parentProductId)) {
-      if (g.items.length > 0) {
-        const fid = g.items[0].id; init[g.uniqueKey] = fid;
-        for (const ng of nested.filter(ng => ng.parentProductId === fid)) { if (ng.items.length > 0) init[ng.uniqueKey] = ng.items[0].id; }
-      }
-    }
-    return init;
-  };
+  // requires backend to expose item.category on XorGroup items (added during recipe flattening)
+  const comboHasCoffee = useMemo(() => {
+    if (!cfg) return false;
+    return cfg.xorGroups.some(g => {
+      const selId = selections[g.uniqueKey];
+      if (!selId) return false;
+      const item = g.items.find(i => i.id === selId);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (item as any)?.category === 'coffee';
+    });
+  }, [cfg, selections]);
 
   useEffect(() => {
     if (!open || !product) return;
     setQty(1); setNotes('');
     if (drink) setDrinkSel({ ...drinkDefaults });
-    else if (cfg) { setSelections(initCombo(cfg)); setSelOpts(new Set()); }
+    else if (cfg) { setSelections({}); setSelOpts(new Set()); setDrinkSel({ ...drinkDefaults }); }
   }, [open, product?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelect = (key: string, itemId: string) => {
@@ -435,7 +431,7 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   if (!open || !product) return null;
 
   const unitPrice = (() => {
-    if (drink) return product.base_price + (DRINK_MODS.size.options.find(o => o.id === drinkSel.size)?.delta ?? 0) + (DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.delta ?? 0);
+    if (drink) return product.base_price;
     if (!cfg) return product.base_price;
     let adj = 0;
     for (const g of cfg.xorGroups) { const item = g.items.find(i => i.id === selections[g.uniqueKey]); if (item) adj += item.priceAdjustment; }
@@ -446,12 +442,22 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   const handleConfirm = () => {
     let mods: Record<string,unknown>;
     if (drink) {
-      mods = { size: DRINK_MODS.size.options.find(o => o.id === drinkSel.size)?.label, milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label, sugar: DRINK_MODS.sugar.options.find(o => o.id === drinkSel.sugar)?.label, ...(product.category === 'cold' ? { ice: DRINK_MODS.ice.options.find(o => o.id === drinkSel.ice)?.label } : {}), ...(drinkSel.notes ? { notes: drinkSel.notes } : {}) };
+      mods = {
+        ...(product.category === 'coffee' ? { sugar: DRINK_MODS.sugar.options.find(o => o.id === drinkSel.sugar)?.label } : {}),
+        // ...(product.category === 'coffee' ? { milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label } : {}),
+        ...(drinkSel.notes ? { notes: drinkSel.notes } : {}),
+      };
     } else if (cfg) {
       const cs: Record<string,{ id: string; name: string }> = {};
       for (const g of cfg.xorGroups) { const sid = selections[g.uniqueKey]; if (sid) { const item = g.items.find(i => i.id === sid); if (item) cs[g.uniqueKey] = { id: sid, name: item.name }; } }
       const so = cfg.optionalItems.filter(o => selectedOptionals.has(o.id)).map(o => ({ id: o.id, name: o.name }));
-      mods = { combo_selections: cs, ...(so.length > 0 ? { selected_optionals: so } : {}), ...(notes ? { notes } : {}) };
+      mods = {
+        combo_selections: cs,
+        ...(comboHasCoffee ? { sugar: DRINK_MODS.sugar.options.find(o => o.id === drinkSel.sugar)?.label } : {}),
+        // ...(comboHasCoffee ? { milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label } : {}),
+        ...(so.length > 0 ? { selected_optionals: so } : {}),
+        ...(notes ? { notes } : {}),
+      };
     } else { mods = {}; }
     onConfirm(mods, qty, unitPrice);
   };
@@ -475,20 +481,23 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
         <div style={{ flex:1, overflow:'auto', padding:'4px 20px 12px' }}>
           {drink ? (
             <>
-              {([['size', DRINK_MODS.size], ['milk', DRINK_MODS.milk], ['sugar', DRINK_MODS.sugar]] as const).map(([key, mod]) => (
-                <div key={key} style={{ marginTop:14 }}>
-                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8, display:'flex', gap:6, alignItems:'baseline' }}>{mod.label}{mod.required && <span style={{ fontSize:11, color:'#D9402F', fontWeight:800 }}>Required</span>}</div>
+              {product.category === 'coffee' && (
+                <div style={{ marginTop:14 }}>
+                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Sugar</div>
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                    {mod.options.map(o => { const on = drinkSel[key] === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, [key]: o.id }))} style={pillStyle(on)}>{o.label}{(o.delta ?? 0) > 0 && !on && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>+RM{(o.delta ?? 0).toFixed(2)}</span>}</button>; })}
+                    {DRINK_MODS.sugar.options.map(o => { const on = drinkSel.sugar === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, sugar: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
                   </div>
                 </div>
-              ))}
-              {product.category === 'cold' && (
-                <div style={{ marginTop:14 }}>
-                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Ice</div>
-                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>{DRINK_MODS.ice.options.map(o => { const on = drinkSel.ice === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, ice: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}</div>
-                </div>
               )}
+              {/* milk — coffee only, not offered yet
+              {product.category === 'coffee' && (
+                <div style={{ marginTop:14 }}>
+                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Milk</div>
+                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                    {DRINK_MODS.milk.options.map(o => { const on = drinkSel.milk === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, milk: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
+                  </div>
+                </div>
+              )} */}
               <div style={{ marginTop:14 }}>
                 <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Notes to barista</div>
                 <input value={drinkSel.notes} onChange={e => setDrinkSel(s => ({ ...s, notes: e.target.value }))} placeholder="e.g. extra hot, no foam" style={{ width:'100%', padding:'12px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius-8, outline:'none', boxSizing:'border-box' }}/>
@@ -497,6 +506,23 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
           ) : cfg ? (
             <>
               <ComboSection cfg={cfg} selections={selections} selectedOptionals={selectedOptionals} onSelect={handleSelect} onToggleOptional={toggleOpt}/>
+              {comboHasCoffee && (
+                <div style={{ marginTop:14 }}>
+                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Sugar</div>
+                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                    {DRINK_MODS.sugar.options.map(o => { const on = drinkSel.sugar === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, sugar: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
+                  </div>
+                </div>
+              )}
+              {/* milk — coffee only, not offered yet
+              {comboHasCoffee && (
+                <div style={{ marginTop:14 }}>
+                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Milk</div>
+                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                    {DRINK_MODS.milk.options.map(o => { const on = drinkSel.milk === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, milk: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
+                  </div>
+                </div>
+              )} */}
               <div style={{ marginTop:14 }}>
                 <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Notes</div>
                 <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. allergies, special requests" style={{ width:'100%', padding:'12px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius-8, outline:'none', boxSizing:'border-box' }}/>
@@ -685,7 +711,7 @@ export default function MenuAppV2() {
 
       <CatBar cats={categories} active={activeCat} setActive={setActiveCat} viewport={viewport}/>
 
-      <main style={{ padding:compact?'0 10px 120px':'0 24px 60px', display:'grid', gridTemplateColumns:viewport==='mobile'?'minmax(0,1fr) minmax(0,1fr)':viewport==='tablet'?'repeat(3,minmax(0,1fr))':'repeat(4,minmax(0,1fr))', gap:compact?6:8 }}>
+      <main style={{ padding:compact?'0 10px 120px':'0 24px 60px', display:'grid', gridTemplateColumns:viewport==='mobile'?'minmax(0,1fr) minmax(0,1fr)':viewport==='tablet'?'repeat(3,minmax(0,1fr))':'repeat(5,minmax(0,1fr))', gap:compact?6:8 }}>
         {filtered.map(p => (
           <ItemCard
             key={p.id} product={p} qty={qtyFor(p.id)}
