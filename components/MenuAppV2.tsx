@@ -679,7 +679,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
                   <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:18, color:T.inkColor }}>Earn 1 pt per visit</div>
                   <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.6), marginTop:2 }}>
                     Get a voucher every {threshold} visits
-                    {config.voucher_value > 0 && ` · RM${config.voucher_value.toFixed(2)} off`}
+                    {config.voucher_discount_value > 0 && ` · RM${config.voucher_discount_value.toFixed(2)} off`}
                   </div>
                 </>
               )}

@@ -179,9 +179,9 @@ export interface LoyaltyConfig {
   points_per_scan: number;
   points_threshold: number;
   voucher_type: 'fixed' | 'percent';
-  voucher_value: number;
+  voucher_discount_value: number;
   voucher_validity_days: number;
-  min_order_for_voucher: number | null;
+  voucher_min_order: number | null;
   is_active: boolean;
   updated_at: string;
 }
