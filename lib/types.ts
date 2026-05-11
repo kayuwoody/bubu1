@@ -174,17 +174,35 @@ export interface Customer {
   updated_at: string;
 }
 
-export interface LoyaltyConfig {
+export interface LoyaltyProgram {
   id: string;
-  points_per_scan: number;
-  points_threshold: number;
+  name: string;
+  description: string | null;
+  trigger_type: 'scan' | 'purchase' | 'manual';
+  points_per_trigger: number;
+  points_per_rm: number | null;
+  threshold: number;
   voucher_type: 'fixed' | 'percent';
   voucher_discount_value: number;
   voucher_validity_days: number;
   voucher_min_order: number | null;
   is_active: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface LoyaltyMemberProgram {
+  id: string;
+  member_id: string;
+  program_id: string;
+  points_balance: number;
+  total_earned: number;
+  enrolled_at: string;
   updated_at: string;
 }
+
+// Convenience alias — the single active loyalty config the customer app cares about
+export type LoyaltyConfig = LoyaltyProgram;
 
 export interface LoyaltyMember {
   id: string;

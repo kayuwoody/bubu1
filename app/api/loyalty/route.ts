@@ -4,14 +4,16 @@ import { supabase } from '@/lib/online/supabase';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const { data: config, error } = await supabase
-    .from('loyalty_config')
+  const { data: programs, error } = await supabase
+    .from('loyalty_programs')
     .select('*')
     .eq('is_active', true)
-    .limit(1)
-    .single();
+    .order('sort_order');
 
-  if (error) console.error('[loyalty] config fetch error:', error.message, error.code);
+  if (error) console.error('[loyalty] programs fetch error:', error.message, error.code);
 
-  return NextResponse.json({ config: config ?? null });
+  // For backward compat, also expose the first scan program as `config`
+  const config = programs?.find(p => p.trigger_type === 'scan') ?? null;
+
+  return NextResponse.json({ programs: programs ?? [], config });
 }

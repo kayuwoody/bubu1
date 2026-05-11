@@ -73,8 +73,8 @@ function LoyaltyChip({
         <span style={{ color: '#92400E' }}>
           Hi {member!.name ?? 'there'}!{' '}
           <strong>{member!.points_balance.toLocaleString()} pts</strong>
-          {config.points_threshold > 0 && (
-            <> · {config.points_threshold - (member!.points_balance % config.points_threshold)} to next voucher</>
+          {config.threshold > 0 && (
+            <> · {config.threshold - (member!.points_balance % config.threshold)} to next voucher</>
           )}
         </span>
       )}
