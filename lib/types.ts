@@ -89,6 +89,7 @@ export interface XorGroupItem {
   name: string;
   basePrice: number;
   priceAdjustment: number;
+  isCoffee: boolean;
 }
 
 export interface XorGroup {
@@ -105,7 +106,9 @@ export interface OptionalItem {
   name: string;
   basePrice: number;
   priceAdjustment: number;
+  isCoffee: boolean;
   parentProductId?: string;
+  parentProductName?: string;
 }
 
 export interface SelectionConfig {

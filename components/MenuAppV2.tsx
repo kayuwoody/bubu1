@@ -398,15 +398,11 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   const drink = !!product && isDrink(product.category) && !cfg;
   const nestedGroups = useMemo(() => cfg?.xorGroups.filter(g => !!g.parentProductId) ?? [], [cfg]);
 
-  // requires backend to expose item.category on XorGroup items (added during recipe flattening)
   const comboHasCoffee = useMemo(() => {
     if (!cfg) return false;
     return cfg.xorGroups.some(g => {
       const selId = selections[g.uniqueKey];
-      if (!selId) return false;
-      const item = g.items.find(i => i.id === selId);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (item as any)?.category === 'coffee';
+      return !!g.items.find(i => i.id === selId)?.isCoffee;
     });
   }, [cfg, selections]);
 
