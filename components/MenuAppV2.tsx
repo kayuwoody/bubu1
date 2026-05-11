@@ -401,11 +401,18 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
 
   const comboHasCoffee = useMemo(() => {
     if (!cfg) return false;
-    if (product?.category.toLowerCase() === 'coffee') return true;
-    return cfg.xorGroups.some(g => {
+    // Product-level: covers single coffee drinks with a selection_config (e.g. hot/cold latte)
+    if (product?.category?.toLowerCase() === 'coffee') return true;
+    // Currently selected item is coffee (combo where user picked a coffee drink)
+    if (cfg.xorGroups.some(g => {
       const selId = selections[g.uniqueKey];
       return !!g.items.find(i => i.id === selId)?.isCoffee;
-    });
+    })) return true;
+    // Nothing selected yet — show sugar eagerly if every top-level item is a coffee product
+    // (e.g. a standalone latte whose only options are Hot/Iced, both isCoffee:true)
+    const topLevel = cfg.xorGroups.filter(g => !g.parentProductId);
+    const nothingPicked = topLevel.every(g => !selections[g.uniqueKey]);
+    return nothingPicked && topLevel.length > 0 && topLevel.every(g => g.items.every(i => i.isCoffee));
   }, [cfg, selections, product]);
 
   useEffect(() => {
@@ -473,8 +480,6 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:22, color:T.inkColor, lineHeight:1.1 }}>{product.name}</div>
             <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:16, color:T.inkColor, marginTop:4 }}>RM {unitPrice.toFixed(2)}</div>
-            {/* DEBUG — remove before launch */}
-            <div style={{ fontSize:10, color:'#999', marginTop:2 }}>cat:{product.category} drink:{String(drink)} cfg:{String(!!cfg)} coffee:{String(comboHasCoffee)}</div>
           </div>
           <button onClick={onClose} style={{ background:'transparent', border:'none', cursor:'pointer', color:T.inkColor, alignSelf:'flex-start' }}><Icon.X width="22" height="22"/></button>
         </div>
