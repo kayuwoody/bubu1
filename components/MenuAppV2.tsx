@@ -23,7 +23,7 @@ const CAT_SWATCHES: Record<string, string> = {
 };
 const DRINK_MODS = {
   sugar: { label: 'Sugar', options: [{ id: 'zero', label: 'Zero', delta: 0 }, { id: 'less', label: 'Less', delta: 0 }, { id: 'medium', label: 'Medium', delta: 0 }, { id: 'sweet', label: 'Sweet', delta: 0 }] },
-  /* milk: { label: 'Milk', options: [{ id: 'full', label: 'Full', delta: 0 }, { id: 'skim', label: 'Skim', delta: 0 }, { id: 'oat', label: 'Oat', delta: 2.00 }, { id: 'almond', label: 'Almond', delta: 2.00 }] }, */
+  milk:  { label: 'Milk', options: [{ id: 'full', label: 'Full', delta: 0 }, { id: 'skim', label: 'Skim', delta: 0 }, { id: 'oat', label: 'Oat', delta: 2.00 }, { id: 'almond', label: 'Almond', delta: 2.00 }] },
   ice:   { label: 'Ice', options: [{ id: 'none', label: 'No ice' }, { id: 'less', label: 'Less' }, { id: 'std', label: 'Normal' }] },
 };
 
@@ -117,10 +117,11 @@ function useCart() {
 }
 
 // ── v2 Header (compact: logo + pickup pill + ETA + loyalty + cart) ─────────
-function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyActive, customerPoints, onLoyaltyClick }: {
+function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyActive, customerPoints, onLoyaltyClick, onOrdersClick }: {
   viewport: Viewport; pickup: 'counter'|'curbside'; setPickup: (v: 'counter'|'curbside') => void;
   cartCount: number; onCartClick: () => void;
   loyaltyActive: boolean; customerPoints: number | null; onLoyaltyClick: () => void;
+  onOrdersClick: () => void;
 }) {
   const compact = viewport === 'mobile';
   const toggle  = () => setPickup(pickup === 'curbside' ? 'counter' : 'curbside');
@@ -137,10 +138,13 @@ function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyAc
       </button>
 
       <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center', flexShrink:0 }}>
+        <button onClick={onOrdersClick} style={{ display:'flex', alignItems:'center', gap:4, padding:compact?'6px 8px':'8px 12px', borderRadius:999, background:'#fff', color:T.inkColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?12:13, cursor:'pointer', whiteSpace:'nowrap' }}>
+          <span style={{ fontSize:13 }}>🧾</span>
+          {!compact && 'Orders'}
+        </button>
         {loyaltyActive && (
           <button onClick={onLoyaltyClick} style={{ display:'flex', alignItems:'center', gap:4, padding:compact?'6px 8px':'8px 12px', borderRadius:999, background:T.secondaryColor, color:T.inkColor, border:'none', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?12:13, cursor:'pointer', whiteSpace:'nowrap' }}>
             <span style={{ fontSize:13 }}>★</span>
-            {/* show pts on non-mobile; just the star on mobile to save space */}
             {!compact && 'Rewards'}
           </button>
         )}
@@ -486,23 +490,29 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
         <div style={{ flex:1, overflow:'auto', padding:'4px 20px 12px' }}>
           {drink ? (
             <>
-              {product.category.toLowerCase() === 'coffee' && (
-                <div style={{ marginTop:14 }}>
-                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Sugar</div>
-                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                    {DRINK_MODS.sugar.options.map(o => { const on = drinkSel.sugar === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, sugar: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
-                  </div>
-                </div>
-              )}
-              {/* milk — coffee only, not offered yet
-              {product.category.toLowerCase() === 'coffee' && (
-                <div style={{ marginTop:14 }}>
-                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Milk</div>
-                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                    {DRINK_MODS.milk.options.map(o => { const on = drinkSel.milk === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, milk: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
-                  </div>
-                </div>
-              )} */}
+              {(() => {
+                const isCoffee = product.category.toLowerCase() === 'coffee';
+                const NO_MILK = new Set(['espresso', 'americano']);
+                const showMilk = isCoffee && !NO_MILK.has(product.name.toLowerCase().trim());
+                return (<>
+                  {isCoffee && (
+                    <div style={{ marginTop:14 }}>
+                      <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Sugar</div>
+                      <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                        {DRINK_MODS.sugar.options.map(o => { const on = drinkSel.sugar === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, sugar: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
+                      </div>
+                    </div>
+                  )}
+                  {showMilk && (
+                    <div style={{ marginTop:14 }}>
+                      <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Milk</div>
+                      <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                        {DRINK_MODS.milk.options.map(o => { const on = drinkSel.milk === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, milk: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
+                      </div>
+                    </div>
+                  )}
+                </>);
+              })()}
               <div style={{ marginTop:14 }}>
                 <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Notes to barista</div>
                 <input value={drinkSel.notes} onChange={e => setDrinkSel(s => ({ ...s, notes: e.target.value }))} placeholder="e.g. extra hot, no foam" style={{ width:'100%', padding:'12px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius-8, outline:'none', boxSizing:'border-box' }}/>
@@ -519,7 +529,6 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
                   </div>
                 </div>
               )}
-              {/* milk — coffee only, not offered yet
               {comboHasCoffee && (
                 <div style={{ marginTop:14 }}>
                   <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Milk</div>
@@ -527,7 +536,7 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
                     {DRINK_MODS.milk.options.map(o => { const on = drinkSel.milk === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, milk: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
                   </div>
                 </div>
-              )} */}
+              )}
               <div style={{ marginTop:14 }}>
                 <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Notes</div>
                 <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. allergies, special requests" style={{ width:'100%', padding:'12px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius-8, outline:'none', boxSizing:'border-box' }}/>
@@ -830,15 +839,6 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
             </div>
           </div>
         )}
-        {/* Order history link */}
-        {member && (
-          <button
-            onClick={() => { onClose(); router.push('/orders'); }}
-            style={{ width:'100%', marginTop:10, padding:'12px', borderRadius:T.cornerRadius-6, border:`1.5px solid ${hex(T.inkColor,.12)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}
-          >
-            🧾 Order History
-          </button>
-        )}
       </div>
       <style>{`@keyframes coSheetIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
     </div>
@@ -908,7 +908,10 @@ export default function MenuAppV2() {
   };
 
   const compact  = viewport === 'mobile';
-  const filtered = products.filter(p => p.category === activeCat);
+  const isUnavail = (p: Product) => !p.available_online || (p.stock_quantity !== null && p.stock_quantity <= 0);
+  const filtered = products
+    .filter(p => p.category === activeCat)
+    .sort((a, b) => Number(isUnavail(a)) - Number(isUnavail(b)));
 
   if (loading) return (
     <div style={{ minHeight:'100vh', background:T.bgColor, display:'grid', placeItems:'center' }}>
@@ -932,6 +935,7 @@ export default function MenuAppV2() {
         loyaltyActive={loyaltyConfig?.is_active ?? false}
         customerPoints={null}
         onLoyaltyClick={() => setLoyaltyOpen(true)}
+        onOrdersClick={() => router.push('/orders')}
       />
 
       <GreetingBand
