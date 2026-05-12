@@ -558,10 +558,9 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   phone: string | null;
   onPhoneSave: (phone: string) => void;
 }) {
-  type ProgramBalance = {
-    points_balance: number; total_earned: number; enrolled_at: string; updated_at: string;
-    loyalty_programs: { id: string; name: string; trigger_type: string; threshold: number; voucher_type: string; voucher_discount_value: number } | null;
-  };
+  type ProgInfo = { id: string; name: string; trigger_type: string; threshold: number; voucher_type: string; voucher_discount_value: number };
+  type ProgramBalance = { points_balance: number; total_earned: number; enrolled_at: string; updated_at: string; loyalty_programs: ProgInfo | null };
+
   const [member,          setMember]          = useState<LoyaltyMember | null>(null);
   const [vouchers,        setVouchers]        = useState<Voucher[]>([]);
   const [transactions,    setTransactions]    = useState<LoyaltyTransaction[]>([]);
@@ -569,24 +568,23 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   const [fetching,        setFetching]        = useState(false);
   const [phoneInput,      setPhoneInput]      = useState('');
   const [phoneErr,        setPhoneErr]        = useState('');
+  const [copied,          setCopied]          = useState<string | null>(null);
 
-  const activePhone = phone;
-  const digits = (activePhone ?? '').replace(/\D/g, '');
+  const digits = (phone ?? '').replace(/\D/g, '');
   const hasPhone = digits.length >= 8;
+
+  const loadMember = (d: { member: LoyaltyMember | null; vouchers: Voucher[]; transactions: LoyaltyTransaction[]; programBalances: ProgramBalance[] }) => {
+    setMember(d.member ?? null);
+    setVouchers(d.vouchers ?? []);
+    setTransactions(d.transactions ?? []);
+    setProgramBalances(d.programBalances ?? []);
+  };
 
   useEffect(() => {
     if (!open || !hasPhone) return;
     setFetching(true);
     fetch(`/api/loyalty/member?phone=${digits}`)
-      .then(r => r.json())
-      .then(d => {
-        setMember(d.member ?? null);
-        setVouchers(d.vouchers ?? []);
-        setTransactions(d.transactions ?? []);
-        setProgramBalances(d.programBalances ?? []);
-      })
-      .catch(() => {})
-      .finally(() => setFetching(false));
+      .then(r => r.json()).then(loadMember).catch(() => {}).finally(() => setFetching(false));
   }, [open, digits, hasPhone]);
 
   const handlePhoneLookup = async (e: React.FormEvent) => {
@@ -598,17 +596,108 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
     try {
       const res = await fetch(`/api/loyalty/member?phone=${d}`);
       const data = await res.json();
-      if (!data.member) { setPhoneErr('No loyalty account found for this number'); setFetching(false); return; }
+      if (!data.member) { setPhoneErr('No loyalty account found for this number'); return; }
       onPhoneSave(d);
-      setMember(data.member);
-      setVouchers(data.vouchers ?? []);
-      setTransactions(data.transactions ?? []);
-      setProgramBalances(data.programBalances ?? []);
+      loadMember(data);
     } catch { setPhoneErr('Could not look up account. Try again.'); }
     finally  { setFetching(false); }
   };
 
+  const copyCode = (code: string) => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(code);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  const reset = () => { onPhoneSave(''); setMember(null); setVouchers([]); setTransactions([]); setProgramBalances([]); setPhoneInput(''); };
+
   if (!open) return null;
+
+  const scanPrograms     = programBalances.filter(pb => pb.loyalty_programs?.trigger_type === 'scan');
+  const purchasePrograms = programBalances.filter(pb => pb.loyalty_programs?.trigger_type === 'purchase');
+
+  // Stamp card (for scan-trigger programs) — matches physical card mockup
+  const StampCard = ({ pb }: { pb: ProgramBalance }) => {
+    const prog = pb.loyalty_programs!;
+    const stamped = pb.points_balance;
+    const total = prog.threshold;
+    const perRow = Math.min(total, 10);
+    const rows: number[][] = [];
+    for (let i = 0; i < total; i += perRow) rows.push(Array.from({ length: Math.min(perRow, total - i) }, (_, j) => i + j));
+    return (
+      <div style={{ background:'#FFF6E8', borderRadius:20, border:'3px solid #3A2414', overflow:'hidden', marginBottom:10 }}>
+        <div style={{ padding:'14px 18px 10px', display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ width:46, height:46, borderRadius:'50%', background:'#F58220', display:'grid', placeItems:'center', flexShrink:0, fontSize:22 }}>☕</div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:17, color:'#3A2414', lineHeight:1.1 }}>Coffee Oasis</div>
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:'rgba(58,36,20,.55)', marginTop:1 }}>{prog.name}</div>
+          </div>
+          <div style={{ textAlign:'right', flexShrink:0 }}>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:24, color:'#3A2414', lineHeight:1 }}>
+              {stamped}<span style={{ fontSize:14, fontWeight:600, opacity:.5 }}>/{total}</span>
+            </div>
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, color:'rgba(58,36,20,.5)' }}>stamps</div>
+          </div>
+        </div>
+        <div style={{ background:'#3A2414', padding:'14px 18px', display:'flex', flexDirection:'column', gap:10 }}>
+          {rows.map((row, ri) => (
+            <div key={ri} style={{ display:'flex', gap:8, justifyContent:'center' }}>
+              {row.map(i => (
+                <div key={i} style={{
+                  width:34, height:34, borderRadius:'50%', flexShrink:0,
+                  background: i < stamped ? '#F58220' : 'transparent',
+                  border: i < stamped ? 'none' : '2.5px dashed rgba(255,255,255,.3)',
+                  display:'grid', placeItems:'center', fontSize:16, color:'#fff',
+                }}>
+                  {i < stamped ? '✦' : ''}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div style={{ padding:'9px 18px 12px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:'rgba(58,36,20,.6)' }}>
+            {total - stamped > 0
+              ? `${total - stamped} more stamp${total - stamped !== 1 ? 's' : ''} to go`
+              : '🎉 Reward ready — check your vouchers!'}
+          </div>
+          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:'#3A2414', flexShrink:0, marginLeft:8 }}>
+            {prog.voucher_type === 'percent' ? `${prog.voucher_discount_value}% off` : `RM${prog.voucher_discount_value.toFixed(2)} off`}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Purchase points card — progress bar toward next voucher
+  const PointsCard = ({ pb }: { pb: ProgramBalance }) => {
+    const prog = pb.loyalty_programs!;
+    const pct = Math.min(100, Math.round((pb.points_balance / prog.threshold) * 100));
+    return (
+      <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'14px 16px', border:`1.5px solid ${hex(T.inkColor,.08)}`, marginBottom:10 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:10 }}>
+          <div style={{ width:40, height:40, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:20, color:'#fff' }}>★</div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, fontWeight:700, color:hex(T.inkColor,.5), textTransform:'uppercase', letterSpacing:'.05em' }}>{prog.name}</div>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:20, color:T.inkColor, lineHeight:1.1 }}>
+              {pb.points_balance.toLocaleString()}{' '}
+              <span style={{ fontSize:13, fontWeight:600, opacity:.5 }}>/ {prog.threshold} pts</span>
+            </div>
+          </div>
+          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:T.primaryColor, flexShrink:0 }}>
+            {prog.voucher_type === 'percent' ? `${prog.voucher_discount_value}%` : `RM${prog.voucher_discount_value.toFixed(2)}`} off
+          </div>
+        </div>
+        <div style={{ height:6, background:hex(T.inkColor,.08), borderRadius:999, overflow:'hidden' }}>
+          <div style={{ height:'100%', width:`${pct}%`, background:T.primaryColor, borderRadius:999, transition:'width .4s ease' }}/>
+        </div>
+        <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.5), marginTop:5 }}>
+          {prog.threshold - pb.points_balance} pts to next {prog.voucher_type === 'percent' ? `${prog.voucher_discount_value}%` : `RM${prog.voucher_discount_value.toFixed(2)}`} voucher
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:60, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
@@ -616,30 +705,27 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
       <div style={{ position:'relative', width:'min(460px,100%)', background:T.bgColor, borderTopLeftRadius:28, borderTopRightRadius:28, padding:'10px 22px 32px', animation:'coSheetIn .25s ease-out', boxShadow:'0 -10px 40px rgba(58,36,20,.25)', maxHeight:'90vh', overflowY:'auto' }}>
         <div style={{ width:40, height:4, background:hex(T.inkColor,.2), borderRadius:999, margin:'0 auto 16px' }}/>
         <div style={{ display:'flex', alignItems:'center', marginBottom:14 }}>
-          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:20, color:T.inkColor }}>Loyalty</div>
+          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:20, color:T.inkColor }}>My Rewards</div>
           <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', cursor:'pointer', color:T.inkColor, fontSize:24, lineHeight:1 }}>×</button>
         </div>
 
         {/* QR / phone lookup */}
         {hasPhone ? (
-          <div style={{ background:T.inkColor, borderRadius:T.cornerRadius, padding:'18px 18px 14px', marginBottom:14, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+          <div style={{ background:T.inkColor, borderRadius:T.cornerRadius, padding:'18px 18px 14px', marginBottom:16, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
             <div style={{ background:'#fff', borderRadius:12, padding:10, display:'inline-flex' }}>
-              <QRCodeSVG value={digits} size={140} />
+              <QRCodeSVG value={digits} size={130} />
             </div>
             <div style={{ color:'#fff', fontFamily:"'Nunito',system-ui", fontSize:13, opacity:.8, textAlign:'center' }}>
-              Show this QR at the counter to earn points
+              Show this QR at the counter to earn stamps
             </div>
-            <button
-              onClick={() => { onPhoneSave(''); setMember(null); setVouchers([]); setTransactions([]); setProgramBalances([]); setPhoneInput(''); }}
-              style={{ background:'transparent', border:`1px solid rgba(255,255,255,.3)`, borderRadius:999, padding:'4px 12px', color:'rgba(255,255,255,.65)', fontSize:12, cursor:'pointer', fontFamily:"'Nunito',system-ui" }}
-            >
+            <button onClick={reset} style={{ background:'transparent', border:`1px solid rgba(255,255,255,.3)`, borderRadius:999, padding:'4px 12px', color:'rgba(255,255,255,.65)', fontSize:12, cursor:'pointer', fontFamily:"'Nunito',system-ui" }}>
               Not you?
             </button>
           </div>
         ) : (
-          <form onSubmit={handlePhoneLookup} style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'16px', marginBottom:14, border:`1.5px solid ${hex(T.inkColor,.08)}` }}>
+          <form onSubmit={handlePhoneLookup} style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'16px', marginBottom:16, border:`1.5px solid ${hex(T.inkColor,.08)}` }}>
             <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:10 }}>
-              Enter your phone to see your QR
+              Enter your phone to see your cards
             </div>
             <div style={{ display:'flex', gap:8 }}>
               <input
@@ -649,11 +735,8 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
                 placeholder="e.g. 0123456789"
                 style={{ flex:1, padding:'11px 14px', fontSize:15, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, outline:'none', fontFamily:"'Nunito',system-ui" }}
               />
-              <button
-                type="submit"
-                disabled={fetching}
-                style={{ padding:'11px 16px', borderRadius:T.cornerRadius-10, border:'none', background:T.primaryColor, color:'#fff', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Nunito',system-ui", opacity:fetching?.6:1 }}
-              >
+              <button type="submit" disabled={fetching}
+                style={{ padding:'11px 16px', borderRadius:T.cornerRadius-10, border:'none', background:T.primaryColor, color:'#fff', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Nunito',system-ui", opacity:fetching ? .6 : 1 }}>
                 {fetching ? '…' : 'Find'}
               </button>
             </div>
@@ -661,65 +744,60 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
           </form>
         )}
 
-        {/* Per-program balances */}
-        {fetching ? (
-          <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'13px 16px', marginBottom:14, border:`1.5px solid ${hex(T.inkColor,.08)}`, fontFamily:"'Nunito',system-ui", fontSize:13, color:hex(T.inkColor,.45) }}>Loading…</div>
-        ) : member && programBalances.length > 0 ? (
-          <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:14 }}>
-            {programBalances.map((pb, i) => {
-              const prog = pb.loyalty_programs;
-              if (!prog) return null;
-              const ptsToNext = prog.threshold - (pb.points_balance % prog.threshold);
-              return (
-                <div key={i} style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'13px 16px', border:`1.5px solid ${hex(T.inkColor,.08)}`, display:'flex', alignItems:'center', gap:12 }}>
-                  <div style={{ width:40, height:40, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:18, color:'#fff' }}>★</div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, fontWeight:700, color:hex(T.inkColor,.5), textTransform:'uppercase', letterSpacing:'.05em', marginBottom:2 }}>{prog.name}</div>
-                    <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:20, color:T.inkColor, lineHeight:1 }}>{pb.points_balance.toLocaleString()} pts</div>
-                    <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.6), marginTop:2 }}>
-                      {ptsToNext} more to next {prog.voucher_type === 'percent' ? `${prog.voucher_discount_value}%` : `RM${prog.voucher_discount_value.toFixed(2)}`} voucher
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : config?.is_active && !member ? (
-          <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'13px 16px', marginBottom:14, border:`1.5px solid ${hex(T.inkColor,.08)}`, display:'flex', alignItems:'center', gap:12 }}>
-            <div style={{ width:40, height:40, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:18, color:'#fff' }}>★</div>
+        {fetching && (
+          <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:hex(T.inkColor,.4), textAlign:'center', padding:'8px 0 14px' }}>Loading…</div>
+        )}
+
+        {/* Stamp cards (scan programs) */}
+        {!fetching && scanPrograms.map((pb, i) => <StampCard key={i} pb={pb} />)}
+
+        {/* Purchase points cards */}
+        {!fetching && purchasePrograms.map((pb, i) => <PointsCard key={i} pb={pb} />)}
+
+        {/* Placeholder when no member loaded yet */}
+        {!fetching && !member && config?.is_active && (
+          <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'14px 16px', marginBottom:10, border:`1.5px solid ${hex(T.inkColor,.08)}`, display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ width:40, height:40, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:20, color:'#fff' }}>★</div>
             <div>
-              <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:18, color:T.inkColor }}>Earn points with every purchase</div>
-              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.6), marginTop:2 }}>
-                Redeem for vouchers
-                {config.voucher_discount_value > 0 && ` · RM${config.voucher_discount_value.toFixed(2)} off`}
+              <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:15, color:T.inkColor }}>Earn stamps & points</div>
+              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.6), marginTop:1 }}>
+                Make a purchase or scan at the counter to start
               </div>
             </div>
           </div>
-        ) : null}
+        )}
 
         {/* Available vouchers */}
         {vouchers.length > 0 && (
           <div style={{ marginBottom:14 }}>
-            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:hex(T.inkColor,.6), textTransform:'uppercase', letterSpacing:'.05em', marginBottom:6 }}>Your Vouchers</div>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:hex(T.inkColor,.6), textTransform:'uppercase', letterSpacing:'.05em', marginBottom:8 }}>Your Vouchers</div>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
               {vouchers.map(v => (
                 <div key={v.id} style={{ display:'flex', alignItems:'center', gap:12, background:'#fff', borderRadius:T.cornerRadius-6, padding:'11px 14px', border:`1.5px solid ${T.primaryColor}` }}>
-                  <div style={{ width:36, height:36, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:14, color:'#fff', fontWeight:700 }}>
+                  <div style={{ width:38, height:38, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:13, color:'#fff', fontWeight:700, lineHeight:1.1, textAlign:'center' }}>
                     {v.type === 'percent' ? `${v.discount_amount}%` : `RM${v.discount_amount}`}
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor }}>
-                      {v.type === 'percent' ? `${v.discount_amount}% off` : `RM ${v.discount_amount.toFixed(2)} off`}
+                      {v.type === 'percent' ? `${v.discount_amount}% off` : `RM ${Number(v.discount_amount).toFixed(2)} off`}
                     </div>
-                    <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.55), marginTop:1, letterSpacing:'.03em' }}>{v.code}</div>
+                    <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.55), marginTop:1, letterSpacing:'.04em' }}>{v.code}</div>
+                    {v.expires_at && (
+                      <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, color:hex(T.inkColor,.4), marginTop:1 }}>
+                        Expires {new Date(v.expires_at).toLocaleDateString('en-MY', { day:'numeric', month:'short', year:'numeric' })}
+                      </div>
+                    )}
                   </div>
-                  {v.expires_at && (
-                    <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, color:hex(T.inkColor,.45), whiteSpace:'nowrap' }}>
-                      exp {new Date(v.expires_at).toLocaleDateString('en-MY', { day:'numeric', month:'short' })}
-                    </div>
-                  )}
+                  <button
+                    onClick={() => copyCode(v.code)}
+                    style={{ flexShrink:0, padding:'6px 12px', borderRadius:999, border:`1.5px solid ${T.primaryColor}`, background: copied === v.code ? T.primaryColor : 'transparent', color: copied === v.code ? '#fff' : T.primaryColor, fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', transition:'all .2s' }}>
+                    {copied === v.code ? '✓ Copied' : 'Copy'}
+                  </button>
                 </div>
               ))}
+            </div>
+            <div style={{ marginTop:8, fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.5), textAlign:'center' }}>
+              Tap Copy, then paste the code at checkout
             </div>
           </div>
         )}
@@ -729,7 +807,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
           <div>
             <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:hex(T.inkColor,.6), textTransform:'uppercase', letterSpacing:'.05em', marginBottom:6 }}>Recent Activity</div>
             <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-              {transactions.slice(0,5).map(tx => (
+              {transactions.slice(0, 5).map(tx => (
                 <div key={tx.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 12px', background:'#fff', borderRadius:T.cornerRadius-8, border:`1px solid ${hex(T.inkColor,.07)}` }}>
                   <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:T.inkColor }}>{tx.description ?? tx.type}</div>
                   <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:tx.points >= 0 ? '#16A34A' : '#DC2626' }}>

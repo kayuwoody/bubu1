@@ -71,11 +71,7 @@ function LoyaltyChip({
         <span style={{ color: `rgba(58,36,20,.45)` }}>Checking loyalty…</span>
       ) : (
         <span style={{ color: '#92400E' }}>
-          Hi {member!.name ?? 'there'}!{' '}
-          <strong>{member!.points_balance.toLocaleString()} pts</strong>
-          {config.threshold > 0 && (
-            <> · {config.threshold - (member!.points_balance % config.threshold)} to next voucher</>
-          )}
+          Hi {member!.name ?? 'there'}! Have a voucher code? Enter it below.
         </span>
       )}
     </div>
@@ -386,7 +382,7 @@ function CheckoutContent() {
                     setVoucherCode(e.target.value);
                     if (voucherStatus !== 'idle') { setVoucherStatus('idle'); setVoucherMsg(''); setVoucherDiscount(0); }
                   }}
-                  placeholder="e.g. CO-ABC123"
+                  placeholder="e.g. VCH-ABC12-XY34"
                   style={{ ...inputStyle, flex: 1, textTransform: 'uppercase' }}
                   disabled={voucherStatus === 'valid'}
                 />
