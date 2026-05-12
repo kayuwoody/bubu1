@@ -141,7 +141,7 @@ function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyAc
           <button onClick={onLoyaltyClick} style={{ display:'flex', alignItems:'center', gap:4, padding:compact?'6px 8px':'8px 12px', borderRadius:999, background:T.secondaryColor, color:T.inkColor, border:'none', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?12:13, cursor:'pointer', whiteSpace:'nowrap' }}>
             <span style={{ fontSize:13 }}>★</span>
             {/* show pts on non-mobile; just the star on mobile to save space */}
-            {!compact && (customerPoints !== null ? `${customerPoints} pts` : 'Loyalty')}
+            {!compact && 'Rewards'}
           </button>
         )}
         <button onClick={onCartClick} aria-label="Cart" style={{ position:'relative', background:T.inkColor, color:'#fff', border:'none', borderRadius:999, padding:compact?'7px 10px':'10px 16px', display:'flex', alignItems:'center', gap:6, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?13:14, cursor:'pointer' }}>
@@ -561,6 +561,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   type ProgInfo = { id: string; name: string; trigger_type: string; threshold: number; voucher_type: string; voucher_discount_value: number };
   type ProgramBalance = { points_balance: number; total_earned: number; enrolled_at: string; updated_at: string; loyalty_programs: ProgInfo | null };
 
+  const router = useRouter();
   const [member,          setMember]          = useState<LoyaltyMember | null>(null);
   const [vouchers,        setVouchers]        = useState<Voucher[]>([]);
   const [transactions,    setTransactions]    = useState<LoyaltyTransaction[]>([]);
@@ -768,37 +769,48 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
         )}
 
         {/* Available vouchers */}
-        {vouchers.length > 0 && (
+        {member && (
           <div style={{ marginBottom:14 }}>
-            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:hex(T.inkColor,.6), textTransform:'uppercase', letterSpacing:'.05em', marginBottom:8 }}>Your Vouchers</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              {vouchers.map(v => (
-                <div key={v.id} style={{ display:'flex', alignItems:'center', gap:12, background:'#fff', borderRadius:T.cornerRadius-6, padding:'11px 14px', border:`1.5px solid ${T.primaryColor}` }}>
-                  <div style={{ width:38, height:38, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:13, color:'#fff', fontWeight:700, lineHeight:1.1, textAlign:'center' }}>
-                    {v.type === 'percent' ? `${v.discount_amount}%` : `RM${v.discount_amount}`}
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor }}>
-                      {v.type === 'percent' ? `${v.discount_amount}% off` : `RM ${Number(v.discount_amount).toFixed(2)} off`}
-                    </div>
-                    <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.55), marginTop:1, letterSpacing:'.04em' }}>{v.code}</div>
-                    {v.expires_at && (
-                      <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, color:hex(T.inkColor,.4), marginTop:1 }}>
-                        Expires {new Date(v.expires_at).toLocaleDateString('en-MY', { day:'numeric', month:'short', year:'numeric' })}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+              <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:hex(T.inkColor,.6), textTransform:'uppercase', letterSpacing:'.05em' }}>
+                Your Vouchers {vouchers.length > 0 && `(${vouchers.length})`}
+              </div>
+              <button
+                onClick={() => { onClose(); router.push('/vouchers'); }}
+                style={{ background:'transparent', border:'none', fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:13, color:T.primaryColor, cursor:'pointer', padding:0 }}>
+                See all →
+              </button>
+            </div>
+            {vouchers.length === 0 ? (
+              <div style={{ background:'#fff', borderRadius:T.cornerRadius-6, padding:'12px 14px', border:`1px solid ${hex(T.inkColor,.08)}`, fontFamily:"'Nunito',system-ui", fontSize:13, color:hex(T.inkColor,.45) }}>
+                No vouchers yet — keep earning!
+              </div>
+            ) : (
+              <>
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  {vouchers.slice(0, 2).map(v => (
+                    <div key={v.id} style={{ display:'flex', alignItems:'center', gap:12, background:'#fff', borderRadius:T.cornerRadius-6, padding:'11px 14px', border:`1.5px solid ${T.primaryColor}`, cursor:'pointer' }}
+                      onClick={() => { onClose(); router.push('/vouchers'); }}>
+                      <div style={{ width:38, height:38, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:13, color:'#fff', fontWeight:700, lineHeight:1.1, textAlign:'center' }}>
+                        {v.type === 'percent' ? `${v.discount_amount}%` : `RM${v.discount_amount}`}
                       </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => copyCode(v.code)}
-                    style={{ flexShrink:0, padding:'6px 12px', borderRadius:999, border:`1.5px solid ${T.primaryColor}`, background: copied === v.code ? T.primaryColor : 'transparent', color: copied === v.code ? '#fff' : T.primaryColor, fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', transition:'all .2s' }}>
-                    {copied === v.code ? '✓ Copied' : 'Copy'}
-                  </button>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor }}>
+                          {v.type === 'percent' ? `${v.discount_amount}% off` : `RM ${Number(v.discount_amount).toFixed(2)} off`}
+                        </div>
+                        <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.55), marginTop:1, letterSpacing:'.04em' }}>{v.code}</div>
+                      </div>
+                      <span style={{ color:T.primaryColor, fontSize:16 }}>›</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div style={{ marginTop:8, fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.5), textAlign:'center' }}>
-              Tap Copy, then paste the code at checkout
-            </div>
+                <button
+                  onClick={() => { onClose(); router.push('/vouchers'); }}
+                  style={{ marginTop:10, width:'100%', padding:'11px', borderRadius:T.cornerRadius-6, border:`1.5px solid ${T.primaryColor}`, background:'transparent', color:T.primaryColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, cursor:'pointer' }}>
+                  {vouchers.length > 2 ? `View all ${vouchers.length} vouchers →` : 'Use at checkout →'}
+                </button>
+              </>
+            )}
           </div>
         )}
 

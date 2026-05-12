@@ -81,6 +81,7 @@ function LoyaltyChip({
 function CheckoutContent() {
   const searchParams = useSearchParams();
   const cancelled    = searchParams.get('cancelled') === '1';
+  const voucherParam = searchParams.get('voucher');
 
   const [pending, setPending] = useState<Pending | null>(null);
   const [name,  setName]  = useState('');
@@ -127,6 +128,36 @@ function CheckoutContent() {
       }
     } catch { /* ignore */ }
   }, []);
+
+  // Auto-apply voucher from URL param (navigated from /vouchers page)
+  useEffect(() => {
+    if (!voucherParam) return;
+    const code = voucherParam.trim().toUpperCase();
+    setVoucherCode(code);
+    setVoucherStatus('checking');
+    setVoucherMsg('');
+    fetch('/api/vouchers/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, order_total: pending?.total ?? 0 }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.valid) {
+          setVoucherStatus('valid');
+          setVoucherDiscount(d.voucher.discount_amount);
+          setVoucherType(d.voucher.type);
+          setVoucherMsg(d.voucher.type === 'percent'
+            ? `${d.voucher.discount_amount}% off applied`
+            : `RM ${d.voucher.discount_amount.toFixed(2)} off applied`);
+        } else {
+          setVoucherStatus('invalid');
+          setVoucherMsg(d.reason ?? 'Voucher could not be applied');
+        }
+      })
+      .catch(() => { setVoucherStatus('invalid'); setVoucherMsg('Could not validate voucher. Try again.'); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voucherParam]);
 
   // Fetch loyalty config once on mount
   useEffect(() => {
@@ -404,6 +435,14 @@ function CheckoutContent() {
                 <div style={{ marginTop: 6, fontSize: 13, color: voucherStatus === 'valid' ? '#16A34A' : '#C0392B', fontWeight: 600 }}>
                   {voucherMsg}
                 </div>
+              )}
+              {voucherStatus !== 'valid' && (
+                <a
+                  href={`/vouchers?returnTo=checkout&total=${pending?.total?.toFixed(2) ?? '0'}`}
+                  style={{ display: 'inline-block', marginTop: 7, fontSize: 13, color: PRI, fontWeight: 700, textDecoration: 'none', fontFamily: "'Nunito', system-ui" }}
+                >
+                  Browse my vouchers →
+                </a>
               )}
             </div>
 
