@@ -141,10 +141,8 @@ function VouchersContent() {
                   }}>
                     {/* Voucher header strip */}
                     <div style={{ background: eligible ? PRI : hex(INK, .08), padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 44, height: 44, borderRadius: '50%', background: eligible ? '#fff' : hex(INK, .15), display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                        <span style={{ ...heading, fontSize: 15, color: eligible ? PRI : hex(INK, .5), lineHeight: 1 }}>
-                          {v.type === 'percent' ? `${amt}%` : `RM${amt.toFixed(2)}`}
-                        </span>
+                      <div style={{ width: 44, height: 44, borderRadius: '50%', background: eligible ? '#fff' : hex(INK, .15), display: 'grid', placeItems: 'center', flexShrink: 0, fontSize: 24 }}>
+                        ☕
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ ...heading, fontSize: 18, color: eligible ? '#fff' : INK }}>
