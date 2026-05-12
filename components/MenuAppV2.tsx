@@ -830,6 +830,15 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
             </div>
           </div>
         )}
+        {/* Order history link */}
+        {member && (
+          <button
+            onClick={() => { onClose(); router.push('/orders'); }}
+            style={{ width:'100%', marginTop:10, padding:'12px', borderRadius:T.cornerRadius-6, border:`1.5px solid ${hex(T.inkColor,.12)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}
+          >
+            🧾 Order History
+          </button>
+        )}
       </div>
       <style>{`@keyframes coSheetIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
     </div>

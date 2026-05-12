@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const phone = (searchParams.get('phone') ?? '').replace(/\D/g, '');
-  if (phone.length < 8) return NextResponse.json({ member: null, vouchers: [], transactions: [] });
+  if (phone.length < 8) return NextResponse.json({ member: null, vouchers: [], usedVouchers: [], transactions: [], programBalances: [] });
 
   const { data: member } = await supabase
     .from('loyalty_members')
@@ -15,18 +15,16 @@ export async function GET(req: Request) {
     .single();
 
   if (!member) {
-    return NextResponse.json({ member: null, vouchers: [], transactions: [] });
+    return NextResponse.json({ member: null, vouchers: [], usedVouchers: [], transactions: [], programBalances: [] });
   }
 
   const now = new Date().toISOString();
 
-  const [{ data: vouchers }, { data: transactions }, { data: programBalances }] = await Promise.all([
+  const [{ data: allVouchers }, { data: transactions }, { data: programBalances }] = await Promise.all([
     supabase
       .from('vouchers')
       .select('*')
       .eq('member_id', member.id)
-      .eq('is_active', true)
-      .or(`expires_at.is.null,expires_at.gt.${now}`)
       .order('created_at', { ascending: false }),
     supabase
       .from('loyalty_transactions')
@@ -40,12 +38,25 @@ export async function GET(req: Request) {
       .eq('member_id', member.id),
   ]);
 
-  const activeVouchers = (vouchers ?? []).filter(v => Number(v.times_used) < Number(v.max_uses));
+  const activeVouchers: typeof allVouchers = [];
+  const usedVouchers:   typeof allVouchers = [];
+
+  for (const v of allVouchers ?? []) {
+    const fullyUsed = Number(v.times_used) >= Number(v.max_uses);
+    const expired   = v.expires_at != null && v.expires_at <= now;
+    const inactive  = !v.is_active;
+    if (fullyUsed || expired || inactive) {
+      usedVouchers.push(v);
+    } else {
+      activeVouchers.push(v);
+    }
+  }
 
   return NextResponse.json({
     member,
-    vouchers: activeVouchers,
-    transactions: transactions ?? [],
+    vouchers:      activeVouchers,
+    usedVouchers,
+    transactions:  transactions ?? [],
     programBalances: programBalances ?? [],
   });
 }

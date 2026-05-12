@@ -22,11 +22,12 @@ function VouchersContent() {
   const returnTo     = searchParams.get('returnTo'); // 'checkout'
   const orderTotal   = parseFloat(searchParams.get('total') ?? '0');
 
-  const [phone,    setPhone]    = useState('');
-  const [vouchers, setVouchers] = useState<Voucher[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [copied,   setCopied]   = useState<string | null>(null);
-  const [applying, setApplying] = useState<string | null>(null);
+  const [phone,        setPhone]        = useState('');
+  const [vouchers,     setVouchers]     = useState<Voucher[]>([]);
+  const [usedVouchers, setUsedVouchers] = useState<Voucher[]>([]);
+  const [loading,      setLoading]      = useState(true);
+  const [copied,       setCopied]       = useState<string | null>(null);
+  const [applying,     setApplying]     = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -36,7 +37,7 @@ function VouchersContent() {
       if (p.length >= 8) {
         fetch(`/api/loyalty/member?phone=${p}`)
           .then(r => r.json())
-          .then(d => setVouchers(d.vouchers ?? []))
+          .then(d => { setVouchers(d.vouchers ?? []); setUsedVouchers(d.usedVouchers ?? []); })
           .catch(() => {})
           .finally(() => setLoading(false));
       } else {
@@ -214,6 +215,48 @@ function VouchersContent() {
             {returnTo !== 'checkout' && (
               <div style={{ marginTop: 20, textAlign: 'center', ...s, fontSize: 13, color: hex(INK, .5) }}>
                 Copy a code, then paste it at checkout to apply your discount.
+              </div>
+            )}
+
+            {/* Used / expired vouchers */}
+            {usedVouchers.length > 0 && (
+              <div style={{ marginTop: 28 }}>
+                <div style={{ ...s, fontSize: 12, fontWeight: 700, color: hex(INK, .4), textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
+                  Used &amp; Expired
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {usedVouchers.map(v => {
+                    const amt = discountAmt(v);
+                    const fullyUsed = Number(v.times_used) >= Number(v.max_uses);
+                    const expired   = v.expires_at != null && new Date(v.expires_at) < new Date();
+                    const reason    = fullyUsed ? 'Used' : expired ? 'Expired' : 'Inactive';
+                    return (
+                      <div key={v.id} style={{ background: '#fff', borderRadius: R - 4, border: `1.5px solid ${hex(INK, .08)}`, overflow: 'hidden', opacity: 0.55 }}>
+                        <div style={{ background: hex(INK, .06), padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 38, height: 38, borderRadius: '50%', background: hex(INK, .1), display: 'grid', placeItems: 'center', flexShrink: 0, fontSize: 20 }}>☕</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ ...heading, fontSize: 15, color: hex(INK, .6) }}>
+                              {v.type === 'percent' ? `${amt}% off` : `RM ${amt.toFixed(2)} off`}
+                            </div>
+                          </div>
+                          <span style={{ ...s, fontSize: 11, fontWeight: 700, background: hex(INK, .08), color: hex(INK, .5), padding: '2px 8px', borderRadius: 999 }}>
+                            {reason}
+                          </span>
+                        </div>
+                        <div style={{ padding: '8px 14px 10px' }}>
+                          <div style={{ borderTop: `1.5px dashed ${hex(INK, .08)}`, marginBottom: 8 }} />
+                          <div style={{ ...s, fontSize: 11, fontWeight: 700, color: hex(INK, .35), textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2 }}>Code</div>
+                          <div style={{ ...heading, fontSize: 14, color: hex(INK, .45), letterSpacing: '.04em' }}>{v.code}</div>
+                          {v.expires_at && (
+                            <div style={{ ...s, fontSize: 11, color: hex(INK, .35), marginTop: 2 }}>
+                              {expired ? 'Expired' : 'Expires'} {new Date(v.expires_at).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </>
