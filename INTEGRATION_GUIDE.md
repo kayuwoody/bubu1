@@ -590,7 +590,7 @@ CREATE TABLE IF NOT EXISTS vouchers (
   expires_at TIMESTAMPTZ,
   times_used INTEGER NOT NULL DEFAULT 0,
   max_uses INTEGER NOT NULL DEFAULT 1,
-  discount_amount NUMERIC NOT NULL,
+  discount_value NUMERIC NOT NULL,
   type TEXT NOT NULL DEFAULT 'fixed'    -- 'fixed' | 'percent'
     CHECK (type IN ('fixed', 'percent')),
   min_order NUMERIC,
@@ -760,7 +760,7 @@ async function issueVoucher(
     code,
     member_id: member.id,
     program_id: program.id,
-    discount_amount: program.voucher_discount_value,
+    discount_value: program.voucher_discount_value,
     type: program.voucher_type,
     min_order: program.voucher_min_order,
     expires_at: expiresAt,
@@ -779,7 +779,7 @@ Customer app calls this at checkout. POS should expose this endpoint (or bubu1 q
 
 ```typescript
 // Request: { code: string, order_total: number }
-// Response: { valid: boolean, reason?: string, voucher?: { discount_amount, type } }
+// Response: { valid: boolean, reason?: string, voucher?: { discount_value, type } }
 ```
 
 Validation checks:
