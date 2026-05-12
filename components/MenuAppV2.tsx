@@ -492,8 +492,8 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
             <>
               {(() => {
                 const isCoffee = product.category.toLowerCase() === 'coffee';
-                const NO_MILK = new Set(['espresso', 'americano']);
-                const showMilk = isCoffee && !NO_MILK.has(product.name.toLowerCase().trim());
+                const nameLower = product.name.toLowerCase();
+                const showMilk = isCoffee && !['espresso', 'americano'].some(k => nameLower.includes(k));
                 return (<>
                   {isCoffee && (
                     <div style={{ marginTop:14 }}>
