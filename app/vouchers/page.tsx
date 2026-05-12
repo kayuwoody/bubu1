@@ -59,8 +59,13 @@ function VouchersContent() {
     router.push(`/checkout?voucher=${encodeURIComponent(code)}`);
   };
 
-  const isEligible = (v: Voucher) =>
-    v.min_order == null || orderTotal <= 0 || orderTotal >= v.min_order;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const discountAmt = (v: any) => Number(v.discount_amount ?? v.amount ?? 0);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const isEligible = (v: any) => {
+    const min = v.min_order != null ? Number(v.min_order) : null;
+    return min == null || orderTotal <= 0 || orderTotal >= min;
+  };
 
   const s: React.CSSProperties = { fontFamily: "'Nunito', system-ui" };
   const heading: React.CSSProperties = { fontFamily: "'Baloo 2', system-ui", fontWeight: 800, color: INK };
@@ -126,6 +131,7 @@ function VouchersContent() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {vouchers.map(v => {
                 const eligible = isEligible(v);
+                const amt = discountAmt(v);
                 return (
                   <div key={v.id} style={{
                     background: '#fff', borderRadius: R - 2,
@@ -137,14 +143,14 @@ function VouchersContent() {
                     <div style={{ background: eligible ? PRI : hex(INK, .08), padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{ width: 44, height: 44, borderRadius: '50%', background: eligible ? '#fff' : hex(INK, .15), display: 'grid', placeItems: 'center', flexShrink: 0 }}>
                         <span style={{ ...heading, fontSize: 15, color: eligible ? PRI : hex(INK, .5), lineHeight: 1 }}>
-                          {v.type === 'percent' ? `${v.discount_amount}%` : `RM${v.discount_amount}`}
+                          {v.type === 'percent' ? `${amt}%` : `RM${amt.toFixed(2)}`}
                         </span>
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ ...heading, fontSize: 18, color: eligible ? '#fff' : INK }}>
                           {v.type === 'percent'
-                            ? `${v.discount_amount}% off`
-                            : `RM ${Number(v.discount_amount).toFixed(2)} off`}
+                            ? `${amt}% off`
+                            : `RM ${amt.toFixed(2)} off`}
                         </div>
                         {v.min_order != null && (
                           <div style={{ ...s, fontSize: 12, color: eligible ? 'rgba(255,255,255,.75)' : hex(INK, .5) }}>

@@ -144,12 +144,13 @@ function CheckoutContent() {
       .then(r => r.json())
       .then(d => {
         if (d.valid) {
+          const amt = Number(d.voucher.discount_amount);
           setVoucherStatus('valid');
-          setVoucherDiscount(d.voucher.discount_amount);
+          setVoucherDiscount(amt);
           setVoucherType(d.voucher.type);
           setVoucherMsg(d.voucher.type === 'percent'
-            ? `${d.voucher.discount_amount}% off applied`
-            : `RM ${d.voucher.discount_amount.toFixed(2)} off applied`);
+            ? `${amt}% off applied`
+            : `RM ${amt.toFixed(2)} off applied`);
         } else {
           setVoucherStatus('invalid');
           setVoucherMsg(d.reason ?? 'Voucher could not be applied');
@@ -202,13 +203,14 @@ function CheckoutContent() {
       });
       const d = await res.json();
       if (d.valid) {
+        const amt = Number(d.voucher.discount_amount);
         setVoucherStatus('valid');
-        setVoucherDiscount(d.voucher.discount_amount);
+        setVoucherDiscount(amt);
         setVoucherType(d.voucher.type);
         setVoucherMsg(
           d.voucher.type === 'percent'
-            ? `${d.voucher.discount_amount}% off applied`
-            : `RM ${d.voucher.discount_amount.toFixed(2)} off applied`,
+            ? `${amt}% off applied`
+            : `RM ${amt.toFixed(2)} off applied`,
         );
       } else {
         setVoucherStatus('invalid');

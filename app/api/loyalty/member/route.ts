@@ -40,7 +40,7 @@ export async function GET(req: Request) {
       .eq('member_id', member.id),
   ]);
 
-  const activeVouchers = (vouchers ?? []).filter(v => v.times_used < v.max_uses);
+  const activeVouchers = (vouchers ?? []).filter(v => Number(v.times_used) < Number(v.max_uses));
 
   return NextResponse.json({
     member,

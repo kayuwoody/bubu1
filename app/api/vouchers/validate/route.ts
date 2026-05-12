@@ -37,10 +37,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ valid: false, reason: 'Voucher has already been used' });
   }
 
-  if (voucher.min_order != null && orderTotal < voucher.min_order) {
+  const minOrder = voucher.min_order != null ? Number(voucher.min_order) : null;
+  if (minOrder != null && orderTotal < minOrder) {
     return NextResponse.json({
       valid: false,
-      reason: `Minimum order of RM ${voucher.min_order.toFixed(2)} required`,
+      reason: `Minimum order of RM ${minOrder.toFixed(2)} required`,
     });
   }
 
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
     valid: true,
     voucher: {
       code: voucher.code,
-      discount_amount: voucher.discount_amount,
+      discount_amount: Number(voucher.discount_amount ?? voucher.amount ?? 0),
       type: voucher.type,
     },
   });
