@@ -792,11 +792,11 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
                     <div key={v.id} style={{ display:'flex', alignItems:'center', gap:12, background:'#fff', borderRadius:T.cornerRadius-6, padding:'11px 14px', border:`1.5px solid ${T.primaryColor}`, cursor:'pointer' }}
                       onClick={() => { onClose(); router.push('/vouchers'); }}>
                       <div style={{ width:38, height:38, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:13, color:'#fff', fontWeight:700, lineHeight:1.1, textAlign:'center' }}>
-                        {v.type === 'percent' ? `${v.discount_amount}%` : `RM${v.discount_amount}`}
+                        {v.type === 'percent' ? `${Number(v.discount_value ?? 0)}%` : `RM${Number(v.discount_value ?? 0)}`}
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor }}>
-                          {v.type === 'percent' ? `${v.discount_amount}% off` : `RM ${Number(v.discount_amount).toFixed(2)} off`}
+                          {v.type === 'percent' ? `${Number(v.discount_value ?? 0)}% off` : `RM ${Number(Number(v.discount_value ?? 0)).toFixed(2)} off`}
                         </div>
                         <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.55), marginTop:1, letterSpacing:'.04em' }}>{v.code}</div>
                       </div>

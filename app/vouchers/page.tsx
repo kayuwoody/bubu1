@@ -60,7 +60,7 @@ function VouchersContent() {
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const discountAmt = (v: any) => Number(v.discount_amount ?? v.amount ?? 0);
+  const discountAmt = (v: any) => Number(v.discount_value ?? v.discount_amount ?? v.amount ?? 0);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isEligible = (v: any) => {
     const min = v.min_order != null ? Number(v.min_order) : null;

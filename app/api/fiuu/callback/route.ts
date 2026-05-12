@@ -297,7 +297,7 @@ async function issueVoucher(
     member_id:       memberId,
     is_active:       true,
     type:            prog.voucher_type,
-    discount_amount: prog.voucher_discount_value,
+    discount_value: prog.voucher_discount_value,
     min_order:       prog.voucher_min_order,
     expires_at:      expiresAt,
     times_used:      0,

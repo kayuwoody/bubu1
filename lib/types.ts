@@ -231,7 +231,7 @@ export interface Voucher {
   expires_at: string | null;
   times_used: number;
   max_uses: number;
-  discount_amount: number;
+  discount_value: number;
   type: 'fixed' | 'percent';
   min_order: number | null;
   created_at: string;

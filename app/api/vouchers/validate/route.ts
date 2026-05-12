@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     valid: true,
     voucher: {
       code: voucher.code,
-      discount_amount: Number(voucher.discount_amount ?? voucher.amount ?? 0),
+      discount_amount: Number(voucher.discount_value ?? voucher.discount_amount ?? voucher.amount ?? 0),
       type: voucher.type,
     },
   });
