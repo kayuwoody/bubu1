@@ -583,18 +583,28 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   const digits = (phone ?? '').replace(/\D/g, '');
   const hasPhone = digits.length >= 8;
 
-  const loadMember = (d: { member: LoyaltyMember | null; vouchers: Voucher[]; transactions: LoyaltyTransaction[]; programBalances: ProgramBalance[] }) => {
+  const CACHE_KEY = `loyalty_cache_${digits}`;
+
+  const loadMember = (d: { member: LoyaltyMember | null; vouchers: Voucher[]; transactions: LoyaltyTransaction[]; programBalances: ProgramBalance[] }, persist = false) => {
     setMember(d.member ?? null);
     setVouchers(d.vouchers ?? []);
     setTransactions(d.transactions ?? []);
     setProgramBalances(d.programBalances ?? []);
+    if (persist && d.member) {
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(d)); } catch { /* quota */ }
+    }
   };
 
   useEffect(() => {
     if (!open || !hasPhone) return;
+    // Show cached data immediately, then revalidate
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) loadMember(JSON.parse(cached));
+    } catch { /* ignore */ }
     setFetching(true);
     fetch(`/api/loyalty/member?phone=${digits}`)
-      .then(r => r.json()).then(loadMember).catch(() => {}).finally(() => setFetching(false));
+      .then(r => r.json()).then(d => loadMember(d, true)).catch(() => {}).finally(() => setFetching(false));
   }, [open, digits, hasPhone]);
 
   const handlePhoneLookup = async (e: React.FormEvent) => {
@@ -608,7 +618,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
       const data = await res.json();
       if (!data.member) { setPhoneErr('No loyalty account found for this number'); return; }
       onPhoneSave(d);
-      loadMember(data);
+      loadMember(data, true);
     } catch { setPhoneErr('Could not look up account. Try again.'); }
     finally  { setFetching(false); }
   };

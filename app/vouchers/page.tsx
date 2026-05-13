@@ -35,6 +35,15 @@ function VouchersContent() {
       const p = (saved.phone ?? '').replace(/\D/g, '');
       setPhone(p);
       if (p.length >= 8) {
+        try {
+          const cached = localStorage.getItem(`loyalty_cache_${p}`);
+          if (cached) {
+            const c = JSON.parse(cached);
+            setVouchers(c.vouchers ?? []);
+            setUsedVouchers(c.usedVouchers ?? []);
+            setLoading(false);
+          }
+        } catch { /* ignore */ }
         fetch(`/api/loyalty/member?phone=${p}`)
           .then(r => r.json())
           .then(d => { setVouchers(d.vouchers ?? []); setUsedVouchers(d.usedVouchers ?? []); })
