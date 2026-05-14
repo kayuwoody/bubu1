@@ -467,6 +467,13 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
         if (defaultItem) initSels[group.uniqueKey] = defaultItem.id;
       }
 
+      // Pass 3: fall back to first item for any unresolved top-level group
+      // (same auto-init logic that handleSelect uses for nested groups)
+      for (const group of cfg.xorGroups.filter(g => !g.parentProductId)) {
+        if (!initSels[group.uniqueKey] && group.items.length > 0)
+          initSels[group.uniqueKey] = group.items[0].id;
+      }
+
       // Initialise nested groups for pre-selected items (mirrors handleSelect behaviour)
       for (const [, itemId] of Object.entries(initSels)) {
         for (const ng of nestedGroups.filter(ng => ng.parentProductId === itemId)) {
