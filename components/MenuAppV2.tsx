@@ -439,7 +439,24 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
     if (!open || !product) return;
     setQty(1); setNotes('');
     if (drink) setDrinkSel(resolveDefaults(product));
-    else if (cfg) { setSelections({}); setSelOpts(new Set()); setDrinkSel(resolveDefaults(product)); }
+    else if (cfg) {
+      // Pre-select XorGroup items marked is_default in product_recipe_items
+      const initSels: Record<string, string> = {};
+      for (const d of product.mod_defaults ?? []) {
+        const group = cfg.xorGroups.find(g =>
+          g.groupName === d.group || g.displayName === d.group
+        );
+        if (!group) continue;
+        const item = group.items.find(i =>
+          (d.linked_product_id && i.id === d.linked_product_id) ||
+          i.name.toLowerCase() === d.name.toLowerCase()
+        );
+        if (item) initSels[group.uniqueKey] = item.id;
+      }
+      setSelections(initSels);
+      setSelOpts(new Set());
+      setDrinkSel(resolveDefaults(product));
+    }
   }, [open, product?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelect = (key: string, itemId: string) => {
