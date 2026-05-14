@@ -576,6 +576,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   const [transactions,    setTransactions]    = useState<LoyaltyTransaction[]>([]);
   const [programBalances, setProgramBalances] = useState<ProgramBalance[]>([]);
   const [fetching,        setFetching]        = useState(false);
+  const [qrVoucher,       setQrVoucher]       = useState<Voucher | null>(null);
   const [phoneInput,      setPhoneInput]      = useState('');
   const [phoneErr,        setPhoneErr]        = useState('');
   const [copied,          setCopied]          = useState<string | null>(null);
@@ -633,6 +634,38 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   const reset = () => { onPhoneSave(''); setMember(null); setVouchers([]); setTransactions([]); setProgramBalances([]); setPhoneInput(''); };
 
   if (!open) return null;
+
+  // QR overlay for in-person voucher redemption
+  if (qrVoucher) {
+    const amt = Number(qrVoucher.discount_value ?? 0);
+    const label = qrVoucher.type === 'percent' ? `${amt}% off` : `RM ${amt.toFixed(2)} off`;
+    return (
+      <div onClick={() => setQrVoucher(null)} style={{ position:'fixed', inset:0, zIndex:60, background:'rgba(0,0,0,.85)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
+        <div onClick={e => e.stopPropagation()} style={{ background:'#FFF6E8', borderRadius:22, padding:'28px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', gap:16, maxWidth:320, width:'100%', border:'3px solid #3A2414' }}>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:22, color:'#3A2414', lineHeight:1.1 }}>{label}</div>
+            {qrVoucher.min_order != null && (
+              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:hex(T.inkColor,.55), marginTop:3 }}>Min. order RM {Number(qrVoucher.min_order).toFixed(2)}</div>
+            )}
+          </div>
+          <div style={{ background:'#fff', padding:16, borderRadius:14, border:`2px solid ${hex(T.inkColor,.12)}` }}>
+            <QRCodeSVG value={qrVoucher.code} size={200} fgColor="#3A2414" bgColor="#ffffff" level="M" />
+          </div>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, fontWeight:700, color:hex(T.inkColor,.4), textTransform:'uppercase', letterSpacing:'.08em', marginBottom:4 }}>Voucher code</div>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:18, color:'#3A2414', letterSpacing:'.06em' }}>{qrVoucher.code}</div>
+            {qrVoucher.expires_at && (
+              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.45), marginTop:3 }}>
+                Expires {new Date(qrVoucher.expires_at).toLocaleDateString('en-MY', { day:'numeric', month:'short', year:'numeric' })}
+              </div>
+            )}
+          </div>
+          <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.45), textAlign:'center' }}>Show this to the cashier to redeem</div>
+          <button onClick={() => setQrVoucher(null)} style={{ background:'#3A2414', color:'#fff', border:'none', borderRadius:999, padding:'10px 32px', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, cursor:'pointer' }}>Close</button>
+        </div>
+      </div>
+    );
+  }
 
   const scanPrograms     = programBalances.filter(pb => pb.loyalty_programs?.trigger_type === 'scan');
   const purchasePrograms = programBalances.filter(pb => pb.loyalty_programs?.trigger_type === 'purchase');
@@ -808,8 +841,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
               <>
                 <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                   {vouchers.slice(0, 2).map(v => (
-                    <div key={v.id} style={{ display:'flex', alignItems:'center', gap:12, background:'#fff', borderRadius:T.cornerRadius-6, padding:'11px 14px', border:`1.5px solid ${T.primaryColor}`, cursor:'pointer' }}
-                      onClick={() => { onClose(); router.push('/vouchers'); }}>
+                    <div key={v.id} style={{ display:'flex', alignItems:'center', gap:12, background:'#fff', borderRadius:T.cornerRadius-6, padding:'11px 14px', border:`1.5px solid ${T.primaryColor}` }}>
                       <div style={{ width:38, height:38, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:13, color:'#fff', fontWeight:700, lineHeight:1.1, textAlign:'center' }}>
                         {v.type === 'percent' ? `${Number(v.discount_value ?? 0)}%` : `RM${Number(v.discount_value ?? 0)}`}
                       </div>
@@ -819,7 +851,11 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
                         </div>
                         <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.55), marginTop:1, letterSpacing:'.04em' }}>{v.code}</div>
                       </div>
-                      <span style={{ color:T.primaryColor, fontSize:16 }}>›</span>
+                      <button
+                        onClick={() => setQrVoucher(v)}
+                        style={{ background:T.inkColor, color:'#fff', border:'none', borderRadius:999, padding:'6px 12px', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', flexShrink:0 }}>
+                        QR
+                      </button>
                     </div>
                   ))}
                 </div>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { QRCodeSVG } from 'qrcode.react';
 import type { Voucher } from '@/lib/types';
 
 const INK = '#3A2414';
@@ -16,10 +17,83 @@ function hex(h: string, a = 1) {
   return `rgba(${r},${g},${b},${a})`;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function QROverlay({ voucher, onClose }: { voucher: any; onClose: () => void }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const discountAmt = (v: any) => Number(v.discount_value ?? v.discount_amount ?? v.amount ?? 0);
+  const amt = discountAmt(voucher);
+  const label = voucher.type === 'percent' ? `${amt}% off` : `RM ${amt.toFixed(2)} off`;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 100,
+        background: 'rgba(0,0,0,.85)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: BG, borderRadius: R, padding: '28px 24px 24px',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
+          maxWidth: 320, width: '100%',
+          border: `3px solid ${INK}`,
+        }}
+      >
+        {/* Header */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 22, color: INK, lineHeight: 1.1 }}>
+            {label}
+          </div>
+          {voucher.min_order != null && (
+            <div style={{ fontFamily: "'Nunito', system-ui", fontSize: 13, color: hex(INK, .55), marginTop: 3 }}>
+              Min. order RM {Number(voucher.min_order).toFixed(2)}
+            </div>
+          )}
+        </div>
+
+        {/* QR */}
+        <div style={{ background: '#fff', padding: 16, borderRadius: 14, border: `2px solid ${hex(INK, .12)}` }}>
+          <QRCodeSVG value={voucher.code} size={200} fgColor={INK} bgColor="#ffffff" level="M" />
+        </div>
+
+        {/* Code */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontFamily: "'Nunito', system-ui", fontSize: 11, fontWeight: 700, color: hex(INK, .4), textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 4 }}>
+            Voucher code
+          </div>
+          <div style={{ fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 18, color: INK, letterSpacing: '.06em' }}>
+            {voucher.code}
+          </div>
+          {voucher.expires_at && (
+            <div style={{ fontFamily: "'Nunito', system-ui", fontSize: 12, color: hex(INK, .45), marginTop: 3 }}>
+              Expires {new Date(voucher.expires_at).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ fontFamily: "'Nunito', system-ui", fontSize: 12, color: hex(INK, .45), textAlign: 'center' }}>
+          Show this to the cashier to redeem
+        </div>
+
+        <button
+          onClick={onClose}
+          style={{ background: INK, color: '#fff', border: 'none', borderRadius: 999, padding: '10px 32px', fontFamily: "'Baloo 2', system-ui", fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function VouchersContent() {
   const router       = useRouter();
   const searchParams = useSearchParams();
-  const returnTo     = searchParams.get('returnTo'); // 'checkout'
+  const returnTo     = searchParams.get('returnTo');
   const orderTotal   = parseFloat(searchParams.get('total') ?? '0');
 
   const [phone,        setPhone]        = useState('');
@@ -28,6 +102,7 @@ function VouchersContent() {
   const [loading,      setLoading]      = useState(true);
   const [copied,       setCopied]       = useState<string | null>(null);
   const [applying,     setApplying]     = useState<string | null>(null);
+  const [qrVoucher,    setQrVoucher]    = useState<Voucher | null>(null);
 
   useEffect(() => {
     try {
@@ -82,6 +157,8 @@ function VouchersContent() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#EFE4D1', padding: '0 0 40px' }}>
+      {qrVoucher && <QROverlay voucher={qrVoucher} onClose={() => setQrVoucher(null)} />}
+
       {/* Header */}
       <div style={{ background: INK, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 10 }}>
         <button
@@ -156,9 +233,7 @@ function VouchersContent() {
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ ...heading, fontSize: 18, color: eligible ? '#fff' : INK }}>
-                          {v.type === 'percent'
-                            ? `${amt}% off`
-                            : `RM ${amt.toFixed(2)} off`}
+                          {v.type === 'percent' ? `${amt}% off` : `RM ${amt.toFixed(2)} off`}
                         </div>
                         {v.min_order != null && (
                           <div style={{ ...s, fontSize: 12, color: eligible ? 'rgba(255,255,255,.75)' : hex(INK, .5) }}>
@@ -170,7 +245,6 @@ function VouchersContent() {
 
                     {/* Voucher body */}
                     <div style={{ padding: '12px 16px' }}>
-                      {/* Dashed divider */}
                       <div style={{ borderTop: `2px dashed ${hex(INK, .1)}`, marginBottom: 12 }} />
 
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -200,19 +274,32 @@ function VouchersContent() {
                             {applying === v.code ? '…' : eligible ? 'Apply →' : 'Not eligible'}
                           </button>
                         ) : (
-                          <button
-                            onClick={() => copyCode(v.code)}
-                            style={{
-                              background: copied === v.code ? PRI : 'transparent',
-                              color: copied === v.code ? '#fff' : PRI,
-                              border: `1.5px solid ${PRI}`, borderRadius: 999,
-                              padding: '10px 20px', cursor: 'pointer',
-                              ...s, fontWeight: 700, fontSize: 14, flexShrink: 0,
-                              transition: 'all .2s',
-                            }}
-                          >
-                            {copied === v.code ? '✓ Copied' : 'Copy code'}
-                          </button>
+                          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                            <button
+                              onClick={() => copyCode(v.code)}
+                              style={{
+                                background: copied === v.code ? PRI : 'transparent',
+                                color: copied === v.code ? '#fff' : PRI,
+                                border: `1.5px solid ${PRI}`, borderRadius: 999,
+                                padding: '10px 16px', cursor: 'pointer',
+                                ...s, fontWeight: 700, fontSize: 14,
+                                transition: 'all .2s',
+                              }}
+                            >
+                              {copied === v.code ? '✓' : 'Copy'}
+                            </button>
+                            <button
+                              onClick={() => setQrVoucher(v)}
+                              style={{
+                                background: INK, color: '#fff',
+                                border: 'none', borderRadius: 999,
+                                padding: '10px 16px', cursor: 'pointer',
+                                ...s, fontWeight: 700, fontSize: 14,
+                              }}
+                            >
+                              Show QR
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -223,7 +310,7 @@ function VouchersContent() {
 
             {returnTo !== 'checkout' && (
               <div style={{ marginTop: 20, textAlign: 'center', ...s, fontSize: 13, color: hex(INK, .5) }}>
-                Copy a code, then paste it at checkout to apply your discount.
+                Show QR to the cashier or copy the code to use at online checkout.
               </div>
             )}
 
