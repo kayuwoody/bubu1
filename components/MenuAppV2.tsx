@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Branch, CartLine, LoyaltyRedemption, LoyaltySettings, Product, SelectionConfig, Viewport, XorGroup } from '@/lib/types';
+import { QRCodeSVG } from 'qrcode.react';
+import type { Branch, CartLine, LoyaltyConfig, LoyaltyMember, LoyaltyTransaction, Voucher, Product, SelectionConfig, Viewport, XorGroup } from '@/lib/types';
 
 interface Category { id: string; label: string }
 
@@ -16,15 +17,15 @@ const T = {
   cornerRadius:   22,
 };
 
-const DRINK_CATS = new Set(['coffee', 'non-coffee', 'cold']);
+const DRINK_CATS = new Set(['coffee', 'non-coffee']);
 const CAT_SWATCHES: Record<string, string> = {
   coffee: '#C88A54', 'non-coffee': '#8CA86A', cold: '#C9A07A', food: '#E3B876', combo: '#D9A977',
 };
+const NO_MILK_IDS = new Set(['26c985d3-868c-4e50-826d-f5d310d1f7e9', '4e784157-70ea-4e1b-a16d-a0dc432a1abc']);
+
 const DRINK_MODS = {
-  size:  { label: 'Size',  required: true,  options: [{ id: 's', label: 'Regular', delta: 0 }, { id: 'm', label: 'Large', delta: 2.00 }] },
-  milk:  { label: 'Milk',  required: false, options: [{ id: 'whole', label: 'Whole', delta: 0 }, { id: 'skim', label: 'Skim', delta: 0 }, { id: 'oat', label: 'Oat', delta: 2.00 }, { id: 'almond', label: 'Almond', delta: 2.00 }, { id: 'soy', label: 'Soy', delta: 1.50 }] },
-  sugar: { label: 'Sugar', required: false, options: [{ id: 'none', label: 'None', delta: 0 }, { id: 'less', label: 'Less', delta: 0 }, { id: 'std', label: 'Normal', delta: 0 }, { id: 'extra', label: 'Extra', delta: 0 }] },
-  ice:   { label: 'Ice', options: [{ id: 'none', label: 'No ice' }, { id: 'less', label: 'Less' }, { id: 'std', label: 'Normal' }] },
+  sugar: { label: 'Sugar', options: [{ id: 'zero', label: 'Zero', delta: 0 }, { id: 'less', label: 'Less', delta: 0 }, { id: 'medium', label: 'Medium', delta: 0 }, { id: 'sweet', label: 'Sweet', delta: 0 }] },
+  milk:  { label: 'Milk', options: [{ id: 'full', label: 'Full', delta: 0 }, { id: 'skim', label: 'Skim', delta: 0 }, { id: 'oat', label: 'Oat', delta: 2.00 }, { id: 'almond', label: 'Almond', delta: 2.00 }] },
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -32,7 +33,7 @@ function hex(h: string, a = 1) {
   const r = parseInt(h.slice(1,3),16), g = parseInt(h.slice(3,5),16), b = parseInt(h.slice(5,7),16);
   return `rgba(${r},${g},${b},${a})`;
 }
-function isDrink(cat: string) { return DRINK_CATS.has(cat); }
+function isDrink(cat: string) { return DRINK_CATS.has(cat.toLowerCase()); }
 function needsSheet(p: Product) { return isDrink(p.category) || p.selection_config != null; }
 function catSwatch(cat: string) { return CAT_SWATCHES[cat] ?? '#C88A54'; }
 
@@ -88,8 +89,8 @@ function PastrySVG({ col, size = 72 }: { col: string; size?: number }) {
     </svg>
   );
 }
-function ItemThumb({ product, size = 150 }: { product: Product; size?: number }) {
-  if (product.image_url) return <img src={product.image_url} alt="" style={{ width: size, height: size, objectFit: 'cover', position: 'relative', inset: 0, borderRadius: 0 }}/>;
+function ItemThumb({ product, size = 100 }: { product: Product; size?: number }) {
+  if (product.image_url) return <img src={product.image_url} alt="" style={{ width: size, height: size, objectFit: 'contain', position: 'relative', inset: 0, borderRadius: 0 }}/>;
   const col = catSwatch(product.category);
   return product.category === 'food' ? <PastrySVG col={col} size={size}/> : <DrinkSVG col={col} size={size}/>;
 }
@@ -117,17 +118,18 @@ function useCart() {
 }
 
 // ── v2 Header (compact: logo + pickup pill + ETA + loyalty + cart) ─────────
-function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyActive, customerPoints, onLoyaltyClick }: {
+function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyActive, customerPoints, onLoyaltyClick, onOrdersClick }: {
   viewport: Viewport; pickup: 'counter'|'curbside'; setPickup: (v: 'counter'|'curbside') => void;
   cartCount: number; onCartClick: () => void;
   loyaltyActive: boolean; customerPoints: number | null; onLoyaltyClick: () => void;
+  onOrdersClick: () => void;
 }) {
   const compact = viewport === 'mobile';
   const toggle  = () => setPickup(pickup === 'curbside' ? 'counter' : 'curbside');
   const PickupIcon = pickup === 'curbside' ? Icon.Car : Icon.Walk;
   return (
-    <header style={{ position:'sticky', top:0, zIndex:20, background:T.bgColor, borderBottom:`1px solid ${hex(T.inkColor,.08)}`, padding:compact?'10px 12px':'14px 24px', display:'flex', alignItems:'center', gap:8 }}>
-      <img src="/co-logo.png" alt="Coffee Oasis" style={{ height:compact?60:80, maxWidth:compact?150:300, width:'auto', objectFit:'contain', flexShrink:0 }}/>
+    <header style={{ position:'sticky', top:0, zIndex:20, background:T.bgColor, borderBottom:`1px solid ${hex(T.inkColor,.08)}`, padding:compact?'5px 12px':'5px 15px', display:'flex', alignItems:'center', gap:8 }}>
+      <img src="/co-logo.png" alt="Coffee Oasis" style={{ height:compact?40:80, maxWidth:compact?200:400, width:'auto', objectFit:'contain', flexShrink:0 }}/>
 
       {/* Pickup pill — tap to toggle; ETA hidden on mobile to save space */}
       <button onClick={toggle} style={{ marginLeft:compact?2:10, display:'flex', alignItems:'center', gap:5, padding:compact?'5px 8px 5px 7px':'8px 14px 8px 10px', borderRadius:999, border:`1.5px solid ${hex(T.inkColor,.12)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?11:13, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
@@ -137,15 +139,18 @@ function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyAc
       </button>
 
       <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center', flexShrink:0 }}>
+        <button onClick={onOrdersClick} style={{ display:'flex', alignItems:'center', gap:4, padding:compact?'6px 8px':'8px 12px', borderRadius:999, background:'#fff', color:T.inkColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?12:13, cursor:'pointer', whiteSpace:'nowrap' }}>
+          <span style={{ fontSize:13 }}>🧾</span>
+          {!compact && 'Orders'}
+        </button>
         {loyaltyActive && (
           <button onClick={onLoyaltyClick} style={{ display:'flex', alignItems:'center', gap:4, padding:compact?'6px 8px':'8px 12px', borderRadius:999, background:T.secondaryColor, color:T.inkColor, border:'none', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?12:13, cursor:'pointer', whiteSpace:'nowrap' }}>
             <span style={{ fontSize:13 }}>★</span>
-            {/* show pts on non-mobile; just the star on mobile to save space */}
-            {!compact && (customerPoints !== null ? `${customerPoints} pts` : 'Loyalty')}
+            {!compact && 'Rewards'}
           </button>
         )}
         <button onClick={onCartClick} aria-label="Cart" style={{ position:'relative', background:T.inkColor, color:'#fff', border:'none', borderRadius:999, padding:compact?'7px 10px':'10px 16px', display:'flex', alignItems:'center', gap:6, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?13:14, cursor:'pointer' }}>
-          <Icon.Cart width={compact?16:18} height={compact?16:18}/>
+          <Icon.Cart width={compact?22:26} height={compact?22:26}/>
           {cartCount > 0 && <span style={{ background:T.primaryColor, color:'#fff', borderRadius:999, padding:'1px 6px', fontSize:11, fontWeight:800, border:'2px solid #fff', position:'absolute', top:-5, right:-5, minWidth:18, textAlign:'center' }}>{cartCount}</span>}
         </button>
       </div>
@@ -160,18 +165,18 @@ function GreetingBand({ viewport, isReturning, hasReorder, onReorder, lastSummar
 }) {
   const compact = viewport === 'mobile';
   return (
-    <section style={{ margin:compact?'8px 14px 0':'12px 24px 0', background:`linear-gradient(135deg,${T.primaryColor} 0%,#FF9A3D 100%)`, borderRadius:T.cornerRadius, padding:compact?'10px 12px':'12px 16px', display:'flex', alignItems:'center', gap:compact?10:14, color:'#fff', overflow:'hidden' }}>
-      <img src="/co-mascot.png" alt="" style={{ width:compact?44:56, height:compact?44:56, objectFit:'contain', flexShrink:0, transform:'rotate(-4deg)', filter:'drop-shadow(0 4px 0 rgba(58,36,20,.18))' }}/>
+    <section style={{ margin:compact?'8px 14px 10px':'12px 24px 10px', background:`linear-gradient(135deg,${T.primaryColor} 0%,#FF9A3D 100%)`, borderRadius:T.cornerRadius, padding:compact?'10px 12px':'12px 16px', display:'flex', alignItems:'center', gap:compact?10:14, color:'#fff', overflow:'hidden' }}>
+      <img src="/co-mascot.png" alt="" style={{ width:compact?60:120, height:compact?60:120, objectFit:'contain', flexShrink:0, transform:'rotate(-4deg)', filter:'drop-shadow(0 4px 0 rgba(58,36,20,.18))' }}/>
       <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?16:18, lineHeight:1.1 }}>
+        <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?22:32, lineHeight:1.1 }}>
           {isReturning ? 'Welcome back ✨' : 'Coffee, sorted.'}
         </div>
-        <div style={{ fontFamily:"'Nunito',system-ui", fontSize:compact?12:13, opacity:.92, marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+        <div style={{ fontFamily:"'Nunito',system-ui", fontSize:compact?16:18, opacity:.92, marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
           {hasReorder ? lastSummary : 'Order ahead, skip the line.'}
         </div>
       </div>
       {hasReorder && (
-        <button onClick={onReorder} style={{ background:'#fff', color:T.primaryColor, border:'none', borderRadius:999, padding:compact?'7px 12px':'9px 16px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?12:13, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, display:'flex', alignItems:'center', gap:5 }}>
+        <button onClick={onReorder} style={{ background:'#fff', color:T.primaryColor, border:'none', borderRadius:999, padding:compact?'10px 12px':'12px 16px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?22:32, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, display:'flex', alignItems:'center', gap:5 }}>
           <Icon.Bolt width="12" height="12"/> Reorder
         </button>
       )}
@@ -183,11 +188,11 @@ function GreetingBand({ viewport, isReturning, hasReorder, onReorder, lastSummar
 function CatBar({ cats, active, setActive, viewport }: { cats: Category[]; active: string; setActive: (id: string) => void; viewport: Viewport }) {
   const compact = viewport === 'mobile';
   return (
-    <div style={{ position:'sticky', top:compact?52:68, zIndex:10, background:`linear-gradient(to bottom,${T.bgColor} 70%,transparent)`, padding:compact?'10px 14px 8px':'12px 24px 10px' }}>
-      <div className="hide-scroll" style={{ display:'flex', gap:6, overflowX:'auto', scrollbarWidth:'none' }}>
+    <div style={{ position:'sticky', top:compact?12:18, zIndex:10, background:`linear-gradient(to bottom,${T.bgColor} 70%,transparent)`, padding:compact?'10px 12px 10px':'10px 24px 13px' }}>
+      <div className="hide-scroll" style={{ display:'flex', gap:3, overflowX:'auto', scrollbarWidth:'thin' }}>
         {cats.map(c => {
           const on = active === c.id;
-          return <button key={c.id} onClick={() => setActive(c.id)} style={{ flexShrink:0, padding:'7px 14px', borderRadius:999, border:'none', background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, cursor:'pointer', boxShadow:on?`0 3px 0 ${hex(T.inkColor,.25)}`:`0 1px 0 ${hex(T.inkColor,.06)}`, transition:'all .12s' }}>{c.label}</button>;
+          return <button key={c.id} onClick={() => setActive(c.id)} style={{ flexShrink:0, padding:'10px 16px', borderRadius:999, border:'none', background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?14:18, cursor:'pointer', boxShadow:on?`0 3px 0 ${hex(T.inkColor,.25)}`:`0 1px 0 ${hex(T.inkColor,.06)}`, transition:'all .12s' }}>{c.label}</button>;
         })}
       </div>
     </div>
@@ -210,8 +215,8 @@ function ItemCard({ product, qty, onAdd, onCustomize, viewport }: { product: Pro
   return (
     <div onClick={handleClick} style={{ background:'#fff', borderRadius:T.cornerRadius, border:`1.5px solid ${hex(T.inkColor,.06)}`, boxShadow:`0 4px 0 ${hex(T.inkColor,.05)}`, cursor:soldOut?'default':'pointer', opacity:soldOut?.45:1, display:'flex', flexDirection:'column', overflow:'hidden', userSelect:'none' }}>
       {/* Image */}
-      <div style={{ width:'100%', aspectRatio:'1.5', background:`radial-gradient(circle at 50% 55%,${hex(col,.22)},${hex(col,.05)} 65%)`, display:'grid', placeItems:'center', position:'relative', overflow:'hidden' }}>
-        <ItemThumb product={product} size={compact?125:240}/>
+      <div style={{ width:'100%', aspectRatio:'1', background:`radial-gradient(circle at 50% 55%,${hex(col,.22)},${hex(col,.05)} 65%)`, display:'grid', placeItems:'center', position:'relative', overflow:'hidden' }}>
+        <ItemThumb product={product} size={compact?150:300}/>
         {soldOut && (
           <div style={{ position:'absolute', inset:0, background:'rgba(255,255,255,.6)', display:'grid', placeItems:'center' }}>
             <span style={{ fontFamily:"'Nunito',system-ui", fontWeight:800, fontSize:11, background:hex(T.inkColor,.85), color:'#fff', borderRadius:6, padding:'3px 8px' }}>Sold out</span>
@@ -261,12 +266,9 @@ function CartDrawer({ open, onClose, lines, incLine, decLine, total, pickup, bra
     const parts: string[] = [];
     if (m.combo_selections && typeof m.combo_selections === 'object') {
       for (const v of Object.values(m.combo_selections as Record<string, { name: string }>)) { if (v?.name) parts.push(v.name); }
-    } else {
-      if (m.size && m.size !== 'Regular') parts.push(m.size as string);
-      if (m.milk && m.milk !== 'Whole')   parts.push(m.milk as string);
-      if (m.sugar && m.sugar !== 'Normal') parts.push((m.sugar as string) + ' sugar');
-      if (m.ice)   parts.push(m.ice as string);
     }
+    if (m.sugar && m.sugar !== 'Zero') parts.push((m.sugar as string) + ' sugar');
+    // if (m.milk) parts.push(m.milk as string);
     if (Array.isArray(m.selected_optionals)) {
       for (const o of m.selected_optionals as Array<{ name: string }>) { if (o?.name) parts.push(`+ ${o.name}`); }
     }
@@ -326,7 +328,7 @@ function CartDrawer({ open, onClose, lines, incLine, decLine, total, pickup, bra
 }
 
 // ── Customize Sheet ────────────────────────────────────────────────────────
-type DrinkSel = { size: string; milk: string; sugar: string; ice: string; notes: string };
+type DrinkSel = { sugar: string; milk: string; notes: string };
 function pillStyle(on: boolean): React.CSSProperties {
   return { padding:'8px 14px', borderRadius:999, border:on?`2px solid ${T.inkColor}`:`1.5px solid ${hex(T.inkColor,.12)}`, background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5 };
 }
@@ -391,8 +393,25 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   product: Product | null; open: boolean; onClose: () => void;
   onConfirm: (mods: Record<string,unknown>, qty: number, unitPrice: number) => void;
 }) {
-  const drinkDefaults: DrinkSel = useMemo(() => ({ size:'s', milk:'whole', sugar:'std', ice:'std', notes:'' }), []);
-  const [drinkSel, setDrinkSel]           = useState<DrinkSel>({ ...drinkDefaults });
+  const drinkDefaults: DrinkSel = useMemo(() => ({ sugar: 'zero', milk: 'full', notes: '' }), []);
+
+  const resolveDefaults = (p: Product | null): DrinkSel => {
+    const base = { ...drinkDefaults };
+    if (!p?.mod_defaults?.length) return base;
+    for (const d of p.mod_defaults) {
+      const key = d.group.toLowerCase() as keyof typeof DRINK_MODS;
+      const mod = DRINK_MODS[key];
+      if (!mod) continue;
+      const nameLower = d.name.toLowerCase();
+      const match = mod.options.find(o =>
+        nameLower.includes(o.label.toLowerCase()) || o.label.toLowerCase().includes(nameLower)
+      );
+      if (match) (base as Record<string, string>)[key] = match.id;
+    }
+    return base;
+  };
+
+  const [drinkSel, setDrinkSel]           = useState<DrinkSel>(() => resolveDefaults(product));
   const [selections, setSelections]       = useState<Record<string,string>>({});
   const [selectedOptionals, setSelOpts]   = useState<Set<string>>(new Set());
   const [notes, setNotes]                 = useState('');
@@ -402,23 +421,71 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   const drink = !!product && isDrink(product.category) && !cfg;
   const nestedGroups = useMemo(() => cfg?.xorGroups.filter(g => !!g.parentProductId) ?? [], [cfg]);
 
-  const initCombo = (c: SelectionConfig) => {
-    const init: Record<string,string> = {};
-    const nested = c.xorGroups.filter(g => !!g.parentProductId);
-    for (const g of c.xorGroups.filter(g => !g.parentProductId)) {
-      if (g.items.length > 0) {
-        const fid = g.items[0].id; init[g.uniqueKey] = fid;
-        for (const ng of nested.filter(ng => ng.parentProductId === fid)) { if (ng.items.length > 0) init[ng.uniqueKey] = ng.items[0].id; }
-      }
-    }
-    return init;
-  };
+  const comboHasCoffee = useMemo(() => {
+    if (!cfg) return false;
+    // Product-level: covers single coffee drinks with a selection_config (e.g. hot/cold latte)
+    if (product?.category?.toLowerCase() === 'coffee') return true;
+    // Currently selected item is coffee (combo where user picked a coffee drink)
+    if (cfg.xorGroups.some(g => {
+      const selId = selections[g.uniqueKey];
+      return !!g.items.find(i => i.id === selId)?.isCoffee;
+    })) return true;
+    // Nothing selected yet — show sugar eagerly if every top-level item is a coffee product
+    // (e.g. a standalone latte whose only options are Hot/Iced, both isCoffee:true)
+    const topLevel = cfg.xorGroups.filter(g => !g.parentProductId);
+    const nothingPicked = topLevel.every(g => !selections[g.uniqueKey]);
+    return nothingPicked && topLevel.length > 0 && topLevel.every(g => g.items.every(i => i.isCoffee));
+  }, [cfg, selections, product]);
 
   useEffect(() => {
     if (!open || !product) return;
     setQty(1); setNotes('');
-    if (drink) setDrinkSel({ ...drinkDefaults });
-    else if (cfg) { setSelections(initCombo(cfg)); setSelOpts(new Set()); }
+    if (drink) setDrinkSel(resolveDefaults(product));
+    else if (cfg) {
+      const initSels: Record<string, string> = {};
+
+      // Pass 1: recipe is_default rows — try exact group name first, fall back to all groups
+      for (const d of product.mod_defaults ?? []) {
+        const candidateGroups = (() => {
+          const named = cfg.xorGroups.find(g => g.groupName === d.group || g.displayName === d.group);
+          return named ? [named] : cfg.xorGroups;
+        })();
+        for (const group of candidateGroups) {
+          if (initSels[group.uniqueKey]) continue;
+          const item = group.items.find(i =>
+            (d.linked_product_id && i.id === d.linked_product_id) ||
+            (d.name && i.name.toLowerCase() === d.name.toLowerCase())
+          );
+          if (item) { initSels[group.uniqueKey] = item.id; break; }
+        }
+      }
+
+      // Pass 2: isDefault flag on XorGroupItem in selection_config JSON
+      for (const group of cfg.xorGroups) {
+        if (initSels[group.uniqueKey]) continue;
+        const defaultItem = group.items.find(i => i.isDefault);
+        if (defaultItem) initSels[group.uniqueKey] = defaultItem.id;
+      }
+
+      // Pass 3: fall back to first item for any unresolved top-level group
+      // (same auto-init logic that handleSelect uses for nested groups)
+      for (const group of cfg.xorGroups.filter(g => !g.parentProductId)) {
+        if (!initSels[group.uniqueKey] && group.items.length > 0)
+          initSels[group.uniqueKey] = group.items[0].id;
+      }
+
+      // Initialise nested groups for pre-selected items (mirrors handleSelect behaviour)
+      for (const [, itemId] of Object.entries(initSels)) {
+        for (const ng of nestedGroups.filter(ng => ng.parentProductId === itemId)) {
+          if (!initSels[ng.uniqueKey] && ng.items.length > 0)
+            initSels[ng.uniqueKey] = ng.items[0].id;
+        }
+      }
+
+      setSelections(initSels);
+      setSelOpts(new Set());
+      setDrinkSel(resolveDefaults(product));
+    }
   }, [open, product?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelect = (key: string, itemId: string) => {
@@ -435,7 +502,7 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   if (!open || !product) return null;
 
   const unitPrice = (() => {
-    if (drink) return product.base_price + (DRINK_MODS.size.options.find(o => o.id === drinkSel.size)?.delta ?? 0) + (DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.delta ?? 0);
+    if (drink) return product.base_price;
     if (!cfg) return product.base_price;
     let adj = 0;
     for (const g of cfg.xorGroups) { const item = g.items.find(i => i.id === selections[g.uniqueKey]); if (item) adj += item.priceAdjustment; }
@@ -446,12 +513,22 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   const handleConfirm = () => {
     let mods: Record<string,unknown>;
     if (drink) {
-      mods = { size: DRINK_MODS.size.options.find(o => o.id === drinkSel.size)?.label, milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label, sugar: DRINK_MODS.sugar.options.find(o => o.id === drinkSel.sugar)?.label, ...(product.category === 'cold' ? { ice: DRINK_MODS.ice.options.find(o => o.id === drinkSel.ice)?.label } : {}), ...(drinkSel.notes ? { notes: drinkSel.notes } : {}) };
+      mods = {
+        ...(product.category.toLowerCase() === 'coffee' ? { sugar: DRINK_MODS.sugar.options.find(o => o.id === drinkSel.sugar)?.label } : {}),
+        ...(drinkSel.milk ? { milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label } : {}),
+        ...(drinkSel.notes ? { notes: drinkSel.notes } : {}),
+      };
     } else if (cfg) {
       const cs: Record<string,{ id: string; name: string }> = {};
       for (const g of cfg.xorGroups) { const sid = selections[g.uniqueKey]; if (sid) { const item = g.items.find(i => i.id === sid); if (item) cs[g.uniqueKey] = { id: sid, name: item.name }; } }
       const so = cfg.optionalItems.filter(o => selectedOptionals.has(o.id)).map(o => ({ id: o.id, name: o.name }));
-      mods = { combo_selections: cs, ...(so.length > 0 ? { selected_optionals: so } : {}), ...(notes ? { notes } : {}) };
+      mods = {
+        combo_selections: cs,
+        ...(drinkSel.sugar ? { sugar: DRINK_MODS.sugar.options.find(o => o.id === drinkSel.sugar)?.label } : {}),
+        ...(drinkSel.milk ? { milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label } : {}),
+        ...(so.length > 0 ? { selected_optionals: so } : {}),
+        ...(notes ? { notes } : {}),
+      };
     } else { mods = {}; }
     onConfirm(mods, qty, unitPrice);
   };
@@ -473,36 +550,60 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
           <button onClick={onClose} style={{ background:'transparent', border:'none', cursor:'pointer', color:T.inkColor, alignSelf:'flex-start' }}><Icon.X width="22" height="22"/></button>
         </div>
         <div style={{ flex:1, overflow:'auto', padding:'4px 20px 12px' }}>
-          {drink ? (
-            <>
-              {([['size', DRINK_MODS.size], ['milk', DRINK_MODS.milk], ['sugar', DRINK_MODS.sugar]] as const).map(([key, mod]) => (
-                <div key={key} style={{ marginTop:14 }}>
-                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8, display:'flex', gap:6, alignItems:'baseline' }}>{mod.label}{mod.required && <span style={{ fontSize:11, color:'#D9402F', fontWeight:800 }}>Required</span>}</div>
-                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                    {mod.options.map(o => { const on = drinkSel[key] === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, [key]: o.id }))} style={pillStyle(on)}>{o.label}{(o.delta ?? 0) > 0 && !on && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>+RM{(o.delta ?? 0).toFixed(2)}</span>}</button>; })}
-                  </div>
+          {(() => {
+            // Standalone drinks use product.id regardless of whether they have a
+            // selection_config (e.g. americano with hot/iced). Only combos resolve
+            // effectiveDrinkId from the selected XorGroup item.
+            const effectiveDrinkId: string | null = isDrink(product.category)
+              ? product.id
+              : cfg?.xorGroups.filter(g => !g.parentProductId)
+                  .map(g => selections[g.uniqueKey]).find(Boolean) ?? null;
+
+            const isCoffee = isDrink(product.category)
+              ? product.category.toLowerCase() === 'coffee'
+              : comboHasCoffee;
+            const showMilk = isCoffee && !NO_MILK_IDS.has(effectiveDrinkId ?? '');
+
+            const SugarRow = () => (
+              <div style={{ marginTop:14 }}>
+                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Sugar</div>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                  {DRINK_MODS.sugar.options.map(o => { const on = drinkSel.sugar === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, sugar: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
                 </div>
-              ))}
-              {product.category === 'cold' && (
+              </div>
+            );
+            const MilkRow = () => (
+              <div style={{ marginTop:14 }}>
+                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Milk</div>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                  {DRINK_MODS.milk.options.map(o => { const on = drinkSel.milk === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, milk: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
+                </div>
+              </div>
+            );
+
+            if (drink) return (
+              <>
+                {isCoffee && <SugarRow />}
+                {showMilk && <MilkRow />}
                 <div style={{ marginTop:14 }}>
-                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Ice</div>
-                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>{DRINK_MODS.ice.options.map(o => { const on = drinkSel.ice === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, ice: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}</div>
+                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Notes to barista</div>
+                  <input value={drinkSel.notes} onChange={e => setDrinkSel(s => ({ ...s, notes: e.target.value }))} placeholder="e.g. extra hot, no foam" style={{ width:'100%', padding:'12px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius-8, outline:'none', boxSizing:'border-box' }}/>
                 </div>
-              )}
-              <div style={{ marginTop:14 }}>
-                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Notes to barista</div>
-                <input value={drinkSel.notes} onChange={e => setDrinkSel(s => ({ ...s, notes: e.target.value }))} placeholder="e.g. extra hot, no foam" style={{ width:'100%', padding:'12px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius-8, outline:'none', boxSizing:'border-box' }}/>
-              </div>
-            </>
-          ) : cfg ? (
-            <>
-              <ComboSection cfg={cfg} selections={selections} selectedOptionals={selectedOptionals} onSelect={handleSelect} onToggleOptional={toggleOpt}/>
-              <div style={{ marginTop:14 }}>
-                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Notes</div>
-                <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. allergies, special requests" style={{ width:'100%', padding:'12px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius-8, outline:'none', boxSizing:'border-box' }}/>
-              </div>
-            </>
-          ) : null}
+              </>
+            );
+            if (cfg) return (
+              <>
+                <ComboSection cfg={cfg} selections={selections} selectedOptionals={selectedOptionals} onSelect={handleSelect} onToggleOptional={toggleOpt}/>
+                <SugarRow />
+                {showMilk && <MilkRow />}
+                <div style={{ marginTop:14 }}>
+                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Notes</div>
+                  <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. allergies, special requests" style={{ width:'100%', padding:'12px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius-8, outline:'none', boxSizing:'border-box' }}/>
+                </div>
+              </>
+            );
+            return null;
+          })()}
         </div>
         <div style={{ padding:'14px 20px 20px', borderTop:`1px solid ${hex(T.inkColor,.08)}`, background:'#fff', display:'flex', alignItems:'center', gap:12 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, background:T.bgColor, borderRadius:999, padding:4 }}>
@@ -520,62 +621,329 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   );
 }
 
-// ── Loyalty Sheet (slide-up, shows points program) ─────────────────────────
-function LoyaltySheet({ open, onClose, settings, redemptions, customer }: {
+// ── Loyalty Sheet ─────────────────────────────────────────────────────────
+function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   open: boolean; onClose: () => void;
-  settings: LoyaltySettings | null;
-  redemptions: LoyaltyRedemption[];
-  customer: { name: string | null; points_balance: number } | null;
+  config: LoyaltyConfig | null;
+  phone: string | null;
+  onPhoneSave: (phone: string) => void;
 }) {
-  if (!open || !settings) return null;
-  const bal = customer?.points_balance ?? 0;
-  const nextRedemption = redemptions.find(r => r.points_required > bal);
-  const ptsToNext = nextRedemption ? nextRedemption.points_required - bal : null;
+  type ProgInfo = { id: string; name: string; trigger_type: string; threshold: number; voucher_type: string; voucher_discount_value: number };
+  type ProgramBalance = { points_balance: number; total_earned: number; enrolled_at: string; updated_at: string; loyalty_programs: ProgInfo | null };
+
+  const router = useRouter();
+  const [member,          setMember]          = useState<LoyaltyMember | null>(null);
+  const [vouchers,        setVouchers]        = useState<Voucher[]>([]);
+  const [transactions,    setTransactions]    = useState<LoyaltyTransaction[]>([]);
+  const [programBalances, setProgramBalances] = useState<ProgramBalance[]>([]);
+  const [fetching,        setFetching]        = useState(false);
+  const [qrVoucher,       setQrVoucher]       = useState<Voucher | null>(null);
+  const [phoneInput,      setPhoneInput]      = useState('');
+  const [phoneErr,        setPhoneErr]        = useState('');
+  const [copied,          setCopied]          = useState<string | null>(null);
+
+  const digits = (phone ?? '').replace(/\D/g, '');
+  const hasPhone = digits.length >= 8;
+
+  const CACHE_KEY = `loyalty_cache_${digits}`;
+
+  const loadMember = (d: { member: LoyaltyMember | null; vouchers: Voucher[]; transactions: LoyaltyTransaction[]; programBalances: ProgramBalance[] }, persist = false) => {
+    setMember(d.member ?? null);
+    setVouchers(d.vouchers ?? []);
+    setTransactions(d.transactions ?? []);
+    setProgramBalances(d.programBalances ?? []);
+    if (persist && d.member) {
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(d)); } catch { /* quota */ }
+    }
+  };
+
+  useEffect(() => {
+    if (!open || !hasPhone) return;
+    // Show cached data immediately, then revalidate
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) loadMember(JSON.parse(cached));
+    } catch { /* ignore */ }
+    setFetching(true);
+    fetch(`/api/loyalty/member?phone=${digits}`)
+      .then(r => r.json()).then(d => loadMember(d, true)).catch(() => {}).finally(() => setFetching(false));
+  }, [open, digits, hasPhone]);
+
+  const handlePhoneLookup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const d = phoneInput.replace(/\D/g, '');
+    if (d.length < 8) { setPhoneErr('Enter a valid phone number'); return; }
+    setPhoneErr('');
+    setFetching(true);
+    try {
+      const res = await fetch(`/api/loyalty/member?phone=${d}`);
+      const data = await res.json();
+      if (!data.member) { setPhoneErr('No loyalty account found for this number'); return; }
+      onPhoneSave(d);
+      loadMember(data, true);
+    } catch { setPhoneErr('Could not look up account. Try again.'); }
+    finally  { setFetching(false); }
+  };
+
+  const copyCode = (code: string) => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(code);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  const reset = () => { onPhoneSave(''); setMember(null); setVouchers([]); setTransactions([]); setProgramBalances([]); setPhoneInput(''); };
+
+  if (!open) return null;
+
+  // QR overlay for in-person voucher redemption
+  if (qrVoucher) {
+    const amt = Number(qrVoucher.discount_value ?? 0);
+    const label = qrVoucher.type === 'percent' ? `${amt}% off` : `RM ${amt.toFixed(2)} off`;
+    return (
+      <div onClick={() => setQrVoucher(null)} style={{ position:'fixed', inset:0, zIndex:60, background:'rgba(0,0,0,.85)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
+        <div onClick={e => e.stopPropagation()} style={{ background:'#FFF6E8', borderRadius:22, padding:'28px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', gap:16, maxWidth:320, width:'100%', border:'3px solid #3A2414' }}>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:22, color:'#3A2414', lineHeight:1.1 }}>{label}</div>
+            {qrVoucher.min_order != null && (
+              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:hex(T.inkColor,.55), marginTop:3 }}>Min. order RM {Number(qrVoucher.min_order).toFixed(2)}</div>
+            )}
+          </div>
+          <div style={{ background:'#fff', padding:16, borderRadius:14, border:`2px solid ${hex(T.inkColor,.12)}` }}>
+            <QRCodeSVG value={qrVoucher.code} size={200} fgColor="#3A2414" bgColor="#ffffff" level="M" />
+          </div>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, fontWeight:700, color:hex(T.inkColor,.4), textTransform:'uppercase', letterSpacing:'.08em', marginBottom:4 }}>Voucher code</div>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:18, color:'#3A2414', letterSpacing:'.06em' }}>{qrVoucher.code}</div>
+            {qrVoucher.expires_at && (
+              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.45), marginTop:3 }}>
+                Expires {new Date(qrVoucher.expires_at).toLocaleDateString('en-MY', { day:'numeric', month:'short', year:'numeric' })}
+              </div>
+            )}
+          </div>
+          <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.45), textAlign:'center' }}>Show this to the cashier to redeem</div>
+          <button onClick={() => setQrVoucher(null)} style={{ background:'#3A2414', color:'#fff', border:'none', borderRadius:999, padding:'10px 32px', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, cursor:'pointer' }}>Close</button>
+        </div>
+      </div>
+    );
+  }
+
+  const scanPrograms     = programBalances.filter(pb => pb.loyalty_programs?.trigger_type === 'scan');
+  const purchasePrograms = programBalances.filter(pb => pb.loyalty_programs?.trigger_type === 'purchase');
+
+  // Stamp card (for scan-trigger programs) — matches physical card mockup
+  const StampCard = ({ pb }: { pb: ProgramBalance }) => {
+    const prog = pb.loyalty_programs!;
+    const stamped = pb.points_balance;
+    const total = prog.threshold;
+    const perRow = Math.min(total, 10);
+    const rows: number[][] = [];
+    for (let i = 0; i < total; i += perRow) rows.push(Array.from({ length: Math.min(perRow, total - i) }, (_, j) => i + j));
+    return (
+      <div style={{ background:'#FFF6E8', borderRadius:20, border:'3px solid #3A2414', overflow:'hidden', marginBottom:10 }}>
+        <div style={{ padding:'14px 18px 10px', display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ width:46, height:46, borderRadius:'50%', background:'#F58220', display:'grid', placeItems:'center', flexShrink:0, fontSize:22 }}>☕</div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:17, color:'#3A2414', lineHeight:1.1 }}>Coffee Oasis</div>
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:'rgba(58,36,20,.55)', marginTop:1 }}>{prog.name}</div>
+          </div>
+          <div style={{ textAlign:'right', flexShrink:0 }}>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:24, color:'#3A2414', lineHeight:1 }}>
+              {stamped}<span style={{ fontSize:14, fontWeight:600, opacity:.5 }}>/{total}</span>
+            </div>
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, color:'rgba(58,36,20,.5)' }}>stamps</div>
+          </div>
+        </div>
+        <div style={{ background:'#3A2414', padding:'14px 18px', display:'flex', flexDirection:'column', gap:10 }}>
+          {rows.map((row, ri) => (
+            <div key={ri} style={{ display:'flex', gap:8, justifyContent:'center' }}>
+              {row.map(i => (
+                <div key={i} style={{
+                  width:34, height:34, borderRadius:'50%', flexShrink:0,
+                  background: i < stamped ? '#F58220' : 'transparent',
+                  border: i < stamped ? 'none' : '2.5px dashed rgba(255,255,255,.3)',
+                  display:'grid', placeItems:'center', fontSize:16, color:'#fff',
+                }}>
+                  {i < stamped ? '✦' : ''}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div style={{ padding:'9px 18px 12px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:'rgba(58,36,20,.6)' }}>
+            {total - stamped > 0
+              ? `${total - stamped} more stamp${total - stamped !== 1 ? 's' : ''} to go`
+              : '🎉 Reward ready — check your vouchers!'}
+          </div>
+          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:'#3A2414', flexShrink:0, marginLeft:8 }}>
+            {prog.voucher_type === 'percent' ? `${prog.voucher_discount_value}% off` : `RM${prog.voucher_discount_value.toFixed(2)} off`}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Purchase points card — progress bar toward next voucher
+  const PointsCard = ({ pb }: { pb: ProgramBalance }) => {
+    const prog = pb.loyalty_programs!;
+    const pct = Math.min(100, Math.round((pb.points_balance / prog.threshold) * 100));
+    return (
+      <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'14px 16px', border:`1.5px solid ${hex(T.inkColor,.08)}`, marginBottom:10 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:10 }}>
+          <div style={{ width:40, height:40, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:20, color:'#fff' }}>★</div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, fontWeight:700, color:hex(T.inkColor,.5), textTransform:'uppercase', letterSpacing:'.05em' }}>{prog.name}</div>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:20, color:T.inkColor, lineHeight:1.1 }}>
+              {pb.points_balance.toLocaleString()}{' '}
+              <span style={{ fontSize:13, fontWeight:600, opacity:.5 }}>/ {prog.threshold} pts</span>
+            </div>
+          </div>
+          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:T.primaryColor, flexShrink:0 }}>
+            {prog.voucher_type === 'percent' ? `${prog.voucher_discount_value}%` : `RM${prog.voucher_discount_value.toFixed(2)}`} off
+          </div>
+        </div>
+        <div style={{ height:6, background:hex(T.inkColor,.08), borderRadius:999, overflow:'hidden' }}>
+          <div style={{ height:'100%', width:`${pct}%`, background:T.primaryColor, borderRadius:999, transition:'width .4s ease' }}/>
+        </div>
+        <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.5), marginTop:5 }}>
+          {prog.threshold - pb.points_balance} pts to next {prog.voucher_type === 'percent' ? `${prog.voucher_discount_value}%` : `RM${prog.voucher_discount_value.toFixed(2)}`} voucher
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div style={{ position:'fixed', inset:0, zIndex:60, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
       <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(58,36,20,.45)' }}/>
-      <div style={{ position:'relative', width:'min(460px,100%)', background:T.bgColor, borderTopLeftRadius:28, borderTopRightRadius:28, padding:'10px 22px 32px', animation:'coSheetIn .25s ease-out', boxShadow:'0 -10px 40px rgba(58,36,20,.25)' }}>
+      <div style={{ position:'relative', width:'min(460px,100%)', background:T.bgColor, borderTopLeftRadius:28, borderTopRightRadius:28, padding:'10px 22px 32px', animation:'coSheetIn .25s ease-out', boxShadow:'0 -10px 40px rgba(58,36,20,.25)', maxHeight:'90vh', overflowY:'auto' }}>
         <div style={{ width:40, height:4, background:hex(T.inkColor,.2), borderRadius:999, margin:'0 auto 16px' }}/>
         <div style={{ display:'flex', alignItems:'center', marginBottom:14 }}>
-          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:20, color:T.inkColor }}>Loyalty Points</div>
+          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:20, color:T.inkColor }}>My Rewards</div>
           <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', cursor:'pointer', color:T.inkColor, fontSize:24, lineHeight:1 }}>×</button>
         </div>
 
-        {/* Balance */}
-        <div style={{ background:T.inkColor, color:'#fff', borderRadius:T.cornerRadius, padding:'16px 18px', marginBottom:14, display:'flex', alignItems:'center', gap:14 }}>
-          <div style={{ width:48, height:48, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:22 }}>★</div>
-          <div>
-            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:26, lineHeight:1 }}>{bal.toLocaleString()} pts</div>
-            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, opacity:.75, marginTop:3 }}>
-              {customer ? `Hi ${customer.name ?? 'there'}!` : 'Earn points with every order'}
-              {ptsToNext != null && ` · ${ptsToNext} pts to next reward`}
+        {/* QR / phone lookup */}
+        {hasPhone ? (
+          <div style={{ background:T.inkColor, borderRadius:T.cornerRadius, padding:'18px 18px 14px', marginBottom:16, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+            <div style={{ background:'#fff', borderRadius:12, padding:10, display:'inline-flex' }}>
+              <QRCodeSVG value={digits} size={130} />
+            </div>
+            <div style={{ color:'#fff', fontFamily:"'Nunito',system-ui", fontSize:13, opacity:.8, textAlign:'center' }}>
+              Show this QR at the counter to earn stamps
+            </div>
+            <button onClick={reset} style={{ background:'transparent', border:`1px solid rgba(255,255,255,.3)`, borderRadius:999, padding:'4px 12px', color:'rgba(255,255,255,.65)', fontSize:12, cursor:'pointer', fontFamily:"'Nunito',system-ui" }}>
+              Not you?
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handlePhoneLookup} style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'16px', marginBottom:16, border:`1.5px solid ${hex(T.inkColor,.08)}` }}>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:10 }}>
+              Enter your phone to see your cards
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <input
+                type="tel"
+                value={phoneInput}
+                onChange={e => { setPhoneInput(e.target.value); setPhoneErr(''); }}
+                placeholder="e.g. 0123456789"
+                style={{ flex:1, padding:'11px 14px', fontSize:15, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, outline:'none', fontFamily:"'Nunito',system-ui" }}
+              />
+              <button type="submit" disabled={fetching}
+                style={{ padding:'11px 16px', borderRadius:T.cornerRadius-10, border:'none', background:T.primaryColor, color:'#fff', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Nunito',system-ui", opacity:fetching ? .6 : 1 }}>
+                {fetching ? '…' : 'Find'}
+              </button>
+            </div>
+            {phoneErr && <div style={{ marginTop:7, fontSize:13, color:'#C0392B', fontWeight:600 }}>{phoneErr}</div>}
+          </form>
+        )}
+
+        {fetching && (
+          <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:hex(T.inkColor,.4), textAlign:'center', padding:'8px 0 14px' }}>Loading…</div>
+        )}
+
+        {/* Stamp cards (scan programs) */}
+        {!fetching && scanPrograms.map((pb, i) => <StampCard key={i} pb={pb} />)}
+
+        {/* Purchase points cards */}
+        {!fetching && purchasePrograms.map((pb, i) => <PointsCard key={i} pb={pb} />)}
+
+        {/* Placeholder when no member loaded yet */}
+        {!fetching && !member && config?.is_active && (
+          <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'14px 16px', marginBottom:10, border:`1.5px solid ${hex(T.inkColor,.08)}`, display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ width:40, height:40, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:20, color:'#fff' }}>★</div>
+            <div>
+              <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:15, color:T.inkColor }}>Earn stamps & points</div>
+              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.6), marginTop:1 }}>
+                Make a purchase or scan at the counter to start
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Rate */}
-        <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'12px 16px', marginBottom:14, border:`1.5px solid ${hex(T.inkColor,.08)}`, fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor }}>
-          <span style={{ fontWeight:700 }}>Earn {settings.points_per_rm} pt{settings.points_per_rm !== 1 ? 's' : ''} per RM spent</span>
-          {settings.min_spend_for_points > 0 && <span style={{ opacity:.6 }}> · min RM{settings.min_spend_for_points.toFixed(2)}</span>}
-        </div>
-
-        {/* Redemptions */}
-        {redemptions.length > 0 && (
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:hex(T.inkColor,.6), textTransform:'uppercase', letterSpacing:'.05em', marginBottom:2 }}>Rewards</div>
-            {redemptions.map(r => {
-              const unlocked = bal >= r.points_required;
-              return (
-                <div key={r.id} style={{ display:'flex', alignItems:'center', gap:12, background:'#fff', borderRadius:T.cornerRadius-6, padding:'12px 14px', border:`1.5px solid ${unlocked?T.primaryColor:hex(T.inkColor,.08)}` }}>
-                  <div style={{ width:36, height:36, borderRadius:'50%', background:unlocked?T.primaryColor:hex(T.inkColor,.06), display:'grid', placeItems:'center', flexShrink:0, fontSize:16 }}>{unlocked ? '🎉' : '★'}</div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor }}>{r.name}</div>
-                    {r.description && <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.6), marginTop:2 }}>{r.description}</div>}
-                  </div>
-                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:13, color:unlocked?T.primaryColor:hex(T.inkColor,.5), whiteSpace:'nowrap' }}>{r.points_required.toLocaleString()} pts</div>
+        {/* Available vouchers */}
+        {member && (
+          <div style={{ marginBottom:14 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+              <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:hex(T.inkColor,.6), textTransform:'uppercase', letterSpacing:'.05em' }}>
+                Your Vouchers {vouchers.length > 0 && `(${vouchers.length})`}
+              </div>
+              <button
+                onClick={() => { onClose(); router.push('/vouchers'); }}
+                style={{ background:'transparent', border:'none', fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:13, color:T.primaryColor, cursor:'pointer', padding:0 }}>
+                See all →
+              </button>
+            </div>
+            {vouchers.length === 0 ? (
+              <div style={{ background:'#fff', borderRadius:T.cornerRadius-6, padding:'12px 14px', border:`1px solid ${hex(T.inkColor,.08)}`, fontFamily:"'Nunito',system-ui", fontSize:13, color:hex(T.inkColor,.45) }}>
+                No vouchers yet — keep earning!
+              </div>
+            ) : (
+              <>
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  {vouchers.slice(0, 2).map(v => (
+                    <div key={v.id} style={{ display:'flex', alignItems:'center', gap:12, background:'#fff', borderRadius:T.cornerRadius-6, padding:'11px 14px', border:`1.5px solid ${T.primaryColor}` }}>
+                      <div style={{ width:38, height:38, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:13, color:'#fff', fontWeight:700, lineHeight:1.1, textAlign:'center' }}>
+                        {v.type === 'percent' ? `${Number(v.discount_value ?? 0)}%` : `RM${Number(v.discount_value ?? 0)}`}
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor }}>
+                          {v.type === 'percent' ? `${Number(v.discount_value ?? 0)}% off` : `RM ${Number(Number(v.discount_value ?? 0)).toFixed(2)} off`}
+                        </div>
+                        <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.55), marginTop:1, letterSpacing:'.04em' }}>{v.code}</div>
+                      </div>
+                      <button
+                        onClick={() => setQrVoucher(v)}
+                        style={{ background:T.inkColor, color:'#fff', border:'none', borderRadius:999, padding:'6px 12px', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', flexShrink:0 }}>
+                        QR
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              );
-            })}
+                <button
+                  onClick={() => { onClose(); router.push('/vouchers'); }}
+                  style={{ marginTop:10, width:'100%', padding:'11px', borderRadius:T.cornerRadius-6, border:`1.5px solid ${T.primaryColor}`, background:'transparent', color:T.primaryColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, cursor:'pointer' }}>
+                  {vouchers.length > 2 ? `View all ${vouchers.length} vouchers →` : 'Use at checkout →'}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Recent transactions */}
+        {transactions.length > 0 && (
+          <div>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:hex(T.inkColor,.6), textTransform:'uppercase', letterSpacing:'.05em', marginBottom:6 }}>Recent Activity</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              {transactions.slice(0, 5).map(tx => (
+                <div key={tx.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 12px', background:'#fff', borderRadius:T.cornerRadius-8, border:`1px solid ${hex(T.inkColor,.07)}` }}>
+                  <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:T.inkColor }}>{tx.description ?? tx.type}</div>
+                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:tx.points >= 0 ? '#16A34A' : '#DC2626' }}>
+                    {tx.points >= 0 ? '+' : ''}{tx.points} pt
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -594,9 +962,8 @@ export default function MenuAppV2() {
   const [categories,  setCategories]  = useState<Category[]>([]);
   const [branch,      setBranch]      = useState<Branch | null>(null);
   const [intakePaused, setIntakePaused] = useState(false);
-  const [loyaltySettings,   setLoyaltySettings]   = useState<LoyaltySettings | null>(null);
-  const [loyaltyRedemptions, setLoyaltyRedemptions] = useState<LoyaltyRedemption[]>([]);
-  const [customer,    setCustomer]    = useState<{ name: string | null; points_balance: number } | null>(null);
+  const [loyaltyConfig, setLoyaltyConfig] = useState<LoyaltyConfig | null>(null);
+  const [savedPhone,  setSavedPhone]  = useState<string | null>(null);
   const [activeCat,   setActiveCat]   = useState('');
   const [pickup,      setPickup]      = useState<'counter'|'curbside'>('counter');
   const [cartOpen,    setCartOpen]    = useState(false);
@@ -615,24 +982,21 @@ export default function MenuAppV2() {
       setCategories(menu.categories ?? []);
       setBranch(menu.branch ?? null);
       setIntakePaused(menu.intake_paused ?? false);
-      setLoyaltySettings(loyalty.settings ?? null);
-      setLoyaltyRedemptions(loyalty.redemptions ?? []);
+      setLoyaltyConfig(loyalty.config ?? null);
       if (menu.categories?.length) setActiveCat(menu.categories[0].id);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  // Customer lookup, returning-user detection, last order
+  // Returning-user detection, last order, saved phone
   useEffect(() => {
     try {
       setIsReturning(!!localStorage.getItem('co_session'));
       const lo = localStorage.getItem('co_last_order');
       if (lo) setLastOrder(JSON.parse(lo));
       const saved = localStorage.getItem('co_form');
-      if (!saved) return;
-      const { phone } = JSON.parse(saved);
-      const digits = (phone ?? '').replace(/\D/g, '');
-      if (digits.length >= 8) {
-        fetch(`/api/customer?phone=${digits}`).then(r => r.json()).then(d => setCustomer(d)).catch(() => {});
+      if (saved) {
+        const { phone } = JSON.parse(saved);
+        if (phone) setSavedPhone(phone);
       }
     } catch { /* ignore */ }
   }, []);
@@ -651,7 +1015,10 @@ export default function MenuAppV2() {
   };
 
   const compact  = viewport === 'mobile';
-  const filtered = products.filter(p => p.category === activeCat);
+  const isUnavail = (p: Product) => !p.available_online || (p.stock_quantity !== null && p.stock_quantity <= 0);
+  const filtered = products
+    .filter(p => p.category === activeCat)
+    .sort((a, b) => Number(isUnavail(a)) - Number(isUnavail(b)));
 
   if (loading) return (
     <div style={{ minHeight:'100vh', background:T.bgColor, display:'grid', placeItems:'center' }}>
@@ -672,9 +1039,10 @@ export default function MenuAppV2() {
         viewport={viewport}
         pickup={pickup} setPickup={setPickup}
         cartCount={count} onCartClick={() => setCartOpen(true)}
-        loyaltyActive={loyaltySettings?.is_active ?? false}
-        customerPoints={customer?.points_balance ?? null}
+        loyaltyActive={loyaltyConfig?.is_active ?? false}
+        customerPoints={null}
         onLoyaltyClick={() => setLoyaltyOpen(true)}
+        onOrdersClick={() => router.push('/orders')}
       />
 
       <GreetingBand
@@ -685,7 +1053,7 @@ export default function MenuAppV2() {
 
       <CatBar cats={categories} active={activeCat} setActive={setActiveCat} viewport={viewport}/>
 
-      <main style={{ padding:compact?'0 10px 120px':'0 24px 60px', display:'grid', gridTemplateColumns:viewport==='mobile'?'minmax(0,1fr) minmax(0,1fr)':viewport==='tablet'?'repeat(3,minmax(0,1fr))':'repeat(4,minmax(0,1fr))', gap:compact?6:8 }}>
+      <main style={{ padding:compact?'0 10px 120px':'0 24px 60px', display:'grid', gridTemplateColumns:viewport==='mobile'?'minmax(0,1fr) minmax(0,1fr)':viewport==='tablet'?'repeat(3,minmax(0,1fr))':'repeat(5,minmax(0,1fr))', gap:compact?6:8 }}>
         {filtered.map(p => (
           <ItemCard
             key={p.id} product={p} qty={qtyFor(p.id)}
@@ -715,7 +1083,20 @@ export default function MenuAppV2() {
 
       <LoyaltySheet
         open={loyaltyOpen} onClose={() => setLoyaltyOpen(false)}
-        settings={loyaltySettings} redemptions={loyaltyRedemptions} customer={customer}
+        config={loyaltyConfig} phone={savedPhone}
+        onPhoneSave={p => {
+          setSavedPhone(p || null);
+          try {
+            if (p) {
+              const existing = JSON.parse(localStorage.getItem('co_form') ?? '{}');
+              localStorage.setItem('co_form', JSON.stringify({ ...existing, phone: p }));
+            } else {
+              const existing = JSON.parse(localStorage.getItem('co_form') ?? '{}');
+              delete existing.phone;
+              localStorage.setItem('co_form', JSON.stringify(existing));
+            }
+          } catch { /* ignore */ }
+        }}
       />
 
       {/* Version switcher */}

@@ -89,6 +89,8 @@ export interface XorGroupItem {
   name: string;
   basePrice: number;
   priceAdjustment: number;
+  isCoffee: boolean;
+  isDefault?: boolean;
 }
 
 export interface XorGroup {
@@ -105,7 +107,9 @@ export interface OptionalItem {
   name: string;
   basePrice: number;
   priceAdjustment: number;
+  isCoffee: boolean;
   parentProductId?: string;
+  parentProductName?: string;
 }
 
 export interface SelectionConfig {
@@ -123,6 +127,7 @@ export interface Product {
   selection_config: SelectionConfig | null;
   available_online: boolean;
   stock_quantity: number | null;
+  mod_defaults?: { group: string; name: string; linked_product_id: string | null }[];
 }
 
 export interface Branch {
@@ -155,6 +160,7 @@ export interface CheckoutSession {
   total_amount: number;
   outlet_id: string;
   order_id: string | null;
+  voucher_code: string | null;
   status: 'pending' | 'paid' | 'failed';
   created_at: string;
 }
@@ -170,25 +176,65 @@ export interface Customer {
   updated_at: string;
 }
 
-export interface LoyaltySettings {
-  id: string;
-  points_per_rm: number;
-  min_spend_for_points: number;
-  is_active: boolean;
-  updated_at: string;
-}
-
-export interface LoyaltyRedemption {
+export interface LoyaltyProgram {
   id: string;
   name: string;
   description: string | null;
-  points_required: number;
-  reward_type: 'free_item' | 'discount_percent' | 'discount_fixed' | 'credit';
-  reward_value: number;
-  reward_item_id: string | null;
+  trigger_type: 'scan' | 'purchase' | 'manual';
+  points_per_trigger: number;
+  points_per_rm: number | null;
+  threshold: number;
+  voucher_type: 'fixed' | 'percent';
+  voucher_discount_value: number;
+  voucher_validity_days: number;
+  voucher_min_order: number | null;
   is_active: boolean;
-  valid_from: string | null;
-  valid_until: string | null;
   sort_order: number;
+  created_at: string;
+}
+
+export interface LoyaltyMemberProgram {
+  id: string;
+  member_id: string;
+  program_id: string;
+  points_balance: number;
+  total_earned: number;
+  enrolled_at: string;
+  updated_at: string;
+}
+
+// Convenience alias — the single active loyalty config the customer app cares about
+export type LoyaltyConfig = LoyaltyProgram;
+
+export interface LoyaltyMember {
+  id: string;
+  phone: string;
+  name: string | null;
+  points_balance: number;
+  total_points_earned: number;
+  enrolled_at: string;
+}
+
+export interface LoyaltyTransaction {
+  id: string;
+  member_id: string;
+  type: string;
+  points: number;
+  description: string | null;
+  reference_id: string | null;
+  created_at: string;
+}
+
+export interface Voucher {
+  id: string;
+  code: string;
+  member_id: string | null;
+  is_active: boolean;
+  expires_at: string | null;
+  times_used: number;
+  max_uses: number;
+  discount_value: number;
+  type: 'fixed' | 'percent';
+  min_order: number | null;
   created_at: string;
 }

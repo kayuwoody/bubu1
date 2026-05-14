@@ -3,17 +3,8 @@ import { supabase } from '@/lib/online/supabase';
 
 export const dynamic = 'force-dynamic';
 
-const CAT_ORDER = ['coffee', 'non-coffee', 'cold', 'food', 'combo'];
-const CAT_LABELS: Record<string, string> = {
-  coffee:       'Coffee',
-  'non-coffee': 'Non-Coffee',
-  cold:         'Iced & Frappe',
-  food:         'Bakes',
-  combo:        'Combos',
-};
-
 export async function GET() {
-  const [productsRes, settingsRes, branchRes, privCatsRes] = await Promise.all([
+  const [productsRes, settingsRes, branchRes, catsRes, defaultsRes] = await Promise.all([
     supabase
       .from('products')
       .select('id, name, category, base_price, image_url, combo_price_override, selection_config, available_online, stock_quantity')
@@ -33,27 +24,36 @@ export async function GET() {
       .single(),
     supabase
       .from('product_categories')
-      .select('id')
-      .eq('is_private', true),
+      .select('id, label, sort_order')
+      .eq('is_private', false)
+      .order('sort_order'),
+    supabase
+      .from('product_recipe_items')
+      .select('product_id, selection_group, linked_product_name, linked_product_id')
+      .eq('is_default', true),
   ]);
 
-  const privCatIds = new Set((privCatsRes.data ?? []).map((c: { id: string }) => c.id));
-  const products = (productsRes.data ?? []).filter(p => !privCatIds.has(p.category));
+  // Build ordered category list from the table (only non-private rows)
+  const dbCats = catsRes.data ?? [];
+  const catOrder = dbCats.map(c => c.id as string);
+  const catLabels = Object.fromEntries(dbCats.map(c => [c.id, c.label as string]));
 
-  const seenCats = new Set<string>();
-  const categories: Array<{ id: string; label: string }> = [];
-  for (const cat of CAT_ORDER) {
-    if (products.some(p => p.category === cat)) {
-      seenCats.add(cat);
-      categories.push({ id: cat, label: CAT_LABELS[cat] ?? cat });
-    }
+  // Group default recipe items by product_id
+  const modDefaultsByProduct: Record<string, { group: string; name: string; linked_product_id: string | null }[]> = {};
+  for (const row of defaultsRes.data ?? []) {
+    if (!row.selection_group && !row.linked_product_id) continue;
+    if (!modDefaultsByProduct[row.product_id]) modDefaultsByProduct[row.product_id] = [];
+    modDefaultsByProduct[row.product_id].push({ group: row.selection_group, name: row.linked_product_name, linked_product_id: row.linked_product_id ?? null });
   }
-  for (const p of products) {
-    if (!seenCats.has(p.category) && p.category !== 'uncategorized') {
-      seenCats.add(p.category);
-      categories.push({ id: p.category, label: p.category });
-    }
-  }
+
+  const allProducts = productsRes.data ?? [];
+  const products = allProducts
+    .filter(p => catOrder.includes(p.category))
+    .map(p => ({ ...p, mod_defaults: modDefaultsByProduct[p.id] ?? [] }));
+
+  const categories = catOrder
+    .filter(cat => products.some(p => p.category === cat))
+    .map(cat => ({ id: cat, label: catLabels[cat] ?? cat }));
 
   return NextResponse.json({
     categories,

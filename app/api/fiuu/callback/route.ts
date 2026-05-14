@@ -156,7 +156,27 @@ export async function POST(req: Request) {
   try { await awardLoyaltyPoints(session, orderId, now); }
   catch (e: unknown) { console.error('[loyalty] uncaught error:', e instanceof Error ? e.message : e); }
 
+  // Increment voucher usage if one was applied — non-blocking
+  if (session.voucher_code) {
+    try { await incrementVoucherUsage(session.voucher_code); }
+    catch (e: unknown) { console.error('[voucher] uncaught error:', e instanceof Error ? e.message : e); }
+  }
+
   return new Response('RECEIVEROK', { status: 200 });
+}
+
+async function incrementVoucherUsage(voucherCode: string) {
+  const { error } = await supabase.rpc('increment_voucher_usage', { voucher_code: voucherCode });
+  if (error) {
+    // Fallback: manual increment if RPC doesn't exist yet
+    console.warn('[voucher] RPC failed, trying manual increment:', error.message);
+    const { data: v } = await supabase.from('vouchers').select('times_used').eq('code', voucherCode).single();
+    if (v) {
+      await supabase.from('vouchers').update({ times_used: v.times_used + 1 }).eq('code', voucherCode);
+    }
+  } else {
+    console.log('[voucher] incremented usage for:', voucherCode);
+  }
 }
 
 async function awardLoyaltyPoints(
@@ -164,57 +184,127 @@ async function awardLoyaltyPoints(
   orderId: string,
   now: string,
 ) {
-  console.log('[loyalty] start — phone:', session.customer_phone, 'amount:', session.total_amount, 'order:', orderId);
-
-  const { data: settings, error: settingsErr } = await supabase
-    .from('loyalty_settings')
-    .select('points_per_rm, min_spend_for_points, is_active')
-    .eq('id', 'main')
-    .single();
-
-  if (settingsErr) { console.error('[loyalty] settings fetch error:', settingsErr.message); return; }
-  if (!settings) { console.warn('[loyalty] no loyalty_settings row with id=main — run the loyalty_schema.sql seed'); return; }
-  if (!settings.is_active) { console.log('[loyalty] loyalty disabled'); return; }
-  if (session.total_amount < (settings.min_spend_for_points ?? 0)) {
-    console.log('[loyalty] below min spend:', session.total_amount, '<', settings.min_spend_for_points);
-    return;
-  }
-
-  const points = Math.floor(session.total_amount * settings.points_per_rm);
-  if (points <= 0) { console.log('[loyalty] 0 pts calculated, skipping'); return; }
-
   const phone = session.customer_phone.replace(/\D/g, '');
-  if (!phone) { console.warn('[loyalty] empty phone after stripping, skipping'); return; }
+  if (!phone) { console.warn('[loyalty] empty phone, skipping'); return; }
 
-  console.log('[loyalty] awarding', points, 'pts to phone:', phone);
+  // Fetch all active purchase-triggered programs
+  const { data: programs, error: progErr } = await supabase
+    .from('loyalty_programs')
+    .select('*')
+    .eq('is_active', true)
+    .eq('trigger_type', 'purchase')
+    .order('sort_order');
 
-  // Upsert customer by phone — only touches name/email/updated_at, not points_balance
-  const { data: customer, error: custErr } = await supabase
-    .from('customers')
+  if (progErr) { console.error('[loyalty] programs fetch error:', progErr.message); return; }
+  if (!programs?.length) { console.log('[loyalty] no active purchase programs'); return; }
+
+  // Upsert loyalty member
+  const { data: member, error: memberErr } = await supabase
+    .from('loyalty_members')
     .upsert(
-      { phone, name: session.customer_name, email: session.customer_email || null, updated_at: now },
+      { phone, name: session.customer_name || null, updated_at: now },
       { onConflict: 'phone' },
     )
-    .select('id, points_balance')
+    .select('id, points_balance, total_points_earned')
     .single();
 
-  if (custErr || !customer) {
-    console.error('[loyalty] customer upsert error:', custErr?.message);
+  if (memberErr || !member) {
+    console.error('[loyalty] member upsert error:', memberErr?.message);
     return;
   }
 
-  const { error: ledgerErr } = await supabase.from('customer_points_ledger').insert({
-    customer_id:  customer.id,
-    order_id:     orderId,
-    points_delta: points,
-    reason:       'order_earn',
-  });
-  if (ledgerErr) { console.error('[loyalty] ledger insert error:', ledgerErr.message); return; }
+  for (const prog of programs) {
+    // Skip if order is below program's min order requirement
+    if (prog.voucher_min_order != null && session.total_amount < prog.voucher_min_order) {
+      console.log('[loyalty] order below min for program', prog.name, '— skipping');
+      continue;
+    }
 
-  const { error: balErr } = await supabase
-    .from('customers')
-    .update({ points_balance: customer.points_balance + points, updated_at: now })
-    .eq('id', customer.id);
-  if (balErr) console.error('[loyalty] balance update error:', balErr.message);
-  else console.log('[loyalty] awarded', points, 'pts → customer:', customer.id, 'order:', orderId);
+    // Calculate points: points_per_rm if set, else points_per_trigger per order
+    const points = prog.points_per_rm != null
+      ? Math.floor(session.total_amount * prog.points_per_rm)
+      : prog.points_per_trigger;
+
+    if (points <= 0) continue;
+
+    // Upsert per-program balance row and get current balance
+    const { data: mp, error: mpErr } = await supabase
+      .from('loyalty_member_programs')
+      .upsert(
+        { member_id: member.id, program_id: prog.id, updated_at: now },
+        { onConflict: 'member_id,program_id', ignoreDuplicates: false },
+      )
+      .select('id, points_balance, total_earned')
+      .single();
+
+    if (mpErr || !mp) {
+      console.error('[loyalty] member_program upsert error:', mpErr?.message, 'prog:', prog.id);
+      continue;
+    }
+
+    const newBalance = mp.points_balance + points;
+    const vouchersToIssue = Math.floor(newBalance / prog.threshold);
+    const remainingBalance = newBalance % prog.threshold;
+
+    // Update per-program balance
+    const { error: balErr } = await supabase
+      .from('loyalty_member_programs')
+      .update({
+        points_balance: remainingBalance,
+        total_earned:   mp.total_earned + points,
+        updated_at:     now,
+      })
+      .eq('id', mp.id);
+    if (balErr) { console.error('[loyalty] mp balance update error:', balErr.message); continue; }
+
+    // Record earn transaction
+    await supabase.from('loyalty_transactions').insert({
+      member_id:    member.id,
+      program_id:   prog.id,
+      type:         'earn_order',
+      points,
+      description:  `Order ${orderId} — ${prog.name}`,
+      reference_id: orderId,
+      created_at:   now,
+    });
+
+    // Issue voucher(s) if threshold crossed
+    for (let i = 0; i < vouchersToIssue; i++) {
+      await issueVoucher(member.id, prog, orderId, now);
+    }
+
+    console.log('[loyalty] prog:', prog.name, '| awarded:', points, '| balance:', remainingBalance, '| vouchers:', vouchersToIssue);
+  }
+
+  // Keep aggregate on loyalty_members in sync
+  await supabase
+    .from('loyalty_members')
+    .update({ updated_at: now })
+    .eq('id', member.id);
+}
+
+async function issueVoucher(
+  memberId: string,
+  prog: { voucher_type: string; voucher_discount_value: number; voucher_validity_days: number; voucher_min_order: number | null },
+  orderId: string,
+  now: string,
+) {
+  const code = `VCH-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  const expiresAt = new Date(Date.now() + prog.voucher_validity_days * 86_400_000).toISOString();
+
+  const { error } = await supabase.from('vouchers').insert({
+    code,
+    member_id:       memberId,
+    is_active:       true,
+    type:            prog.voucher_type,
+    discount_value: prog.voucher_discount_value,
+    min_order:       prog.voucher_min_order,
+    expires_at:      expiresAt,
+    times_used:      0,
+    max_uses:        1,
+    created_at:      now,
+    reference_id:    orderId,
+  });
+  if (error) console.error('[loyalty] voucher insert error:', error.message);
+  else console.log('[loyalty] issued voucher:', code, 'for member:', memberId);
 }

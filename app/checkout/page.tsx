@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { CartLine, LoyaltySettings } from '@/lib/types';
+import type { CartLine, LoyaltyConfig } from '@/lib/types';
 
 const INK  = '#3A2414';
 const BG   = '#FFF6E8';
@@ -48,38 +48,30 @@ const inputStyle: React.CSSProperties = {
 };
 
 function LoyaltyChip({
-  settings, customer, lookingUp, total,
+  config, member, lookingUp,
 }: {
-  settings: LoyaltySettings | null;
-  customer: { name: string | null; points_balance: number } | null;
+  config: LoyaltyConfig | null;
+  member: { name: string | null; points_balance: number } | null;
   lookingUp: boolean;
-  total: number;
 }) {
-  if (!settings?.is_active) return null;
-  const toEarn = Math.floor(total * settings.points_per_rm);
-  if (toEarn <= 0 && !customer && !lookingUp) return null;
+  if (!config?.is_active) return null;
+  const hasMember = !!member;
+  if (!hasMember && !lookingUp) return null;
 
-  const hasCustomer = !!customer;
   return (
     <div style={{
       marginTop: 8, padding: '9px 13px',
       borderRadius: R - 10,
-      background: hasCustomer ? '#FFFBEB' : `rgba(58,36,20,.03)`,
-      border: `1px solid ${hasCustomer ? '#FDE68A' : `rgba(58,36,20,.07)`}`,
+      background: hasMember ? '#FFFBEB' : `rgba(58,36,20,.03)`,
+      border: `1px solid ${hasMember ? '#FDE68A' : `rgba(58,36,20,.07)`}`,
       fontSize: 13, display: 'flex', alignItems: 'center', gap: 7,
     }}>
       <span style={{ fontSize: 15 }}>⭐</span>
       {lookingUp ? (
         <span style={{ color: `rgba(58,36,20,.45)` }}>Checking loyalty…</span>
-      ) : hasCustomer ? (
-        <span style={{ color: '#92400E' }}>
-          Hi {customer!.name ?? 'there'}!{' '}
-          <strong>{customer!.points_balance.toLocaleString()} pts</strong> balance
-          {toEarn > 0 && <> · +{toEarn} pts on this order</>}
-        </span>
       ) : (
-        <span style={{ color: `rgba(58,36,20,.55)` }}>
-          Earn <strong>{toEarn} pts</strong> on this order
+        <span style={{ color: '#92400E' }}>
+          Hi {member!.name ?? 'there'}! Have a voucher code? Enter it below.
         </span>
       )}
     </div>
@@ -89,6 +81,7 @@ function LoyaltyChip({
 function CheckoutContent() {
   const searchParams = useSearchParams();
   const cancelled    = searchParams.get('cancelled') === '1';
+  const voucherParam = searchParams.get('voucher');
 
   const [pending, setPending] = useState<Pending | null>(null);
   const [name,  setName]  = useState('');
@@ -98,9 +91,14 @@ function CheckoutContent() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySettings | null>(null);
-  const [customer, setCustomer] = useState<{ name: string | null; points_balance: number } | null>(null);
+  const [loyaltyConfig, setLoyaltyConfig] = useState<LoyaltyConfig | null>(null);
+  const [loyaltyMember, setLoyaltyMember] = useState<{ name: string | null; points_balance: number } | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
+  const [voucherCode,    setVoucherCode]    = useState('');
+  const [voucherStatus,  setVoucherStatus]  = useState<'idle'|'checking'|'valid'|'invalid'>('idle');
+  const [voucherMsg,     setVoucherMsg]     = useState('');
+  const [voucherDiscount, setVoucherDiscount] = useState(0);
+  const [voucherType,    setVoucherType]    = useState<'fixed'|'percent'>('fixed');
 
   const CHANNELS = [
     { value: 'fpx',          label: 'Online Banking (FPX)' },
@@ -131,28 +129,98 @@ function CheckoutContent() {
     } catch { /* ignore */ }
   }, []);
 
+  // Auto-apply voucher from URL param (navigated from /vouchers page)
+  useEffect(() => {
+    if (!voucherParam) return;
+    const code = voucherParam.trim().toUpperCase();
+    setVoucherCode(code);
+    setVoucherStatus('checking');
+    setVoucherMsg('');
+    fetch('/api/vouchers/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, order_total: pending?.total ?? 0 }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.valid) {
+          const amt = Number(d.voucher.discount_amount);
+          setVoucherStatus('valid');
+          setVoucherDiscount(amt);
+          setVoucherType(d.voucher.type);
+          setVoucherMsg(d.voucher.type === 'percent'
+            ? `${amt}% off applied`
+            : `RM ${amt.toFixed(2)} off applied`);
+        } else {
+          setVoucherStatus('invalid');
+          setVoucherMsg(d.reason ?? 'Voucher could not be applied');
+        }
+      })
+      .catch(() => { setVoucherStatus('invalid'); setVoucherMsg('Could not validate voucher. Try again.'); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voucherParam]);
+
   // Fetch loyalty config once on mount
   useEffect(() => {
     fetch('/api/loyalty')
       .then(r => r.json())
-      .then(d => setLoyaltySettings(d.settings ?? null))
+      .then(d => setLoyaltyConfig(d.config ?? null))
       .catch(() => {});
   }, []);
 
-  // Debounced customer lookup by phone
+  // Debounced loyalty member lookup by phone
   useEffect(() => {
     const digits = phone.replace(/\D/g, '');
-    if (digits.length < 8) { setCustomer(null); return; }
+    if (digits.length < 8) { setLoyaltyMember(null); return; }
     setLookingUp(true);
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/customer?phone=${digits}`);
-        setCustomer(res.ok ? await res.json() : null);
-      } catch { setCustomer(null); }
+        const res = await fetch(`/api/loyalty/member?phone=${digits}`);
+        const d = res.ok ? await res.json() : null;
+        setLoyaltyMember(d?.member ?? null);
+      } catch { setLoyaltyMember(null); }
       finally  { setLookingUp(false); }
     }, 700);
     return () => { clearTimeout(timer); setLookingUp(false); };
   }, [phone]);
+
+  const discountedTotal = (() => {
+    if (voucherStatus !== 'valid' || !pending) return pending?.total ?? 0;
+    if (voucherType === 'percent') return Math.max(0, pending.total * (1 - voucherDiscount / 100));
+    return Math.max(0, pending.total - voucherDiscount);
+  })();
+
+  const applyVoucher = async () => {
+    const code = voucherCode.trim().toUpperCase();
+    if (!code) return;
+    setVoucherStatus('checking');
+    setVoucherMsg('');
+    try {
+      const res = await fetch('/api/vouchers/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, order_total: pending?.total ?? 0 }),
+      });
+      const d = await res.json();
+      if (d.valid) {
+        const amt = Number(d.voucher.discount_amount);
+        setVoucherStatus('valid');
+        setVoucherDiscount(amt);
+        setVoucherType(d.voucher.type);
+        setVoucherMsg(
+          d.voucher.type === 'percent'
+            ? `${amt}% off applied`
+            : `RM ${amt.toFixed(2)} off applied`,
+        );
+      } else {
+        setVoucherStatus('invalid');
+        setVoucherMsg(d.reason ?? 'Invalid voucher');
+      }
+    } catch {
+      setVoucherStatus('invalid');
+      setVoucherMsg('Could not check voucher. Try again.');
+    }
+  };
 
   if (!pending) {
     return (
@@ -183,8 +251,9 @@ function CheckoutContent() {
           phone: phone.trim(),
           pickup: pending.pickup,
           items: pending.lines,
-          total: pending.total,
+          total: discountedTotal,
           channel,
+          ...(voucherStatus === 'valid' && voucherCode ? { voucher_code: voucherCode.trim().toUpperCase() } : {}),
         }),
       });
       const data = await res.json();
@@ -296,9 +365,22 @@ function CheckoutContent() {
             <span>Pickup</span>
             <span style={{ fontWeight: 700, color: INK }}>{pending.pickup === 'curbside' ? 'Curbside' : 'At counter'}</span>
           </div>
+          {voucherStatus === 'valid' && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#16A34A', marginBottom: 4 }}>
+              <span>Voucher ({voucherCode.toUpperCase()})</span>
+              <span>
+                -{voucherType === 'percent'
+                  ? `${voucherDiscount}% (RM ${(pending.total - discountedTotal).toFixed(2)})`
+                  : `RM ${voucherDiscount.toFixed(2)}`}
+              </span>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 20, color: INK, borderTop: `1px solid ${hex(INK, .06)}`, paddingTop: 8, marginTop: 4 }}>
             <span>Total</span>
-            <span>RM {pending.total.toFixed(2)}</span>
+            <span>
+              {voucherStatus === 'valid' && <span style={{ fontSize: 14, fontWeight: 400, color: hex(INK, .4), textDecoration: 'line-through', marginRight: 6 }}>RM {pending.total.toFixed(2)}</span>}
+              RM {discountedTotal.toFixed(2)}
+            </span>
           </div>
         </div>
 
@@ -316,11 +398,54 @@ function CheckoutContent() {
               <label style={labelStyle}>Phone</label>
               <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. 0123456789" required style={inputStyle} />
               <LoyaltyChip
-                settings={loyaltySettings}
-                customer={customer}
+                config={loyaltyConfig}
+                member={loyaltyMember}
                 lookingUp={lookingUp}
-                total={pending.total}
               />
+            </div>
+
+            {/* Voucher */}
+            <div>
+              <label style={labelStyle}>Voucher Code (optional)</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="text"
+                  value={voucherCode}
+                  onChange={e => {
+                    setVoucherCode(e.target.value);
+                    if (voucherStatus !== 'idle') { setVoucherStatus('idle'); setVoucherMsg(''); setVoucherDiscount(0); }
+                  }}
+                  placeholder="e.g. VCH-ABC12-XY34"
+                  style={{ ...inputStyle, flex: 1, textTransform: 'uppercase' }}
+                  disabled={voucherStatus === 'valid'}
+                />
+                <button
+                  type="button"
+                  onClick={voucherStatus === 'valid' ? () => { setVoucherStatus('idle'); setVoucherCode(''); setVoucherMsg(''); setVoucherDiscount(0); } : applyVoucher}
+                  disabled={voucherStatus === 'checking' || (!voucherCode.trim() && voucherStatus !== 'valid')}
+                  style={{
+                    padding: '14px 16px', borderRadius: R - 8, border: 'none', cursor: 'pointer',
+                    background: voucherStatus === 'valid' ? '#16A34A' : INK,
+                    color: '#fff', fontFamily: "'Nunito', system-ui", fontWeight: 700, fontSize: 14,
+                    whiteSpace: 'nowrap', opacity: voucherStatus === 'checking' ? 0.6 : 1,
+                  }}
+                >
+                  {voucherStatus === 'valid' ? '✓ Remove' : voucherStatus === 'checking' ? '…' : 'Apply'}
+                </button>
+              </div>
+              {voucherMsg && (
+                <div style={{ marginTop: 6, fontSize: 13, color: voucherStatus === 'valid' ? '#16A34A' : '#C0392B', fontWeight: 600 }}>
+                  {voucherMsg}
+                </div>
+              )}
+              {voucherStatus !== 'valid' && (
+                <a
+                  href={`/vouchers?returnTo=checkout&total=${pending?.total?.toFixed(2) ?? '0'}`}
+                  style={{ display: 'inline-block', marginTop: 7, fontSize: 13, color: PRI, fontWeight: 700, textDecoration: 'none', fontFamily: "'Nunito', system-ui" }}
+                >
+                  Browse my vouchers →
+                </a>
+              )}
             </div>
 
             {/* Email */}
@@ -361,7 +486,7 @@ function CheckoutContent() {
               boxShadow: loading ? 'none' : `0 6px 0 ${hex(PRI, .4)}`,
             }}
           >
-            {loading ? 'Loading payment…' : `Pay RM ${pending.total.toFixed(2)} →`}
+            {loading ? 'Loading payment…' : `Pay RM ${discountedTotal.toFixed(2)} →`}
           </button>
 
           {loading && (
