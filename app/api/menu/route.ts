@@ -3,17 +3,8 @@ import { supabase } from '@/lib/online/supabase';
 
 export const dynamic = 'force-dynamic';
 
-const CAT_ORDER = ['coffee', 'non-coffee', 'cold', 'food', 'combo'];
-const CAT_LABELS: Record<string, string> = {
-  coffee:       'Coffee',
-  'non-coffee': 'Non-Coffee',
-  cold:         'Iced & Frappe',
-  food:         'Bakes',
-  combo:        'Combos',
-};
-
 export async function GET() {
-  const [productsRes, settingsRes, branchRes] = await Promise.all([
+  const [productsRes, settingsRes, branchRes, catsRes] = await Promise.all([
     supabase
       .from('products')
       .select('id, name, category, base_price, image_url, combo_price_override, selection_config, available_online, stock_quantity')
@@ -31,19 +22,24 @@ export async function GET() {
       .eq('is_active', true)
       .limit(1)
       .single(),
+    supabase
+      .from('product_categories')
+      .select('id, label, sort_order')
+      .eq('is_private', false)
+      .order('sort_order'),
   ]);
 
-  const allProducts = productsRes.data ?? [];
-  const products = allProducts.filter(p => CAT_ORDER.includes(p.category));
+  // Build ordered category list from the table (only non-private rows)
+  const dbCats = catsRes.data ?? [];
+  const catOrder = dbCats.map(c => c.id as string);
+  const catLabels = Object.fromEntries(dbCats.map(c => [c.id, c.label as string]));
 
-  const seenCats = new Set<string>();
-  const categories: Array<{ id: string; label: string }> = [];
-  for (const cat of CAT_ORDER) {
-    if (products.some(p => p.category === cat)) {
-      seenCats.add(cat);
-      categories.push({ id: cat, label: CAT_LABELS[cat] ?? cat });
-    }
-  }
+  const allProducts = productsRes.data ?? [];
+  const products = allProducts.filter(p => catOrder.includes(p.category));
+
+  const categories = catOrder
+    .filter(cat => products.some(p => p.category === cat))
+    .map(cat => ({ id: cat, label: catLabels[cat] ?? cat }));
 
   return NextResponse.json({
     categories,
