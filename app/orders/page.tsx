@@ -65,9 +65,20 @@ function formatDate(iso: string) {
 
 function modsLabel(mods: Record<string, unknown> | null): string {
   if (!mods) return '';
-  const parts = Object.entries(mods)
-    .filter(([k, v]) => k !== 'notes' && k !== 'combo_selections' && v)
-    .map(([, v]) => String(v));
+  const parts: string[] = [];
+  if (mods.combo_selections && typeof mods.combo_selections === 'object') {
+    for (const v of Object.values(mods.combo_selections as Record<string, { name: string }>)) {
+      if (v?.name) parts.push(v.name);
+    }
+  }
+  if (mods.sugar && mods.sugar !== 'Zero') parts.push((mods.sugar as string) + ' sugar');
+  if (mods.milk && mods.milk !== 'Full') parts.push((mods.milk as string) + ' milk');
+  if (Array.isArray(mods.selected_optionals)) {
+    for (const o of mods.selected_optionals as Array<{ name: string }>) {
+      if (o?.name) parts.push(`+ ${o.name}`);
+    }
+  }
+  if (mods.notes) parts.push(`"${mods.notes as string}"`);
   return parts.join(' · ');
 }
 
