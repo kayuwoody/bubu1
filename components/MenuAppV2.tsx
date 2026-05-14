@@ -442,7 +442,7 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
     else if (cfg) {
       const initSels: Record<string, string> = {};
 
-      // Source 1: product_recipe_items.is_default rows
+      // Source 1: product_recipe_items.is_default — match by group name + id/name
       for (const d of product.mod_defaults ?? []) {
         const group = cfg.xorGroups.find(g =>
           g.groupName === d.group || g.displayName === d.group
@@ -457,9 +457,20 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
 
       // Source 2: isDefault flag on XorGroupItem in selection_config
       for (const group of cfg.xorGroups) {
-        if (initSels[group.uniqueKey]) continue; // already set from source 1
+        if (initSels[group.uniqueKey]) continue;
         const defaultItem = group.items.find(i => i.isDefault);
         if (defaultItem) initSels[group.uniqueKey] = defaultItem.id;
+      }
+
+      // Source 3: product_recipe_items.is_default — match by linked_product_id
+      // across any group, regardless of group name (handles name mismatches)
+      for (const d of product.mod_defaults ?? []) {
+        if (!d.linked_product_id) continue;
+        for (const group of cfg.xorGroups) {
+          if (initSels[group.uniqueKey]) continue;
+          const item = group.items.find(i => i.id === d.linked_product_id);
+          if (item) { initSels[group.uniqueKey] = item.id; break; }
+        }
       }
 
       setSelections(initSels);
