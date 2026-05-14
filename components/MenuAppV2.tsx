@@ -21,6 +21,8 @@ const DRINK_CATS = new Set(['coffee', 'non-coffee']);
 const CAT_SWATCHES: Record<string, string> = {
   coffee: '#C88A54', 'non-coffee': '#8CA86A', cold: '#C9A07A', food: '#E3B876', combo: '#D9A977',
 };
+const NO_MILK_IDS = new Set(['26c985d3-868c-4e50-826d-f5d310d1f7e9', '4e784157-70ea-4e1b-a16d-a0dc432a1abc']);
+
 const DRINK_MODS = {
   sugar: { label: 'Sugar', options: [{ id: 'zero', label: 'Zero', delta: 0 }, { id: 'less', label: 'Less', delta: 0 }, { id: 'medium', label: 'Medium', delta: 0 }, { id: 'sweet', label: 'Sweet', delta: 0 }] },
   milk:  { label: 'Milk', options: [{ id: 'full', label: 'Full', delta: 0 }, { id: 'skim', label: 'Skim', delta: 0 }, { id: 'oat', label: 'Oat', delta: 2.00 }, { id: 'almond', label: 'Almond', delta: 2.00 }] },
@@ -542,61 +544,57 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
         </div>
         <div style={{ flex:1, overflow:'auto', padding:'4px 20px 12px' }}>
           {(() => {
-            const NO_MILK_IDS = new Set(['26c985d3-868c-4e50-826d-f5d310d1f7e9', '4e784157-70ea-4e1b-a16d-a0dc432a1abc']);
-            return (<>
-          {drink ? (
-            <>
-              {(() => {
-                const isCoffee = product.category.toLowerCase() === 'coffee';
-                const showMilk = isCoffee && !NO_MILK_IDS.has(product.id);
-                return (<>
-                  {isCoffee && (
-                    <div style={{ marginTop:14 }}>
-                      <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Sugar</div>
-                      <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                        {DRINK_MODS.sugar.options.map(o => { const on = drinkSel.sugar === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, sugar: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
-                      </div>
-                    </div>
-                  )}
-                  {showMilk && (
-                    <div style={{ marginTop:14 }}>
-                      <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Milk</div>
-                      <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                        {DRINK_MODS.milk.options.map(o => { const on = drinkSel.milk === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, milk: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
-                      </div>
-                    </div>
-                  )}
-                </>);
-              })()}
-              <div style={{ marginTop:14 }}>
-                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Notes to barista</div>
-                <input value={drinkSel.notes} onChange={e => setDrinkSel(s => ({ ...s, notes: e.target.value }))} placeholder="e.g. extra hot, no foam" style={{ width:'100%', padding:'12px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius-8, outline:'none', boxSizing:'border-box' }}/>
-              </div>
-            </>
-          ) : cfg ? (
-            <>
-              <ComboSection cfg={cfg} selections={selections} selectedOptionals={selectedOptionals} onSelect={handleSelect} onToggleOptional={toggleOpt}/>
+            // The drink being customised: the product itself for single drinks,
+            // or whichever item is selected in a top-level XorGroup for combos.
+            const effectiveDrinkId: string | null = drink
+              ? product.id
+              : cfg?.xorGroups.filter(g => !g.parentProductId)
+                  .map(g => selections[g.uniqueKey]).find(Boolean) ?? null;
+
+            const isCoffee = drink
+              ? product.category.toLowerCase() === 'coffee'
+              : comboHasCoffee;
+            const showMilk = isCoffee && !NO_MILK_IDS.has(effectiveDrinkId ?? '');
+
+            const SugarRow = () => (
               <div style={{ marginTop:14 }}>
                 <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Sugar</div>
                 <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                   {DRINK_MODS.sugar.options.map(o => { const on = drinkSel.sugar === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, sugar: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
                 </div>
               </div>
-              {comboHasCoffee && !NO_MILK_IDS.has(product.id) && (
-                <div style={{ marginTop:14 }}>
-                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Milk</div>
-                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                    {DRINK_MODS.milk.options.map(o => { const on = drinkSel.milk === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, milk: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
-                  </div>
-                </div>
-              )}
+            );
+            const MilkRow = () => (
               <div style={{ marginTop:14 }}>
-                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Notes</div>
-                <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. allergies, special requests" style={{ width:'100%', padding:'12px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius-8, outline:'none', boxSizing:'border-box' }}/>
+                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Milk</div>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                  {DRINK_MODS.milk.options.map(o => { const on = drinkSel.milk === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, milk: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
+                </div>
               </div>
-            </>
-          ) : null}
-            </>);
+            );
+
+            if (drink) return (
+              <>
+                {isCoffee && <SugarRow />}
+                {showMilk && <MilkRow />}
+                <div style={{ marginTop:14 }}>
+                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Notes to barista</div>
+                  <input value={drinkSel.notes} onChange={e => setDrinkSel(s => ({ ...s, notes: e.target.value }))} placeholder="e.g. extra hot, no foam" style={{ width:'100%', padding:'12px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius-8, outline:'none', boxSizing:'border-box' }}/>
+                </div>
+              </>
+            );
+            if (cfg) return (
+              <>
+                <ComboSection cfg={cfg} selections={selections} selectedOptionals={selectedOptionals} onSelect={handleSelect} onToggleOptional={toggleOpt}/>
+                <SugarRow />
+                {showMilk && <MilkRow />}
+                <div style={{ marginTop:14 }}>
+                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Notes</div>
+                  <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. allergies, special requests" style={{ width:'100%', padding:'12px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius-8, outline:'none', boxSizing:'border-box' }}/>
+                </div>
+              </>
+            );
+            return null;
           })()}
         </div>
         <div style={{ padding:'14px 20px 20px', borderTop:`1px solid ${hex(T.inkColor,.08)}`, background:'#fff', display:'flex', alignItems:'center', gap:12 }}>

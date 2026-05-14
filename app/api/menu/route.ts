@@ -41,7 +41,7 @@ export async function GET() {
   // Group default recipe items by product_id
   const modDefaultsByProduct: Record<string, { group: string; name: string; linked_product_id: string | null }[]> = {};
   for (const row of defaultsRes.data ?? []) {
-    if (!row.selection_group || !row.linked_product_name) continue;
+    if (!row.selection_group && !row.linked_product_id) continue;
     if (!modDefaultsByProduct[row.product_id]) modDefaultsByProduct[row.product_id] = [];
     modDefaultsByProduct[row.product_id].push({ group: row.selection_group, name: row.linked_product_name, linked_product_id: row.linked_product_id ?? null });
   }
