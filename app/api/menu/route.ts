@@ -33,14 +33,20 @@ export async function GET() {
       .single(),
     supabase
       .from('product_categories')
-      .select('id, name')
+      .select('*')
       .eq('is_private', true),
   ]);
 
-  const privCatKeys = new Set(
-    (privCatsRes.data ?? []).flatMap((c: { id: string; name: string }) => [c.id, c.name])
+  // Build a set of every string value from every column of private category rows
+  // so we match regardless of whether products.category stores an id, slug, or name
+  const privCatKeys = new Set<string>(
+    (privCatsRes.data ?? []).flatMap((c: Record<string, unknown>) =>
+      Object.values(c).filter((v): v is string => typeof v === 'string')
+    )
   );
-  const products = (productsRes.data ?? []).filter(p => !privCatKeys.has(p.category));
+
+  const allProducts = productsRes.data ?? [];
+  const products = allProducts.filter(p => !privCatKeys.has(p.category));
 
   const seenCats = new Set<string>();
   const categories: Array<{ id: string; label: string }> = [];
@@ -51,7 +57,7 @@ export async function GET() {
     }
   }
   for (const p of products) {
-    if (!seenCats.has(p.category) && p.category !== 'uncategorized') {
+    if (!seenCats.has(p.category) && p.category !== 'uncategorized' && !privCatKeys.has(p.category)) {
       seenCats.add(p.category);
       categories.push({ id: p.category, label: p.category });
     }
