@@ -392,7 +392,24 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   onConfirm: (mods: Record<string,unknown>, qty: number, unitPrice: number) => void;
 }) {
   const drinkDefaults: DrinkSel = useMemo(() => ({ sugar: 'zero', milk: 'full', notes: '' }), []);
-  const [drinkSel, setDrinkSel]           = useState<DrinkSel>({ ...drinkDefaults });
+
+  const resolveDefaults = (p: Product | null): DrinkSel => {
+    const base = { ...drinkDefaults };
+    if (!p?.mod_defaults?.length) return base;
+    for (const d of p.mod_defaults) {
+      const key = d.group.toLowerCase() as keyof typeof DRINK_MODS;
+      const mod = DRINK_MODS[key];
+      if (!mod) continue;
+      const nameLower = d.name.toLowerCase();
+      const match = mod.options.find(o =>
+        nameLower.includes(o.label.toLowerCase()) || o.label.toLowerCase().includes(nameLower)
+      );
+      if (match) (base as Record<string, string>)[key] = match.id;
+    }
+    return base;
+  };
+
+  const [drinkSel, setDrinkSel]           = useState<DrinkSel>(() => resolveDefaults(product));
   const [selections, setSelections]       = useState<Record<string,string>>({});
   const [selectedOptionals, setSelOpts]   = useState<Set<string>>(new Set());
   const [notes, setNotes]                 = useState('');
@@ -421,8 +438,8 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   useEffect(() => {
     if (!open || !product) return;
     setQty(1); setNotes('');
-    if (drink) setDrinkSel({ ...drinkDefaults });
-    else if (cfg) { setSelections({}); setSelOpts(new Set()); setDrinkSel({ ...drinkDefaults }); }
+    if (drink) setDrinkSel(resolveDefaults(product));
+    else if (cfg) { setSelections({}); setSelOpts(new Set()); setDrinkSel(resolveDefaults(product)); }
   }, [open, product?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelect = (key: string, itemId: string) => {

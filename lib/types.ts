@@ -126,6 +126,7 @@ export interface Product {
   selection_config: SelectionConfig | null;
   available_online: boolean;
   stock_quantity: number | null;
+  mod_defaults?: { group: string; name: string }[];
 }
 
 export interface Branch {
