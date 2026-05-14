@@ -13,7 +13,7 @@ const CAT_LABELS: Record<string, string> = {
 };
 
 export async function GET() {
-  const [productsRes, settingsRes, branchRes, privCatsRes] = await Promise.all([
+  const [productsRes, settingsRes, branchRes] = await Promise.all([
     supabase
       .from('products')
       .select('id, name, category, base_price, image_url, combo_price_override, selection_config, available_online, stock_quantity')
@@ -31,22 +31,10 @@ export async function GET() {
       .eq('is_active', true)
       .limit(1)
       .single(),
-    supabase
-      .from('product_categories')
-      .select('*')
-      .eq('is_private', true),
   ]);
 
-  // Build a set of every string value from every column of private category rows
-  // so we match regardless of whether products.category stores an id, slug, or name
-  const privCatKeys = new Set<string>(
-    (privCatsRes.data ?? []).flatMap((c: Record<string, unknown>) =>
-      Object.values(c).filter((v): v is string => typeof v === 'string')
-    )
-  );
-
   const allProducts = productsRes.data ?? [];
-  const products = allProducts.filter(p => !privCatKeys.has(p.category));
+  const products = allProducts.filter(p => CAT_ORDER.includes(p.category));
 
   const seenCats = new Set<string>();
   const categories: Array<{ id: string; label: string }> = [];
@@ -54,12 +42,6 @@ export async function GET() {
     if (products.some(p => p.category === cat)) {
       seenCats.add(cat);
       categories.push({ id: cat, label: CAT_LABELS[cat] ?? cat });
-    }
-  }
-  for (const p of products) {
-    if (!seenCats.has(p.category) && p.category !== 'uncategorized' && !privCatKeys.has(p.category)) {
-      seenCats.add(p.category);
-      categories.push({ id: p.category, label: p.category });
     }
   }
 
