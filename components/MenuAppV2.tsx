@@ -444,34 +444,34 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
     else if (cfg) {
       const initSels: Record<string, string> = {};
 
-      // Source 1: product_recipe_items.is_default — match by group name + id/name
+      // Pass 1: recipe is_default rows — try exact group name first, fall back to all groups
       for (const d of product.mod_defaults ?? []) {
-        const group = cfg.xorGroups.find(g =>
-          g.groupName === d.group || g.displayName === d.group
-        );
-        if (!group) continue;
-        const item = group.items.find(i =>
-          (d.linked_product_id && i.id === d.linked_product_id) ||
-          i.name.toLowerCase() === d.name.toLowerCase()
-        );
-        if (item) initSels[group.uniqueKey] = item.id;
+        const candidateGroups = (() => {
+          const named = cfg.xorGroups.find(g => g.groupName === d.group || g.displayName === d.group);
+          return named ? [named] : cfg.xorGroups;
+        })();
+        for (const group of candidateGroups) {
+          if (initSels[group.uniqueKey]) continue;
+          const item = group.items.find(i =>
+            (d.linked_product_id && i.id === d.linked_product_id) ||
+            (d.name && i.name.toLowerCase() === d.name.toLowerCase())
+          );
+          if (item) { initSels[group.uniqueKey] = item.id; break; }
+        }
       }
 
-      // Source 2: isDefault flag on XorGroupItem in selection_config
+      // Pass 2: isDefault flag on XorGroupItem in selection_config JSON
       for (const group of cfg.xorGroups) {
         if (initSels[group.uniqueKey]) continue;
         const defaultItem = group.items.find(i => i.isDefault);
         if (defaultItem) initSels[group.uniqueKey] = defaultItem.id;
       }
 
-      // Source 3: product_recipe_items.is_default — match by linked_product_id
-      // across any group, regardless of group name (handles name mismatches)
-      for (const d of product.mod_defaults ?? []) {
-        if (!d.linked_product_id) continue;
-        for (const group of cfg.xorGroups) {
-          if (initSels[group.uniqueKey]) continue;
-          const item = group.items.find(i => i.id === d.linked_product_id);
-          if (item) { initSels[group.uniqueKey] = item.id; break; }
+      // Initialise nested groups for pre-selected items (mirrors handleSelect behaviour)
+      for (const [, itemId] of Object.entries(initSels)) {
+        for (const ng of nestedGroups.filter(ng => ng.parentProductId === itemId)) {
+          if (!initSels[ng.uniqueKey] && ng.items.length > 0)
+            initSels[ng.uniqueKey] = ng.items[0].id;
         }
       }
 
