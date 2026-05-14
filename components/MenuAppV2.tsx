@@ -521,11 +521,13 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
           <button onClick={onClose} style={{ background:'transparent', border:'none', cursor:'pointer', color:T.inkColor, alignSelf:'flex-start' }}><Icon.X width="22" height="22"/></button>
         </div>
         <div style={{ flex:1, overflow:'auto', padding:'4px 20px 12px' }}>
+          {(() => {
+            const NO_MILK_IDS = new Set(['26c985d3-868c-4e50-826d-f5d310d1f7e9', '4e784157-70ea-4e1b-a16d-a0dc432a1abc']);
+            return (<>
           {drink ? (
             <>
               {(() => {
                 const isCoffee = product.category.toLowerCase() === 'coffee';
-                const NO_MILK_IDS = new Set(['26c985d3-868c-4e50-826d-f5d310d1f7e9', '4e784157-70ea-4e1b-a16d-a0dc432a1abc']);
                 const showMilk = isCoffee && !NO_MILK_IDS.has(product.id);
                 return (<>
                   {isCoffee && (
@@ -560,7 +562,7 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
                   {DRINK_MODS.sugar.options.map(o => { const on = drinkSel.sugar === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, sugar: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
                 </div>
               </div>
-              {comboHasCoffee && (
+              {comboHasCoffee && !NO_MILK_IDS.has(product.id) && (
                 <div style={{ marginTop:14 }}>
                   <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Milk</div>
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
@@ -574,6 +576,8 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
               </div>
             </>
           ) : null}
+            </>);
+          })()}
         </div>
         <div style={{ padding:'14px 20px 20px', borderTop:`1px solid ${hex(T.inkColor,.08)}`, background:'#fff', display:'flex', alignItems:'center', gap:12 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, background:T.bgColor, borderRadius:999, padding:4 }}>
