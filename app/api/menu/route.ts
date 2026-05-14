@@ -33,12 +33,14 @@ export async function GET() {
       .single(),
     supabase
       .from('product_categories')
-      .select('id')
+      .select('id, name')
       .eq('is_private', true),
   ]);
 
-  const privCatIds = new Set((privCatsRes.data ?? []).map((c: { id: string }) => c.id));
-  const products = (productsRes.data ?? []).filter(p => !privCatIds.has(p.category));
+  const privCatKeys = new Set(
+    (privCatsRes.data ?? []).flatMap((c: { id: string; name: string }) => [c.id, c.name])
+  );
+  const products = (productsRes.data ?? []).filter(p => !privCatKeys.has(p.category));
 
   const seenCats = new Set<string>();
   const categories: Array<{ id: string; label: string }> = [];
