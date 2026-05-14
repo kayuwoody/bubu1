@@ -462,7 +462,7 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
       const so = cfg.optionalItems.filter(o => selectedOptionals.has(o.id)).map(o => ({ id: o.id, name: o.name }));
       mods = {
         combo_selections: cs,
-        ...(comboHasCoffee ? { sugar: DRINK_MODS.sugar.options.find(o => o.id === drinkSel.sugar)?.label } : {}),
+        ...(drinkSel.sugar ? { sugar: DRINK_MODS.sugar.options.find(o => o.id === drinkSel.sugar)?.label } : {}),
         // ...(comboHasCoffee ? { milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label } : {}),
         ...(so.length > 0 ? { selected_optionals: so } : {}),
         ...(notes ? { notes } : {}),
@@ -521,14 +521,12 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
           ) : cfg ? (
             <>
               <ComboSection cfg={cfg} selections={selections} selectedOptionals={selectedOptionals} onSelect={handleSelect} onToggleOptional={toggleOpt}/>
-              {comboHasCoffee && (
-                <div style={{ marginTop:14 }}>
-                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Sugar</div>
-                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                    {DRINK_MODS.sugar.options.map(o => { const on = drinkSel.sugar === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, sugar: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
-                  </div>
+              <div style={{ marginTop:14 }}>
+                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Sugar</div>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                  {DRINK_MODS.sugar.options.map(o => { const on = drinkSel.sugar === o.id; return <button key={o.id} onClick={() => setDrinkSel(s => ({ ...s, sugar: o.id }))} style={pillStyle(on)}>{o.label}</button>; })}
                 </div>
-              )}
+              </div>
               {comboHasCoffee && (
                 <div style={{ marginTop:14 }}>
                   <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>Milk</div>
