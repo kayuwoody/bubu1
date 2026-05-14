@@ -440,8 +440,9 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
     setQty(1); setNotes('');
     if (drink) setDrinkSel(resolveDefaults(product));
     else if (cfg) {
-      // Pre-select XorGroup items marked is_default in product_recipe_items
       const initSels: Record<string, string> = {};
+
+      // Source 1: product_recipe_items.is_default rows
       for (const d of product.mod_defaults ?? []) {
         const group = cfg.xorGroups.find(g =>
           g.groupName === d.group || g.displayName === d.group
@@ -453,6 +454,14 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
         );
         if (item) initSels[group.uniqueKey] = item.id;
       }
+
+      // Source 2: isDefault flag on XorGroupItem in selection_config
+      for (const group of cfg.xorGroups) {
+        if (initSels[group.uniqueKey]) continue; // already set from source 1
+        const defaultItem = group.items.find(i => i.isDefault);
+        if (defaultItem) initSels[group.uniqueKey] = defaultItem.id;
+      }
+
       setSelections(initSels);
       setSelOpts(new Set());
       setDrinkSel(resolveDefaults(product));

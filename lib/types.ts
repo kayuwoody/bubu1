@@ -90,6 +90,7 @@ export interface XorGroupItem {
   basePrice: number;
   priceAdjustment: number;
   isCoffee: boolean;
+  isDefault?: boolean;
 }
 
 export interface XorGroup {
