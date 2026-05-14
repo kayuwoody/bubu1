@@ -544,14 +544,15 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
         </div>
         <div style={{ flex:1, overflow:'auto', padding:'4px 20px 12px' }}>
           {(() => {
-            // The drink being customised: the product itself for single drinks,
-            // or whichever item is selected in a top-level XorGroup for combos.
-            const effectiveDrinkId: string | null = drink
+            // Standalone drinks use product.id regardless of whether they have a
+            // selection_config (e.g. americano with hot/iced). Only combos resolve
+            // effectiveDrinkId from the selected XorGroup item.
+            const effectiveDrinkId: string | null = isDrink(product.category)
               ? product.id
               : cfg?.xorGroups.filter(g => !g.parentProductId)
                   .map(g => selections[g.uniqueKey]).find(Boolean) ?? null;
 
-            const isCoffee = drink
+            const isCoffee = isDrink(product.category)
               ? product.category.toLowerCase() === 'coffee'
               : comboHasCoffee;
             const showMilk = isCoffee && !NO_MILK_IDS.has(effectiveDrinkId ?? '');
