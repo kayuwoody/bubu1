@@ -209,12 +209,11 @@ function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyAc
     <header style={{ position:'sticky', top:0, zIndex:20, background:T.bgColor, borderBottom:`1px solid ${hex(T.inkColor,.08)}`, padding:compact?'5px 12px':'5px 15px', display:'flex', alignItems:'center', gap:8 }}>
       <img src="/co-logo.png" alt="Coffee Oasis" style={{ height:compact?40:80, maxWidth:compact?200:400, width:'auto', objectFit:'contain', flexShrink:0 }}/>
 
-      {/* Pickup pill — tap to toggle; ETA hidden on mobile to save space */}
-      <button onClick={toggle} style={{ marginLeft:compact?2:10, display:'flex', alignItems:'center', gap:5, padding:compact?'5px 8px 5px 7px':'8px 14px 8px 10px', borderRadius:999, border:`1.5px solid ${hex(T.inkColor,.12)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?11:13, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
-        <PickupIcon width={compact?13:16} height={compact?13:16}/>
-        <span style={{ opacity:.45, fontWeight:600 }}>Pickup:</span>
+      {/* Pickup pill — tap to toggle */}
+      <button onClick={toggle} style={{ marginLeft:compact?2:8, display:'flex', alignItems:'center', gap:4, padding:compact?'5px 7px':'6px 10px 6px 8px', borderRadius:999, border:`1.5px solid ${hex(T.inkColor,.12)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?11:12, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
+        <PickupIcon width={compact?13:14} height={compact?13:14}/>
+        {!compact && <span style={{ opacity:.45, fontWeight:600 }}>Pickup:</span>}
         <span>{pickup === 'curbside' ? 'Curbside' : 'Counter'}</span>
-        {!compact && <><span style={{ opacity:.35, fontSize:11, margin:'0 2px' }}>·</span><Icon.Clock width={14} height={14}/><span style={{ color:T.primaryColor }}>~4m</span></>}
       </button>
 
       <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center', flexShrink:0 }}>
