@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Branch, CartLine, LoyaltyConfig, LoyaltyMember, LoyaltyTransaction, Voucher, Product, SelectionConfig, Viewport, XorGroup } from '@/lib/types';
@@ -117,12 +117,90 @@ function useCart() {
   return { lines, addLine, incLine, decLine, qtyFor, incById, decById, count, total };
 }
 
+// ── Active order ring icon ─────────────────────────────────────────────────
+interface ActiveOrder { id: string; created_at: string; status: string; pickup_type: string }
+const TERMINAL_STATUSES = new Set(['collected', 'rejected']);
+const PREP_MS = 5 * 60 * 1000; // assumed avg prep time for progress fill
+
+function useActiveOrder(): ActiveOrder | null {
+  const [order, setOrder] = useState<ActiveOrder | null>(null);
+
+  useEffect(() => {
+    const read = () => {
+      try {
+        const raw = localStorage.getItem('co_active_order');
+        if (!raw) { setOrder(null); return; }
+        const o: ActiveOrder = JSON.parse(raw);
+        if (TERMINAL_STATUSES.has(o.status)) { localStorage.removeItem('co_active_order'); setOrder(null); return; }
+        setOrder(o);
+      } catch { setOrder(null); }
+    };
+    read();
+    window.addEventListener('storage', read);
+    // Poll every 15s so status changes from the order page propagate here
+    const t = setInterval(read, 15_000);
+    return () => { window.removeEventListener('storage', read); clearInterval(t); };
+  }, []);
+
+  return order;
+}
+
+function OrderRingIcon({ order, size = 30 }: { order: ActiveOrder; size?: number }) {
+  const [pct, setPct] = useState(0);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const tick = () => {
+      if (order.status === 'ready') { setPct(1); return; }
+      const elapsed = Date.now() - new Date(order.created_at).getTime();
+      setPct(Math.min(elapsed / PREP_MS, 0.88));
+      rafRef.current = window.setTimeout(tick, 15_000);
+    };
+    tick();
+    return () => { if (rafRef.current) clearTimeout(rafRef.current); };
+  }, [order.status, order.created_at]);
+
+  const isReady = order.status === 'ready';
+  const cx = size / 2, cy = size / 2;
+  const r  = (size - 5) / 2;
+  const circ = 2 * Math.PI * r;
+  const filled = circ * pct;
+  const ringColor = isReady ? T.primaryColor : T.inkColor;
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: 'block', overflow: 'visible' }}>
+      {isReady && (
+        <circle cx={cx} cy={cy} r={r + 4} fill="none" stroke={hex(T.primaryColor, .25)} strokeWidth={4}
+          style={{ animation: 'orderPulse 1.4s ease-in-out infinite' }}/>
+      )}
+      {/* Track */}
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={hex(T.inkColor, .12)} strokeWidth={3}/>
+      {/* Fill arc */}
+      <circle cx={cx} cy={cy} r={r} fill="none"
+        stroke={ringColor}
+        strokeWidth={3}
+        strokeDasharray={`${filled} ${circ - filled}`}
+        strokeDashoffset={circ * 0.25}
+        strokeLinecap="round"
+        style={{ transition: 'stroke-dasharray 2s ease, stroke 0.4s' }}
+      />
+      {/* Cup */}
+      <text x={cx} y={cy + 4.5} textAnchor="middle" fontSize={size * 0.42}
+        fill={isReady ? T.primaryColor : T.inkColor}
+        style={{ fontFamily: 'system-ui', transition: 'fill 0.4s', userSelect: 'none' }}>
+        ☕
+      </text>
+    </svg>
+  );
+}
+
 // ── v2 Header (compact: logo + pickup pill + ETA + loyalty + cart) ─────────
-function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyActive, customerPoints, onLoyaltyClick, onOrdersClick }: {
+function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyActive, customerPoints, onLoyaltyClick, onOrdersClick, activeOrder }: {
   viewport: Viewport; pickup: 'counter'|'curbside'; setPickup: (v: 'counter'|'curbside') => void;
   cartCount: number; onCartClick: () => void;
   loyaltyActive: boolean; customerPoints: number | null; onLoyaltyClick: () => void;
   onOrdersClick: () => void;
+  activeOrder: ActiveOrder | null;
 }) {
   const compact = viewport === 'mobile';
   const toggle  = () => setPickup(pickup === 'curbside' ? 'counter' : 'curbside');
@@ -139,6 +217,12 @@ function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyAc
       </button>
 
       <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center', flexShrink:0 }}>
+        {activeOrder && (
+          <a href={`/order/${activeOrder.id}`} title={`Order ${activeOrder.id}`}
+            style={{ display:'flex', alignItems:'center', justifyContent:'center', width:compact?36:42, height:compact?36:42, borderRadius:'50%', background: activeOrder.status === 'ready' ? hex(T.primaryColor,.12) : '#fff', border:`1.5px solid ${activeOrder.status === 'ready' ? T.primaryColor : hex(T.inkColor,.12)}`, cursor:'pointer', flexShrink:0, textDecoration:'none', animation: activeOrder.status === 'ready' ? 'orderBounce 0.6s ease' : 'none' }}>
+            <OrderRingIcon order={activeOrder} size={compact?22:26}/>
+          </a>
+        )}
         <button onClick={onOrdersClick} style={{ display:'flex', alignItems:'center', gap:4, padding:compact?'6px 8px':'8px 12px', borderRadius:999, background:'#fff', color:T.inkColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?12:13, cursor:'pointer', whiteSpace:'nowrap' }}>
           <span style={{ fontSize:13 }}>🧾</span>
           {!compact && 'Orders'}
@@ -954,8 +1038,9 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
 
 // ── Main App ───────────────────────────────────────────────────────────────
 export default function MenuAppV2() {
-  const router   = useRouter();
-  const viewport = useViewport();
+  const router      = useRouter();
+  const viewport    = useViewport();
+  const activeOrder = useActiveOrder();
   const { lines, addLine, incLine, decLine, qtyFor, incById, decById, count, total } = useCart();
 
   const [products,    setProducts]    = useState<Product[]>([]);
@@ -1023,7 +1108,11 @@ export default function MenuAppV2() {
   if (loading) return (
     <div style={{ minHeight:'100vh', background:T.bgColor, display:'grid', placeItems:'center' }}>
       <div style={{ width:40, height:40, border:`3px solid ${hex(T.primaryColor,.3)}`, borderTopColor:T.primaryColor, borderRadius:'50%', animation:'spin .8s linear infinite' }}/>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{`
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes orderPulse{0%,100%{opacity:.3;transform:scale(1)}50%{opacity:.7;transform:scale(1.15)}}
+        @keyframes orderBounce{0%,100%{transform:scale(1)}40%{transform:scale(1.2)}70%{transform:scale(.95)}}
+      `}</style>
     </div>
   );
 
@@ -1043,6 +1132,7 @@ export default function MenuAppV2() {
         customerPoints={null}
         onLoyaltyClick={() => setLoyaltyOpen(true)}
         onOrdersClick={() => router.push('/orders')}
+        activeOrder={activeOrder}
       />
 
       <GreetingBand
