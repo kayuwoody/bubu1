@@ -212,6 +212,7 @@ function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyAc
       {/* Pickup pill — tap to toggle; ETA hidden on mobile to save space */}
       <button onClick={toggle} style={{ marginLeft:compact?2:10, display:'flex', alignItems:'center', gap:5, padding:compact?'5px 8px 5px 7px':'8px 14px 8px 10px', borderRadius:999, border:`1.5px solid ${hex(T.inkColor,.12)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?11:13, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
         <PickupIcon width={compact?13:16} height={compact?13:16}/>
+        <span style={{ opacity:.45, fontWeight:600 }}>Pickup:</span>
         <span>{pickup === 'curbside' ? 'Curbside' : 'Counter'}</span>
         {!compact && <><span style={{ opacity:.35, fontSize:11, margin:'0 2px' }}>·</span><Icon.Clock width={14} height={14}/><span style={{ color:T.primaryColor }}>~4m</span></>}
       </button>
