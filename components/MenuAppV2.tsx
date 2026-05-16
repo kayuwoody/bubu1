@@ -1249,10 +1249,6 @@ export default function MenuAppV2() {
         />
       )}
 
-      {/* Version switcher */}
-      <a href="/" style={{ position:'fixed', bottom:compact?64:24, left:16, zIndex:50, background:hex(T.inkColor,.85), color:'#fff', padding:'7px 14px', borderRadius:999, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, textDecoration:'none', backdropFilter:'blur(4px)' }}>
-        ← v1
-      </a>
     </div>
   );
 }
