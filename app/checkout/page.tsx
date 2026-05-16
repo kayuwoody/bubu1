@@ -369,15 +369,15 @@ function CheckoutContent() {
           <button
             type="button"
             onClick={() => setPickup(p => p === 'curbside' ? 'counter' : 'curbside')}
-            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, background: hex(INK, .03), border: `1.5px dashed ${hex(INK, .12)}`, borderRadius: R - 10, padding: '10px 14px', cursor: 'pointer' }}
+            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, background: '#FFF6E8', border: `2px solid ${PRI}`, borderRadius: R - 10, padding: '10px 14px', cursor: 'pointer' }}
           >
             <div style={{ textAlign: 'left' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: hex(INK, .45), textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 2 }}>Pickup location</div>
               <div style={{ fontSize: 15, fontWeight: 800, color: INK, fontFamily: "'Baloo 2', system-ui" }}>
-                {pickup === 'curbside' ? '🚗 Curbside' : '🚶 At counter'}
+                {pickup === 'curbside' ? '🚗 Curbside pickup' : '🚶 Counter pickup'}
               </div>
             </div>
-            <div style={{ fontSize: 12, color: PRI, fontWeight: 700, fontFamily: "'Nunito', system-ui" }}>tap to change →</div>
+            <div style={{ fontSize: 12, color: PRI, fontWeight: 700, fontFamily: "'Nunito', system-ui", whiteSpace: 'nowrap' }}>change →</div>
           </button>
           {voucherStatus === 'valid' && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#16A34A', marginBottom: 4 }}>
