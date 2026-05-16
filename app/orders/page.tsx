@@ -173,8 +173,8 @@ function OrdersContent() {
               const items  = order.online_order_items ?? [];
               return (
                 <div key={order.id} style={{ background: '#fff', borderRadius: R - 2, overflow: 'hidden', border: `1.5px solid ${hex(INK, .08)}` }}>
-                  {/* Order header */}
-                  <div style={{ padding: '12px 16px', borderBottom: `1px solid ${hex(INK, .07)}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {/* Order header — tapping navigates to detail page */}
+                  <div onClick={() => router.push(`/order/${order.id}`)} style={{ padding: '12px 16px', borderBottom: `1px solid ${hex(INK, .07)}`, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{ ...heading, fontSize: 16 }}>Order #{order.id}</span>

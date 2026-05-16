@@ -387,10 +387,10 @@ function CartBar({ count, total, onClick, viewport }: { count: number; total: nu
 }
 
 // ── Cart Drawer ────────────────────────────────────────────────────────────
-function CartDrawer({ open, onClose, lines, incLine, decLine, total, pickup, branch, onPay }: {
+function CartDrawer({ open, onClose, lines, incLine, decLine, total, onPay }: {
   open: boolean; onClose: () => void; lines: CartLine[];
   incLine: (lid: string) => void; decLine: (lid: string) => void;
-  total: number; pickup: 'counter'|'curbside'; branch: Branch | null; onPay: () => void;
+  total: number; onPay: () => void;
 }) {
   if (!open) return null;
 
@@ -437,13 +437,6 @@ function CartDrawer({ open, onClose, lines, incLine, decLine, total, pickup, bra
               </div>
             );
           })}
-          <div style={{ marginTop:8, padding:14, background:'#fff', borderRadius:T.cornerRadius-4, border:`1.5px dashed ${hex(T.inkColor,.15)}`, display:'flex', alignItems:'center', gap:10, fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor }}>
-            {pickup === 'curbside' ? <Icon.Car width="20" height="20"/> : <Icon.Walk width="20" height="20"/>}
-            <div>
-              <div style={{ fontWeight:700 }}>{pickup === 'curbside' ? 'Curbside pickup' : 'Counter pickup'}</div>
-              {branch?.address && <div style={{ opacity:.65, fontSize:12 }}>{branch.address}</div>}
-            </div>
-          </div>
         </div>
         <div style={{ padding:20, borderTop:`1px solid ${hex(T.inkColor,.08)}`, background:'#fff' }}>
           <div style={{ display:'flex', justifyContent:'space-between', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:22, color:T.inkColor, marginBottom:12 }}>
@@ -1211,7 +1204,7 @@ export default function MenuAppV2() {
       <CartDrawer
         open={cartOpen} onClose={() => setCartOpen(false)}
         lines={lines} incLine={incLine} decLine={decLine}
-        total={total} pickup={pickup} branch={branch} onPay={handlePay}
+        total={total} onPay={handlePay}
       />
 
       <CustomizeSheet
