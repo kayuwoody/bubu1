@@ -93,7 +93,7 @@ function CheckoutContent() {
   const [loading, setLoading] = useState(false);
 
   const [loyaltyConfig, setLoyaltyConfig] = useState<LoyaltyConfig | null>(null);
-  const [loyaltyMember, setLoyaltyMember] = useState<{ name: string | null; points_balance: number } | null>(null);
+  const [loyaltyMember, setLoyaltyMember] = useState<{ name: string | null; points_balance: number; programPoints: number } | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
   const [voucherCode,    setVoucherCode]    = useState('');
   const [voucherStatus,  setVoucherStatus]  = useState<'idle'|'checking'|'valid'|'invalid'>('idle');
@@ -182,7 +182,14 @@ function CheckoutContent() {
       try {
         const res = await fetch(`/api/loyalty/member?phone=${digits}`);
         const d = res.ok ? await res.json() : null;
-        setLoyaltyMember(d?.member ?? null);
+        if (d?.member) {
+          const pb = (d.programBalances ?? []).find(
+            (p: { loyalty_programs: { id: string } | null }) => p.loyalty_programs?.id === loyaltyConfig?.id
+          );
+          setLoyaltyMember({ ...d.member, programPoints: pb?.points_balance ?? 0 });
+        } else {
+          setLoyaltyMember(null);
+        }
       } catch { setLoyaltyMember(null); }
       finally  { setLookingUp(false); }
     }, 700);
@@ -194,6 +201,16 @@ function CheckoutContent() {
     if (voucherType === 'percent') return Math.max(0, pending.total * (1 - voucherDiscount / 100));
     return Math.max(0, pending.total - voucherDiscount);
   })();
+
+  const pointsToEarn = (() => {
+    if (!loyaltyConfig || loyaltyConfig.trigger_type !== 'purchase') return 0;
+    if (loyaltyConfig.points_per_rm) return Math.floor(discountedTotal * loyaltyConfig.points_per_rm);
+    return loyaltyConfig.points_per_trigger ?? 0;
+  })();
+  const currentProgramPoints = loyaltyMember?.programPoints ?? 0;
+  const willUnlockVoucher = pointsToEarn > 0 && !!loyaltyConfig &&
+    currentProgramPoints < loyaltyConfig.threshold &&
+    (currentProgramPoints + pointsToEarn) >= loyaltyConfig.threshold;
 
   const applyVoucher = async () => {
     const code = voucherCode.trim().toUpperCase();
@@ -397,6 +414,37 @@ function CheckoutContent() {
             </span>
           </div>
         </div>
+
+        {/* Loyalty points preview — only shown once member is identified */}
+        {loyaltyMember && pointsToEarn > 0 && loyaltyConfig && (
+          <div style={{ background: willUnlockVoucher ? '#F0FDF4' : '#FFFBEB', border: `1.5px solid ${willUnlockVoucher ? '#86EFAC' : '#FDE68A'}`, borderRadius: R - 8, padding: '11px 14px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 20, flexShrink: 0 }}>{willUnlockVoucher ? '🎉' : '⭐'}</span>
+            <div style={{ fontFamily: "'Nunito', system-ui", fontSize: 13 }}>
+              {willUnlockVoucher ? (
+                <>
+                  <span style={{ fontWeight: 800, color: '#15803D' }}>You'll earn {pointsToEarn} pts and unlock a </span>
+                  <span style={{ fontWeight: 800, color: '#15803D' }}>
+                    {loyaltyConfig.voucher_type === 'percent'
+                      ? `${loyaltyConfig.voucher_discount_value}% off`
+                      : `RM ${Number(loyaltyConfig.voucher_discount_value).toFixed(2)} off`}
+                  </span>
+                  <span style={{ fontWeight: 800, color: '#15803D' }}> voucher with this order!</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontWeight: 800, color: '#92400E' }}>+{pointsToEarn} pts</span>
+                  <span style={{ color: '#92400E' }}> · {loyaltyConfig.threshold - currentProgramPoints - pointsToEarn} more pts to your next </span>
+                  <span style={{ fontWeight: 700, color: '#92400E' }}>
+                    {loyaltyConfig.voucher_type === 'percent'
+                      ? `${loyaltyConfig.voucher_discount_value}% off`
+                      : `RM ${Number(loyaltyConfig.voucher_discount_value).toFixed(2)} off`}
+                  </span>
+                  <span style={{ color: '#92400E' }}> voucher</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
