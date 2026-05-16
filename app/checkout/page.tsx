@@ -84,6 +84,7 @@ function CheckoutContent() {
   const voucherParam = searchParams.get('voucher');
 
   const [pending, setPending] = useState<Pending | null>(null);
+  const [pickup,  setPickup]  = useState<'counter'|'curbside'>('counter');
   const [name,  setName]  = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -111,7 +112,11 @@ function CheckoutContent() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem('co_pending');
-      if (raw) setPending(JSON.parse(raw));
+      if (raw) {
+        const p: Pending = JSON.parse(raw);
+        setPending(p);
+        setPickup(p.pickup ?? 'counter');
+      }
     } catch { /* ignore */ }
   }, []);
 
@@ -249,7 +254,7 @@ function CheckoutContent() {
           name: name.trim(),
           email: email.trim(),
           phone: phone.trim(),
-          pickup: pending.pickup,
+          pickup,
           items: pending.lines,
           total: discountedTotal,
           channel,
@@ -361,10 +366,19 @@ function CheckoutContent() {
         <div style={{ fontSize: 14, color: hex(INK, .6), marginBottom: 24 }}>{itemNames}</div>
 
         <div style={{ background: '#fff', borderRadius: R, border: `1.5px solid ${hex(INK, .08)}`, padding: 16, marginBottom: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 14, color: hex(INK, .65) }}>
-            <span>Pickup</span>
-            <span style={{ fontWeight: 700, color: INK }}>{pending.pickup === 'curbside' ? 'Curbside' : 'At counter'}</span>
-          </div>
+          <button
+            type="button"
+            onClick={() => setPickup(p => p === 'curbside' ? 'counter' : 'curbside')}
+            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, background: hex(INK, .03), border: `1.5px dashed ${hex(INK, .12)}`, borderRadius: R - 10, padding: '10px 14px', cursor: 'pointer' }}
+          >
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: hex(INK, .45), textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 2 }}>Pickup location</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: INK, fontFamily: "'Baloo 2', system-ui" }}>
+                {pickup === 'curbside' ? '🚗 Curbside' : '🚶 At counter'}
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: PRI, fontWeight: 700, fontFamily: "'Nunito', system-ui" }}>tap to change →</div>
+          </button>
           {voucherStatus === 'valid' && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#16A34A', marginBottom: 4 }}>
               <span>Voucher ({voucherCode.toUpperCase()})</span>

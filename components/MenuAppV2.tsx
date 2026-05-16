@@ -194,7 +194,43 @@ function OrderRingIcon({ order, size = 30 }: { order: ActiveOrder; size?: number
   );
 }
 
-// ── v2 Header (compact: logo + pickup pill + ETA + loyalty + cart) ─────────
+// ── Pickup Bar (mobile strip below greeting) ──────────────────────────────
+function PickupBar({ pickup, onToggle }: { pickup: 'counter'|'curbside'; onToggle: () => void }) {
+  const PickupIcon = pickup === 'curbside' ? Icon.Car : Icon.Walk;
+  return (
+    <div style={{ padding:'2px 14px 8px' }}>
+      <button onClick={onToggle} style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px 7px 10px', borderRadius:999, border:`1.5px solid ${hex(T.inkColor,.1)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' }}>
+        <PickupIcon width={13} height={13}/>
+        <span style={{ opacity:.45, fontWeight:600 }}>Pickup from:</span>
+        <span>{pickup === 'curbside' ? 'Curbside' : 'Counter'}</span>
+        <span style={{ opacity:.3, fontSize:10 }}>tap to change</span>
+      </button>
+    </div>
+  );
+}
+
+// ── Bottom Nav (mobile only) ───────────────────────────────────────────────
+function BottomNav({ onOrdersClick, loyaltyActive, onRewardsClick }: {
+  onOrdersClick: () => void; loyaltyActive: boolean; onRewardsClick: () => void;
+}) {
+  const items = [
+    { icon: '🏠', label: 'Menu',    onClick: () => window.scrollTo({ top: 0, behavior: 'smooth' }) },
+    { icon: '🧾', label: 'Orders',  onClick: onOrdersClick },
+    ...(loyaltyActive ? [{ icon: '★', label: 'Rewards', onClick: onRewardsClick }] : []),
+  ];
+  return (
+    <nav style={{ position:'fixed', bottom:0, left:0, right:0, height:56, zIndex:14, background:T.bgColor, borderTop:`1px solid ${hex(T.inkColor,.1)}`, display:'flex', alignItems:'center', boxShadow:`0 -4px 16px ${hex(T.inkColor,.07)}` }}>
+      {items.map(item => (
+        <button key={item.label} onClick={item.onClick} style={{ flex:1, height:'100%', border:'none', background:'transparent', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, cursor:'pointer', color:hex(T.inkColor,.5), fontFamily:"'Nunito',system-ui" }}>
+          <span style={{ fontSize:item.label==='Rewards'?16:18 }}>{item.icon}</span>
+          <span style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'.03em' }}>{item.label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+// ── Header ─────────────────────────────────────────────────────────────────
 function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyActive, customerPoints, onLoyaltyClick, onOrdersClick, activeOrder }: {
   viewport: Viewport; pickup: 'counter'|'curbside'; setPickup: (v: 'counter'|'curbside') => void;
   cartCount: number; onCartClick: () => void;
@@ -209,29 +245,34 @@ function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyAc
     <header style={{ position:'sticky', top:0, zIndex:20, background:T.bgColor, borderBottom:`1px solid ${hex(T.inkColor,.08)}`, padding:compact?'5px 12px':'5px 15px', display:'flex', alignItems:'center', gap:8 }}>
       <img src="/co-logo.png" alt="Coffee Oasis" style={{ height:compact?40:80, maxWidth:compact?200:400, width:'auto', objectFit:'contain', flexShrink:0 }}/>
 
-      {/* Pickup pill — tap to toggle */}
-      <button onClick={toggle} style={{ marginLeft:compact?2:8, display:'flex', alignItems:'center', gap:4, padding:compact?'5px 7px':'6px 10px 6px 8px', borderRadius:999, border:`1.5px solid ${hex(T.inkColor,.12)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?11:12, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
-        <PickupIcon width={compact?13:14} height={compact?13:14}/>
-        {!compact && <span style={{ opacity:.45, fontWeight:600 }}>Pickup:</span>}
-        <span>{pickup === 'curbside' ? 'Curbside' : 'Counter'}</span>
-      </button>
+      {/* Pickup pill — desktop only; mobile uses PickupBar below greeting */}
+      {!compact && (
+        <button onClick={toggle} style={{ marginLeft:8, display:'flex', alignItems:'center', gap:4, padding:'6px 10px 6px 8px', borderRadius:999, border:`1.5px solid ${hex(T.inkColor,.12)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
+          <PickupIcon width={14} height={14}/>
+          <span style={{ opacity:.45, fontWeight:600 }}>Pickup:</span>
+          <span>{pickup === 'curbside' ? 'Curbside' : 'Counter'}</span>
+        </button>
+      )}
 
       <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center', flexShrink:0 }}>
         {activeOrder && (
           <a href={`/order/${activeOrder.id}`} title={`Order ${activeOrder.id}`}
-            style={{ display:'flex', alignItems:'center', justifyContent:'center', width:compact?36:42, height:compact?36:42, borderRadius:'50%', background: activeOrder.status === 'ready' ? hex(T.primaryColor,.12) : '#fff', border:`1.5px solid ${activeOrder.status === 'ready' ? T.primaryColor : hex(T.inkColor,.12)}`, cursor:'pointer', flexShrink:0, textDecoration:'none', animation: activeOrder.status === 'ready' ? 'orderBounce 0.6s ease' : 'none' }}>
-            <OrderRingIcon order={activeOrder} size={compact?22:26}/>
+            style={{ display:'flex', alignItems:'center', justifyContent:'center', width:compact?34:42, height:compact?34:42, borderRadius:'50%', background: activeOrder.status === 'ready' ? hex(T.primaryColor,.12) : '#fff', border:`1.5px solid ${activeOrder.status === 'ready' ? T.primaryColor : hex(T.inkColor,.12)}`, cursor:'pointer', flexShrink:0, textDecoration:'none', animation: activeOrder.status === 'ready' ? 'orderBounce 0.6s ease' : 'none' }}>
+            <OrderRingIcon order={activeOrder} size={compact?20:26}/>
           </a>
         )}
-        <button onClick={onOrdersClick} style={{ display:'flex', alignItems:'center', gap:4, padding:compact?'6px 8px':'8px 12px', borderRadius:999, background:'#fff', color:T.inkColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?12:13, cursor:'pointer', whiteSpace:'nowrap' }}>
-          <span style={{ fontSize:13 }}>🧾</span>
-          {!compact && 'Orders'}
-        </button>
-        {loyaltyActive && (
-          <button onClick={onLoyaltyClick} style={{ display:'flex', alignItems:'center', gap:4, padding:compact?'6px 8px':'8px 12px', borderRadius:999, background:T.secondaryColor, color:T.inkColor, border:'none', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?12:13, cursor:'pointer', whiteSpace:'nowrap' }}>
-            <span style={{ fontSize:13 }}>★</span>
-            {!compact && 'Rewards'}
-          </button>
+        {/* Orders + Rewards — desktop only; mobile uses BottomNav */}
+        {!compact && (
+          <>
+            <button onClick={onOrdersClick} style={{ display:'flex', alignItems:'center', gap:4, padding:'8px 12px', borderRadius:999, background:'#fff', color:T.inkColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap' }}>
+              <span style={{ fontSize:13 }}>🧾</span>Orders
+            </button>
+            {loyaltyActive && (
+              <button onClick={onLoyaltyClick} style={{ display:'flex', alignItems:'center', gap:4, padding:'8px 12px', borderRadius:999, background:T.secondaryColor, color:T.inkColor, border:'none', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap' }}>
+                <span style={{ fontSize:13 }}>★</span>Rewards
+              </button>
+            )}
+          </>
         )}
         <button onClick={onCartClick} aria-label="Cart" style={{ position:'relative', background:T.inkColor, color:'#fff', border:'none', borderRadius:999, padding:compact?'7px 10px':'10px 16px', display:'flex', alignItems:'center', gap:6, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?13:14, cursor:'pointer' }}>
           <Icon.Cart width={compact?22:26} height={compact?22:26}/>
@@ -249,19 +290,28 @@ function GreetingBand({ viewport, isReturning, hasReorder, onReorder, lastSummar
 }) {
   const compact = viewport === 'mobile';
   return (
-    <section style={{ margin:compact?'8px 14px 10px':'12px 24px 10px', background:`linear-gradient(135deg,${T.primaryColor} 0%,#FF9A3D 100%)`, borderRadius:T.cornerRadius, padding:compact?'10px 12px':'12px 16px', display:'flex', alignItems:'center', gap:compact?10:14, color:'#fff', overflow:'hidden' }}>
-      <img src="/co-mascot.png" alt="" style={{ width:compact?60:120, height:compact?60:120, objectFit:'contain', flexShrink:0, transform:'rotate(-4deg)', filter:'drop-shadow(0 4px 0 rgba(58,36,20,.18))' }}/>
-      <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?22:32, lineHeight:1.1 }}>
-          {isReturning ? 'Welcome back ✨' : 'Coffee, sorted.'}
+    <section style={{ margin:compact?'8px 14px 6px':'12px 24px 10px', background:`linear-gradient(135deg,${T.primaryColor} 0%,#FF9A3D 100%)`, borderRadius:T.cornerRadius, padding:compact?'10px 12px':'12px 16px', display:'flex', flexDirection: compact && hasReorder ? 'column' : 'row', alignItems: compact && hasReorder ? 'stretch' : 'center', gap:compact?8:14, color:'#fff', overflow:'hidden' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:compact?10:14, flex:1, minWidth:0 }}>
+        <img src="/co-mascot.png" alt="" style={{ width:compact?52:120, height:compact?52:120, objectFit:'contain', flexShrink:0, transform:'rotate(-4deg)', filter:'drop-shadow(0 4px 0 rgba(58,36,20,.18))' }}/>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?20:32, lineHeight:1.1 }}>
+            {isReturning ? 'Welcome back ✨' : 'Coffee, sorted.'}
+          </div>
+          <div style={{ fontFamily:"'Nunito',system-ui", fontSize:compact?14:18, opacity:.92, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace: compact && hasReorder ? 'normal' : 'nowrap' }}>
+            {hasReorder ? lastSummary : 'Order ahead, skip the line.'}
+          </div>
         </div>
-        <div style={{ fontFamily:"'Nunito',system-ui", fontSize:compact?16:18, opacity:.92, marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-          {hasReorder ? lastSummary : 'Order ahead, skip the line.'}
-        </div>
+        {/* Inline on desktop */}
+        {!compact && hasReorder && (
+          <button onClick={onReorder} style={{ background:'#fff', color:T.primaryColor, border:'none', borderRadius:999, padding:'12px 16px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:18, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, display:'flex', alignItems:'center', gap:5 }}>
+            <Icon.Bolt width="12" height="12"/> Reorder
+          </button>
+        )}
       </div>
-      {hasReorder && (
-        <button onClick={onReorder} style={{ background:'#fff', color:T.primaryColor, border:'none', borderRadius:999, padding:compact?'10px 12px':'12px 16px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?22:32, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, display:'flex', alignItems:'center', gap:5 }}>
-          <Icon.Bolt width="12" height="12"/> Reorder
+      {/* Full-width below on mobile */}
+      {compact && hasReorder && (
+        <button onClick={onReorder} style={{ background:'#fff', color:T.primaryColor, border:'none', borderRadius:T.cornerRadius-8, padding:'10px 14px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+          <Icon.Bolt width="12" height="12"/> Reorder last order
         </button>
       )}
     </section>
@@ -324,7 +374,7 @@ function CartBar({ count, total, onClick, viewport }: { count: number; total: nu
   if (count === 0) return null;
   const compact = viewport === 'mobile';
   return (
-    <div style={{ position:'sticky', bottom:compact?12:20, margin:compact?'0 16px 12px':'0 28px 20px', marginTop:20, zIndex:15 }}>
+    <div style={{ position:'sticky', bottom:compact?68:20, margin:compact?'0 16px 12px':'0 28px 20px', marginTop:20, zIndex:15 }}>
       <button onClick={onClick} style={{ width:'100%', padding:compact?'14px 18px':'16px 22px', background:T.inkColor, color:'#fff', border:'none', borderRadius:T.cornerRadius, display:'flex', alignItems:'center', justifyContent:'space-between', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?15:16, cursor:'pointer', boxShadow:`0 8px 0 ${hex(T.inkColor,.25)},0 18px 40px ${hex(T.inkColor,.2)}` }}>
         <span style={{ display:'flex', alignItems:'center', gap:10 }}>
           <span style={{ background:T.primaryColor, padding:'2px 10px', borderRadius:999, fontSize:14 }}>{count}</span>
@@ -1141,9 +1191,11 @@ export default function MenuAppV2() {
         lastSummary={lastOrder?.items.map(l => `${l.qty}× ${l.name}`).join(', ') ?? ''}
       />
 
+      {compact && <PickupBar pickup={pickup} onToggle={() => setPickup(pickup === 'curbside' ? 'counter' : 'curbside')}/>}
+
       <CatBar cats={categories} active={activeCat} setActive={setActiveCat} viewport={viewport}/>
 
-      <main style={{ padding:compact?'0 10px 120px':'0 24px 60px', display:'grid', gridTemplateColumns:viewport==='mobile'?'minmax(0,1fr) minmax(0,1fr)':viewport==='tablet'?'repeat(3,minmax(0,1fr))':'repeat(5,minmax(0,1fr))', gap:compact?6:8 }}>
+      <main style={{ padding:compact?'0 10px 180px':'0 24px 60px', display:'grid', gridTemplateColumns:viewport==='mobile'?'minmax(0,1fr) minmax(0,1fr)':viewport==='tablet'?'repeat(3,minmax(0,1fr))':'repeat(5,minmax(0,1fr))', gap:compact?6:8 }}>
         {filtered.map(p => (
           <ItemCard
             key={p.id} product={p} qty={qtyFor(p.id)}
@@ -1189,8 +1241,16 @@ export default function MenuAppV2() {
         }}
       />
 
+      {compact && (
+        <BottomNav
+          onOrdersClick={() => router.push('/orders')}
+          loyaltyActive={loyaltyConfig?.is_active ?? false}
+          onRewardsClick={() => setLoyaltyOpen(true)}
+        />
+      )}
+
       {/* Version switcher */}
-      <a href="/" style={{ position:'fixed', bottom:compact?86:24, left:16, zIndex:50, background:hex(T.inkColor,.85), color:'#fff', padding:'7px 14px', borderRadius:999, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, textDecoration:'none', backdropFilter:'blur(4px)' }}>
+      <a href="/" style={{ position:'fixed', bottom:compact?64:24, left:16, zIndex:50, background:hex(T.inkColor,.85), color:'#fff', padding:'7px 14px', borderRadius:999, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, textDecoration:'none', backdropFilter:'blur(4px)' }}>
         ← v1
       </a>
     </div>
