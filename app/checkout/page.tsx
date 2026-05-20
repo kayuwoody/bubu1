@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { QRCodeSVG } from 'qrcode.react';
 import type { CartLine, LoyaltyConfig } from '@/lib/types';
 
 const INK  = '#3A2414';
@@ -101,6 +102,16 @@ function CheckoutContent() {
   const [voucherDiscount, setVoucherDiscount] = useState(0);
   const [voucherType,    setVoucherType]    = useState<'fixed'|'percent'>('fixed');
 
+  type PassOption = { id: string; code: string | null; points_balance: number; loyalty_programs: { id: string; name: string } | null };
+  const [availablePasses,  setAvailablePasses]  = useState<PassOption[]>([]);
+  const [selectedPass,     setSelectedPass]     = useState<PassOption | null>(null);
+  const [passStatus,       setPassStatus]       = useState<'idle'|'checking'|'valid'|'invalid'>('idle');
+  const [passMsg,          setPassMsg]          = useState('');
+  const [passDiscount,     setPassDiscount]     = useState(0);
+  const [passUsesApplied,  setPassUsesApplied]  = useState(0);
+  const [copiedPass,       setCopiedPass]       = useState<string | null>(null);
+  const [passQrPass,       setPassQrPass]       = useState<PassOption | null>(null);
+
   const CHANNELS = [
     { value: 'fpx',          label: 'Online Banking (FPX)' },
     { value: 'TNG-EWALLET',  label: "Touch 'n Go eWallet" },
@@ -187,8 +198,14 @@ function CheckoutContent() {
             (p: { loyalty_programs: { id: string } | null }) => p.loyalty_programs?.id === loyaltyConfig?.id
           );
           setLoyaltyMember({ ...d.member, programPoints: pb?.points_balance ?? 0 });
+          const passes = (d.programBalances ?? []).filter(
+            (p: { points_balance: number; loyalty_programs: { trigger_type: string } | null }) =>
+              p.loyalty_programs?.trigger_type === 'pass' && p.points_balance > 0
+          );
+          setAvailablePasses(passes);
         } else {
           setLoyaltyMember(null);
+          setAvailablePasses([]);
         }
       } catch { setLoyaltyMember(null); }
       finally  { setLookingUp(false); }
@@ -196,10 +213,52 @@ function CheckoutContent() {
     return () => { clearTimeout(timer); setLookingUp(false); };
   }, [phone]);
 
+  const applyPass = async (pass: PassOption) => {
+    if (!pass.code || !pending) return;
+    setPassStatus('checking');
+    setPassMsg('');
+    try {
+      const res = await fetch('/api/passes/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: pass.code, items: pending.lines }),
+      });
+      const d = await res.json();
+      if (d.valid) {
+        setSelectedPass(pass);
+        setPassStatus('valid');
+        setPassDiscount(d.discount_amount);
+        setPassUsesApplied(d.uses_applied);
+        setPassMsg(`${d.uses_applied} use${d.uses_applied !== 1 ? 's' : ''} applied — RM ${Number(d.discount_amount).toFixed(2)} off`);
+      } else {
+        setPassStatus('invalid');
+        setPassMsg(d.reason ?? 'Pass could not be applied');
+        setSelectedPass(null);
+      }
+    } catch {
+      setPassStatus('invalid');
+      setPassMsg('Could not validate pass. Try again.');
+      setSelectedPass(null);
+    }
+  };
+
+  const removePass = () => {
+    setSelectedPass(null);
+    setPassStatus('idle');
+    setPassMsg('');
+    setPassDiscount(0);
+    setPassUsesApplied(0);
+  };
+
   const discountedTotal = (() => {
-    if (voucherStatus !== 'valid' || !pending) return pending?.total ?? 0;
-    if (voucherType === 'percent') return Math.max(0, pending.total * (1 - voucherDiscount / 100));
-    return Math.max(0, pending.total - voucherDiscount);
+    let base = pending?.total ?? 0;
+    if (voucherStatus === 'valid' && pending) {
+      base = voucherType === 'percent'
+        ? Math.max(0, base * (1 - voucherDiscount / 100))
+        : Math.max(0, base - voucherDiscount);
+    }
+    if (passStatus === 'valid') base = Math.max(0, base - passDiscount);
+    return base;
   })();
 
   const pointsToEarn = (() => {
@@ -244,6 +303,35 @@ function CheckoutContent() {
     }
   };
 
+  // Pass QR overlay (shown anywhere on the checkout page)
+  const PassQROverlay = passQrPass && passQrPass.code ? (
+    <div
+      onClick={() => setPassQrPass(null)}
+      style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ background: BG, borderRadius: R, padding: '28px 24px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, maxWidth: 320, width: '100%', border: `3px solid ${INK}` }}
+      >
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 20, color: INK }}>{passQrPass.loyalty_programs?.name ?? 'Pass'}</div>
+          <div style={{ fontFamily: "'Nunito', system-ui", fontSize: 13, color: hex(INK, .55), marginTop: 3 }}>
+            {passQrPass.points_balance} use{passQrPass.points_balance !== 1 ? 's' : ''} remaining
+          </div>
+        </div>
+        <div style={{ background: '#fff', padding: 16, borderRadius: 14, border: `2px solid ${hex(INK, .12)}` }}>
+          <QRCodeSVG value={passQrPass.code} size={180} fgColor={INK} bgColor="#ffffff" level="M" />
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontFamily: "'Nunito', system-ui", fontSize: 11, fontWeight: 700, color: hex(INK, .4), textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 4 }}>Pass code</div>
+          <div style={{ fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 16, color: INK, letterSpacing: '.06em' }}>{passQrPass.code}</div>
+        </div>
+        <div style={{ fontFamily: "'Nunito', system-ui", fontSize: 12, color: hex(INK, .45), textAlign: 'center' }}>Show to the cashier at pickup to redeem</div>
+        <button onClick={() => setPassQrPass(null)} style={{ background: INK, color: '#fff', border: 'none', borderRadius: 999, padding: '10px 32px', fontFamily: "'Baloo 2', system-ui", fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Close</button>
+      </div>
+    </div>
+  ) : null;
+
   if (!pending) {
     return (
       <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: BG, fontFamily: "'Nunito', system-ui" }}>
@@ -276,6 +364,7 @@ function CheckoutContent() {
           total: discountedTotal,
           channel,
           ...(voucherStatus === 'valid' && voucherCode ? { voucher_code: voucherCode.trim().toUpperCase() } : {}),
+          ...(passStatus === 'valid' && selectedPass?.code ? { pass_code: selectedPass.code } : {}),
         }),
       });
       const data = await res.json();
@@ -370,6 +459,7 @@ function CheckoutContent() {
 
   return (
     <div style={{ minHeight: '100vh', background: BG, fontFamily: "'Nunito', system-ui", padding: '24px 16px 48px' }}>
+      {PassQROverlay}
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
         <a href="/" style={{ color: hex(INK, .55), fontSize: 14, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24 }}>← Back to menu</a>
 
@@ -401,9 +491,15 @@ function CheckoutContent() {
               <span>Voucher ({voucherCode.toUpperCase()})</span>
               <span>
                 -{voucherType === 'percent'
-                  ? `${voucherDiscount}% (RM ${(pending.total - discountedTotal).toFixed(2)})`
+                  ? `${voucherDiscount}% (RM ${(voucherType === 'percent' ? pending.total * voucherDiscount / 100 : voucherDiscount).toFixed(2)})`
                   : `RM ${voucherDiscount.toFixed(2)}`}
               </span>
+            </div>
+          )}
+          {passStatus === 'valid' && selectedPass && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#16A34A', marginBottom: 4 }}>
+              <span>Pass ({selectedPass.loyalty_programs?.name ?? selectedPass.code}) ×{passUsesApplied}</span>
+              <span>-RM {passDiscount.toFixed(2)}</span>
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 20, color: INK, borderTop: `1px solid ${hex(INK, .06)}`, paddingTop: 8, marginTop: 4 }}>
@@ -509,6 +605,82 @@ function CheckoutContent() {
                 </a>
               )}
             </div>
+
+            {/* Passes — only shown if member has active passes */}
+            {availablePasses.length > 0 && (
+              <div>
+                <label style={labelStyle}>Use a Pass</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {availablePasses.map(pass => {
+                    const isSelected = selectedPass?.id === pass.id;
+                    const isApplied  = passStatus === 'valid' && isSelected;
+                    return (
+                      <div
+                        key={pass.id}
+                        style={{
+                          background: '#fff', borderRadius: R - 8,
+                          border: `1.5px solid ${isApplied ? '#16A34A' : isSelected ? PRI : hex(INK, .12)}`,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {/* Pass row */}
+                        <div style={{ padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#6B21A8', display: 'grid', placeItems: 'center', flexShrink: 0, fontSize: 16, color: '#fff' }}>🎟</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: INK, fontFamily: "'Baloo 2', system-ui" }}>
+                              {pass.loyalty_programs?.name ?? 'Pass'}
+                            </div>
+                            <div style={{ fontSize: 12, color: hex(INK, .5), fontFamily: "'Nunito', system-ui" }}>
+                              {pass.points_balance} use{pass.points_balance !== 1 ? 's' : ''} remaining
+                            </div>
+                          </div>
+                          {/* Action buttons */}
+                          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                            {pass.code && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => { setCopiedPass(pass.code); navigator.clipboard.writeText(pass.code!).then(() => setTimeout(() => setCopiedPass(null), 2000)); }}
+                                  style={{ padding: '6px 10px', borderRadius: 999, border: `1px solid ${hex(INK,.2)}`, background: copiedPass === pass.code ? INK : 'transparent', color: copiedPass === pass.code ? '#fff' : INK, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: "'Nunito', system-ui", transition: 'all .2s' }}
+                                >
+                                  {copiedPass === pass.code ? '✓' : 'Copy'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setPassQrPass(pass)}
+                                  style={{ padding: '6px 10px', borderRadius: 999, border: `1px solid ${hex(INK,.2)}`, background: 'transparent', color: INK, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: "'Nunito', system-ui" }}
+                                >
+                                  QR
+                                </button>
+                              </>
+                            )}
+                            <button
+                              type="button"
+                              onClick={isApplied ? removePass : () => applyPass(pass)}
+                              disabled={passStatus === 'checking'}
+                              style={{
+                                padding: '6px 12px', borderRadius: 999, border: 'none',
+                                background: isApplied ? '#16A34A' : '#6B21A8',
+                                color: '#fff', fontSize: 12, fontWeight: 700, cursor: passStatus === 'checking' ? 'not-allowed' : 'pointer',
+                                fontFamily: "'Nunito', system-ui", opacity: passStatus === 'checking' && isSelected ? .6 : 1,
+                              }}
+                            >
+                              {isApplied ? '✓ Remove' : passStatus === 'checking' && isSelected ? '…' : 'Apply'}
+                            </button>
+                          </div>
+                        </div>
+                        {/* Status message for this pass */}
+                        {(isSelected && passMsg) && (
+                          <div style={{ padding: '6px 14px 10px', fontSize: 12, fontWeight: 600, color: passStatus === 'valid' ? '#16A34A' : '#C0392B', fontFamily: "'Nunito', system-ui" }}>
+                            {passMsg}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Email */}
             <div>

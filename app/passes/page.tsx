@@ -93,6 +93,7 @@ function PassesContent() {
   const [products, setProducts] = useState<Record<string, PassProduct[]>>({});
   const [loading,  setLoading]  = useState(true);
   const [qrPass,   setQrPass]   = useState<Pass | null>(null);
+  const [copied,   setCopied]   = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -182,8 +183,10 @@ function PassesContent() {
             {passes.map(pass => {
               const prog = pass.loyalty_programs;
               const usesLeft = pass.points_balance;
+              const totalUses = pass.total_earned > 0 ? pass.total_earned : (usesLeft + 1);
+              const usesSpent = Math.max(0, totalUses - usesLeft);
+              const pct = Math.min(100, Math.round((usesSpent / totalUses) * 100));
               const eligibleProducts = prog ? (products[prog.id] ?? []) : [];
-              const pct = prog ? Math.min(100, Math.round(((prog.threshold - usesLeft) / prog.threshold) * 100)) : 0;
               return (
                 <div key={pass.id} style={{ background:'#fff', borderRadius:R-2, overflow:'hidden', border:`1.5px solid ${hex(INK,.08)}` }}>
                   {/* Pass header */}
@@ -218,7 +221,7 @@ function PassesContent() {
                           <div style={{ height:'100%', width:`${pct}%`, background:'#fff', borderRadius:999, transition:'width .4s ease' }} />
                         </div>
                         <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, color:'rgba(255,255,255,.6)', marginTop:4 }}>
-                          {prog.threshold - usesLeft} of {prog.threshold} uses spent
+                          {usesSpent} of {totalUses} uses spent
                         </div>
                       </div>
                     )}
@@ -226,20 +229,33 @@ function PassesContent() {
 
                   {/* Pass body */}
                   <div style={{ padding:'14px 18px 18px' }}>
-                    {/* QR button */}
+                    {/* QR + Copy buttons */}
                     {pass.code && (
-                      <button
-                        onClick={() => setQrPass(pass)}
-                        style={{
-                          width:'100%', padding:'11px',
-                          background:INK, color:'#fff',
-                          border:'none', borderRadius:R-8,
-                          ...s, fontWeight:700, fontSize:14,
-                          cursor:'pointer', marginBottom: eligibleProducts.length > 0 ? 14 : 0,
-                        }}
-                      >
-                        Show QR to redeem →
-                      </button>
+                      <div style={{ display:'flex', gap:8, marginBottom: eligibleProducts.length > 0 ? 14 : 0 }}>
+                        <button
+                          onClick={() => setQrPass(pass)}
+                          style={{ flex:1, padding:'11px', background:INK, color:'#fff', border:'none', borderRadius:R-8, ...s, fontWeight:700, fontSize:14, cursor:'pointer' }}
+                        >
+                          Show QR →
+                        </button>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(pass.code!).then(() => {
+                              setCopied(pass.code);
+                              setTimeout(() => setCopied(null), 2000);
+                            });
+                          }}
+                          style={{
+                            padding:'11px 18px', border:`1.5px solid ${INK}`, borderRadius:R-8,
+                            background: copied === pass.code ? INK : 'transparent',
+                            color: copied === pass.code ? '#fff' : INK,
+                            ...s, fontWeight:700, fontSize:14, cursor:'pointer', flexShrink:0,
+                            transition:'all .2s',
+                          }}
+                        >
+                          {copied === pass.code ? '✓ Copied' : 'Copy'}
+                        </button>
+                      </div>
                     )}
 
                     {/* Eligible products */}
