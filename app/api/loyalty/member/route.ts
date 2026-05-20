@@ -34,7 +34,7 @@ export async function GET(req: Request) {
       .limit(20),
     supabase
       .from('loyalty_member_programs')
-      .select('points_balance, total_earned, enrolled_at, updated_at, loyalty_programs(id, name, trigger_type, threshold, voucher_type, voucher_discount_value)')
+      .select('id, code, points_balance, total_earned, enrolled_at, updated_at, loyalty_programs(id, name, trigger_type, threshold, voucher_type, voucher_discount_value)')
       .eq('member_id', member.id),
   ]);
 

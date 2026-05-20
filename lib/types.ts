@@ -235,6 +235,6 @@ export interface Voucher {
   max_uses: number;
   discount_value: number;
   type: 'fixed' | 'percent';
-  min_order: number | null;
+  min_order_amount: number | null;
   created_at: string;
 }

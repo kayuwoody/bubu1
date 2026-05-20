@@ -756,7 +756,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   onPhoneSave: (phone: string) => void;
 }) {
   type ProgInfo = { id: string; name: string; trigger_type: string; threshold: number; voucher_type: string; voucher_discount_value: number };
-  type ProgramBalance = { points_balance: number; total_earned: number; enrolled_at: string; updated_at: string; loyalty_programs: ProgInfo | null };
+  type ProgramBalance = { id: string; code: string | null; points_balance: number; total_earned: number; enrolled_at: string; updated_at: string; loyalty_programs: ProgInfo | null };
 
   const router = useRouter();
   const [member,          setMember]          = useState<LoyaltyMember | null>(null);
@@ -765,6 +765,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   const [programBalances, setProgramBalances] = useState<ProgramBalance[]>([]);
   const [fetching,        setFetching]        = useState(false);
   const [qrVoucher,       setQrVoucher]       = useState<Voucher | null>(null);
+  const [qrPass,          setQrPass]          = useState<ProgramBalance | null>(null);
   const [phoneInput,      setPhoneInput]      = useState('');
   const [phoneErr,        setPhoneErr]        = useState('');
   const [copied,          setCopied]          = useState<string | null>(null);
@@ -823,6 +824,33 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
 
   if (!open) return null;
 
+  // QR overlay for pass redemption
+  if (qrPass && qrPass.code) {
+    const prog = qrPass.loyalty_programs;
+    const usesLeft = qrPass.points_balance;
+    return (
+      <div onClick={() => setQrPass(null)} style={{ position:'fixed', inset:0, zIndex:60, background:'rgba(0,0,0,.85)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
+        <div onClick={e => e.stopPropagation()} style={{ background:'#FFF6E8', borderRadius:22, padding:'28px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', gap:16, maxWidth:320, width:'100%', border:'3px solid #3A2414' }}>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:20, color:'#3A2414', lineHeight:1.1 }}>{prog?.name ?? 'Pass'}</div>
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:'rgba(58,36,20,.55)', marginTop:3 }}>
+              {usesLeft} use{usesLeft !== 1 ? 's' : ''} remaining
+            </div>
+          </div>
+          <div style={{ background:'#fff', padding:16, borderRadius:14, border:'2px solid rgba(58,36,20,.12)' }}>
+            <QRCodeSVG value={qrPass.code} size={200} fgColor="#3A2414" bgColor="#ffffff" level="M" />
+          </div>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, fontWeight:700, color:'rgba(58,36,20,.4)', textTransform:'uppercase', letterSpacing:'.08em', marginBottom:4 }}>Pass code</div>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:16, color:'#3A2414', letterSpacing:'.06em' }}>{qrPass.code}</div>
+          </div>
+          <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:'rgba(58,36,20,.45)', textAlign:'center' }}>Show this to the cashier to redeem</div>
+          <button onClick={() => setQrPass(null)} style={{ background:'#3A2414', color:'#fff', border:'none', borderRadius:999, padding:'10px 32px', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, cursor:'pointer' }}>Close</button>
+        </div>
+      </div>
+    );
+  }
+
   // QR overlay for in-person voucher redemption
   if (qrVoucher) {
     const amt = Number(qrVoucher.discount_value ?? 0);
@@ -832,8 +860,8 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
         <div onClick={e => e.stopPropagation()} style={{ background:'#FFF6E8', borderRadius:22, padding:'28px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', gap:16, maxWidth:320, width:'100%', border:'3px solid #3A2414' }}>
           <div style={{ textAlign:'center' }}>
             <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:22, color:'#3A2414', lineHeight:1.1 }}>{label}</div>
-            {qrVoucher.min_order != null && (
-              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:hex(T.inkColor,.55), marginTop:3 }}>Min. order RM {Number(qrVoucher.min_order).toFixed(2)}</div>
+            {qrVoucher.min_order_amount != null && (
+              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:hex(T.inkColor,.55), marginTop:3 }}>Min. order RM {Number(qrVoucher.min_order_amount).toFixed(2)}</div>
             )}
           </div>
           <div style={{ background:'#fff', padding:16, borderRadius:14, border:`2px solid ${hex(T.inkColor,.12)}` }}>
@@ -857,6 +885,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
 
   const scanPrograms     = programBalances.filter(pb => pb.loyalty_programs?.trigger_type === 'scan');
   const purchasePrograms = programBalances.filter(pb => pb.loyalty_programs?.trigger_type === 'purchase');
+  const passPrograms     = programBalances.filter(pb => pb.loyalty_programs?.trigger_type === 'pass');
 
   // Stamp card (for scan-trigger programs) — matches physical card mockup
   const StampCard = ({ pb }: { pb: ProgramBalance }) => {
@@ -940,6 +969,37 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
     );
   };
 
+  // Pass card component
+  const PassCard = ({ pb }: { pb: ProgramBalance }) => {
+    const prog = pb.loyalty_programs!;
+    const usesLeft = pb.points_balance;
+    const hasCode = !!pb.code;
+    return (
+      <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'14px 16px', border:`1.5px solid ${hex(T.inkColor,.08)}`, marginBottom:10 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ width:40, height:40, borderRadius:'50%', background:'#6B21A8', display:'grid', placeItems:'center', flexShrink:0, fontSize:18, color:'#fff' }}>🎟</div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, fontWeight:700, color:hex(T.inkColor,.5), textTransform:'uppercase', letterSpacing:'.05em' }}>{prog.name}</div>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:18, color:T.inkColor, lineHeight:1.1 }}>
+              {usesLeft} <span style={{ fontSize:13, fontWeight:600, opacity:.5 }}>use{usesLeft !== 1 ? 's' : ''} left</span>
+            </div>
+            {pb.code && (
+              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:11, color:hex(T.inkColor,.4), marginTop:1, letterSpacing:'.04em' }}>{pb.code}</div>
+            )}
+          </div>
+          {hasCode && (
+            <button
+              onClick={() => setQrPass(pb)}
+              style={{ background:T.inkColor, color:'#fff', border:'none', borderRadius:999, padding:'6px 12px', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', flexShrink:0 }}
+            >
+              QR
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div style={{ position:'fixed', inset:0, zIndex:60, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
       <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(58,36,20,.45)' }}/>
@@ -994,6 +1054,23 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
 
         {/* Purchase points cards */}
         {!fetching && purchasePrograms.map((pb, i) => <PointsCard key={i} pb={pb} />)}
+
+        {/* Passes */}
+        {!fetching && passPrograms.length > 0 && (
+          <div style={{ marginBottom:14 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+              <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:hex(T.inkColor,.6), textTransform:'uppercase', letterSpacing:'.05em' }}>
+                Passes ({passPrograms.length})
+              </div>
+              <button
+                onClick={() => { onClose(); router.push('/passes'); }}
+                style={{ background:'transparent', border:'none', fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:13, color:T.primaryColor, cursor:'pointer', padding:0 }}>
+                See all →
+              </button>
+            </div>
+            {passPrograms.slice(0, 2).map((pb, i) => <PassCard key={i} pb={pb} />)}
+          </div>
+        )}
 
         {/* Placeholder when no member loaded yet */}
         {!fetching && !member && config?.is_active && (

@@ -48,9 +48,9 @@ function QROverlay({ voucher, onClose }: { voucher: any; onClose: () => void }) 
           <div style={{ fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 22, color: INK, lineHeight: 1.1 }}>
             {label}
           </div>
-          {voucher.min_order != null && (
+          {voucher.min_order_amount != null && (
             <div style={{ fontFamily: "'Nunito', system-ui", fontSize: 13, color: hex(INK, .55), marginTop: 3 }}>
-              Min. order RM {Number(voucher.min_order).toFixed(2)}
+              Min. order RM {Number(voucher.min_order_amount).toFixed(2)}
             </div>
           )}
         </div>
@@ -148,7 +148,7 @@ function VouchersContent() {
   const discountAmt = (v: any) => Number(v.discount_value ?? v.discount_amount ?? v.amount ?? 0);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isEligible = (v: any) => {
-    const min = v.min_order != null ? Number(v.min_order) : null;
+    const min = v.min_order_amount != null ? Number(v.min_order_amount) : null;
     return min == null || orderTotal <= 0 || orderTotal >= min;
   };
 
@@ -235,9 +235,9 @@ function VouchersContent() {
                         <div style={{ ...heading, fontSize: 18, color: eligible ? '#fff' : INK }}>
                           {v.type === 'percent' ? `${amt}% off` : `RM ${amt.toFixed(2)} off`}
                         </div>
-                        {v.min_order != null && (
+                        {v.min_order_amount != null && (
                           <div style={{ ...s, fontSize: 12, color: eligible ? 'rgba(255,255,255,.75)' : hex(INK, .5) }}>
-                            Min. order RM {Number(v.min_order).toFixed(2)}
+                            Min. order RM {Number(v.min_order_amount).toFixed(2)}
                           </div>
                         )}
                       </div>
