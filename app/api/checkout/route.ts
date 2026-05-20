@@ -66,7 +66,7 @@ export async function POST(req: Request) {
       outlet_id,
       status: 'pending',
       ...(voucher_code ? { voucher_code: voucher_code.trim().toUpperCase() } : {}),
-      ...(pass_code ? { pass_code: pass_code.trim().toUpperCase() } : {}),
+      ...(pass_code ? { code: pass_code.trim().toUpperCase() } : {}),
     })
     .select('id')
     .single();
