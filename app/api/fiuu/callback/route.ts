@@ -188,11 +188,19 @@ async function generateAndUploadReceipt(orderId: string, session: CheckoutSessio
   );
 
   const filename = `online-order-${orderId}.html`;
-  const { error } = await supabase.storage
-    .from('receipts')
-    .upload(filename, html, { contentType: 'text/html', upsert: true });
+  const url = `${process.env.SUPABASE_URL}/storage/v1/object/receipts/${filename}`;
 
-  if (error) console.error('[receipt] upload error:', error.message);
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'text/html; charset=utf-8',
+      'x-upsert': 'true',
+    },
+    body: html,
+  });
+
+  if (!res.ok) console.error('[receipt] upload error:', res.status, await res.text().catch(() => ''));
   else console.log('[receipt] uploaded:', filename);
 }
 
