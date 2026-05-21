@@ -11,10 +11,10 @@ export async function POST(req: Request) {
   const { code, items } = body;
   if (!code) return NextResponse.json({ valid: false, reason: 'No pass code provided' });
 
-  // Look up the pass enrollment
+  // Look up the pass enrollment + program details including daily limit
   const { data: enrollment } = await supabase
     .from('loyalty_member_programs')
-    .select('id, points_balance, loyalty_programs(id, name)')
+    .select('id, points_balance, loyalty_programs(id, name, pass_daily_limit)')
     .eq('code', code.trim().toUpperCase())
     .single();
 
@@ -23,6 +23,33 @@ export async function POST(req: Request) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const prog = enrollment.loyalty_programs as any;
+  const dailyLimit: number | null = prog?.pass_daily_limit ?? null;
+
+  // Check daily limit if set
+  let allowedToday = enrollment.points_balance; // unlimited by default
+  if (dailyLimit !== null) {
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+
+    const { count: todayCount } = await supabase
+      .from('member_pass_usage')
+      .select('*', { count: 'exact', head: true })
+      .eq('enrollment_id', enrollment.id)
+      .gte('used_at', todayStart.toISOString());
+
+    const todayUsed = todayCount ?? 0;
+    const remainingToday = dailyLimit - todayUsed;
+
+    if (remainingToday <= 0) {
+      return NextResponse.json({
+        valid: false,
+        reason: `You've already used your daily allowance (${dailyLimit} use${dailyLimit !== 1 ? 's' : ''}/day) for this pass. Come back tomorrow!`,
+        daily_limit: dailyLimit,
+        today_used: todayUsed,
+      });
+    }
+    allowedToday = remainingToday;
+  }
 
   // Fetch eligible products for this program
   const { data: eligible } = await supabase
@@ -38,9 +65,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ valid: false, reason: 'Your cart has no items covered by this pass' });
   }
 
-  // One use = one eligible item (qty 1). Cover as many as uses_left allows.
-  const usesToApply = Math.min(enrollment.points_balance, matchingItems.reduce((s, l) => s + l.qty, 0));
-  // Discount = unit price of eligible items up to usesToApply qty
+  // Cap by: uses remaining on pass AND daily allowance remaining
+  const cartEligibleQty = matchingItems.reduce((s, l) => s + l.qty, 0);
+  const usesToApply = Math.min(enrollment.points_balance, allowedToday, cartEligibleQty);
+
+  // Discount = unit price × covered qty
   let discount = 0;
   let remaining = usesToApply;
   for (const l of matchingItems) {
@@ -56,5 +85,7 @@ export async function POST(req: Request) {
     pass_name: prog?.name ?? 'Pass',
     uses_applied: usesToApply,
     uses_left: enrollment.points_balance,
+    daily_limit: dailyLimit,
+    ...(dailyLimit !== null ? { today_remaining: allowedToday } : {}),
   });
 }
