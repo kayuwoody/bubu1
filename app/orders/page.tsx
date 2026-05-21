@@ -21,6 +21,9 @@ const STATUS_LABEL: Record<string, string> = {
   ready:     'Ready',
   collected: 'Collected',
   rejected:  'Rejected',
+  completed: 'Completed',
+  paid:      'Completed',
+  voided:    'Voided',
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -29,6 +32,9 @@ const STATUS_COLOR: Record<string, string> = {
   ready:     '#15803D',
   collected: '#6B7280',
   rejected:  '#DC2626',
+  completed: '#6B7280',
+  paid:      '#6B7280',
+  voided:    '#DC2626',
 };
 
 const STATUS_BG: Record<string, string> = {
@@ -37,6 +43,9 @@ const STATUS_BG: Record<string, string> = {
   ready:     '#DCFCE7',
   collected: '#F3F4F6',
   rejected:  '#FEE2E2',
+  completed: '#F3F4F6',
+  paid:      '#F3F4F6',
+  voided:    '#FEE2E2',
 };
 
 interface OrderItem {
@@ -49,11 +58,12 @@ interface OrderItem {
 
 interface Order {
   id:          string;
+  source:      'online' | 'pos';
   status:      string;
-  pickup_type: string;
+  pickup_type: string | null;
   total_paid:  number;
   created_at:  string;
-  online_order_items: OrderItem[];
+  items:       OrderItem[];
 }
 
 function formatDate(iso: string) {
@@ -110,7 +120,7 @@ function OrdersContent() {
 
   const reorder = (order: Order) => {
     setReordering(order.id);
-    const lines: CartLine[] = order.online_order_items.map(item => ({
+    const lines: CartLine[] = order.items.map(item => ({
       lid:       `${item.product_id}-reorder-${Date.now()}`,
       id:        item.product_id,
       name:      item.product_name,
@@ -170,11 +180,14 @@ function OrdersContent() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {orders.map(order => {
               const status = order.status ?? 'pending';
-              const items  = order.online_order_items ?? [];
+              const items  = order.items ?? [];
               return (
                 <div key={order.id} style={{ background: '#fff', borderRadius: R - 2, overflow: 'hidden', border: `1.5px solid ${hex(INK, .08)}` }}>
-                  {/* Order header — tapping navigates to detail page */}
-                  <div onClick={() => router.push(`/order/${order.id}`)} style={{ padding: '12px 16px', borderBottom: `1px solid ${hex(INK, .07)}`, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                  {/* Order header — online orders tap through to detail page */}
+                  <div
+                    onClick={() => order.source === 'online' ? router.push(`/order/${order.id}`) : undefined}
+                    style={{ padding: '12px 16px', borderBottom: `1px solid ${hex(INK, .07)}`, display: 'flex', alignItems: 'center', gap: 10, cursor: order.source === 'online' ? 'pointer' : 'default' }}
+                  >
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{ ...heading, fontSize: 16 }}>Order #{order.id}</span>
@@ -186,9 +199,16 @@ function OrdersContent() {
                         }}>
                           {STATUS_LABEL[status] ?? status}
                         </span>
+                        {order.source === 'pos' && (
+                          <span style={{ ...s, fontSize: 11, fontWeight: 700, background: hex(INK, .07), color: hex(INK, .5), padding: '2px 8px', borderRadius: 999 }}>
+                            In-store
+                          </span>
+                        )}
                       </div>
                       <div style={{ ...s, fontSize: 12, color: hex(INK, .5), marginTop: 2 }}>
-                        {formatDate(order.created_at)} · {order.pickup_type === 'curbside' ? 'Curbside' : 'Counter pickup'}
+                        {formatDate(order.created_at)}
+                        {order.source === 'online' && ' · '}
+                        {order.source === 'online' && (order.pickup_type === 'curbside' ? 'Curbside' : 'Counter pickup')}
                       </div>
                     </div>
                     <div style={{ ...heading, fontSize: 18, flexShrink: 0 }}>
