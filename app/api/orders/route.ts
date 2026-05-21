@@ -8,17 +8,47 @@ export async function GET(req: Request) {
   const phone = (searchParams.get('phone') ?? '').replace(/\D/g, '');
   if (phone.length < 8) return NextResponse.json({ orders: [] });
 
-  const { data: orders, error } = await supabase
-    .from('online_orders')
-    .select(`
-      id, status, pickup_type, total_paid, created_at,
-      online_order_items ( product_id, product_name, qty, unit_price, mods )
-    `)
-    .eq('customer_phone', phone)
-    .order('created_at', { ascending: false })
-    .limit(30);
+  const [onlineRes, posRes] = await Promise.all([
+    supabase
+      .from('online_orders')
+      .select('id, status, pickup_type, total_paid, created_at, online_order_items(product_id, product_name, qty, unit_price, mods)')
+      .eq('customer_phone', phone)
+      .order('created_at', { ascending: false })
+      .limit(40),
+    supabase
+      .from('pos_orders')
+      .select('id, status, total_paid, created_at, pos_order_items(product_id, product_name, qty, unit_price, mods)')
+      .eq('loyalty_member_phone', phone)
+      .order('created_at', { ascending: false })
+      .limit(40),
+  ]);
 
-  if (error) console.error('[orders] fetch error:', error.message);
+  if (onlineRes.error) console.error('[orders] online fetch error:', onlineRes.error.message);
+  if (posRes.error)    console.error('[orders] pos fetch error:',    posRes.error.message);
 
-  return NextResponse.json({ orders: orders ?? [] });
+  const online = (onlineRes.data ?? []).map(o => ({
+    id:          o.id,
+    source:      'online' as const,
+    status:      o.status ?? 'pending',
+    pickup_type: o.pickup_type ?? null,
+    total_paid:  o.total_paid,
+    created_at:  o.created_at,
+    items:       o.online_order_items ?? [],
+  }));
+
+  const pos = (posRes.data ?? []).map(o => ({
+    id:          o.id,
+    source:      'pos' as const,
+    status:      o.status ?? 'completed',
+    pickup_type: null,
+    total_paid:  o.total_paid,
+    created_at:  o.created_at,
+    items:       o.pos_order_items ?? [],
+  }));
+
+  const orders = [...online, ...pos]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 50);
+
+  return NextResponse.json({ orders });
 }
