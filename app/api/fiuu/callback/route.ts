@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/online/supabase';
 import { verifyFiuuCallback, isFiuuSuccess } from '@/lib/online/fiuu';
 import { nextOrderNumber } from '@/lib/online/orderNumber';
+import { generateReceiptHtml } from '@/lib/online/receiptGenerator';
 import type { CartLine, CheckoutSession } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -162,7 +163,37 @@ export async function POST(req: Request) {
     catch (e: unknown) { console.error('[voucher] uncaught error:', e instanceof Error ? e.message : e); }
   }
 
+  // Generate and upload receipt — non-blocking
+  try { await generateAndUploadReceipt(orderId, session, items); }
+  catch (e: unknown) { console.error('[receipt] uncaught error:', e instanceof Error ? e.message : e); }
+
   return new Response('RECEIVEROK', { status: 200 });
+}
+
+async function generateAndUploadReceipt(orderId: string, session: CheckoutSession, items: CartLine[]) {
+  const html = generateReceiptHtml(
+    {
+      id:            orderId,
+      customer_name: session.customer_name,
+      pickup_type:   session.pickup_type,
+      total_paid:    session.total_amount,
+      created_at:    new Date().toISOString(),
+    },
+    items.map(l => ({
+      product_name: l.name ?? l.id,
+      qty:          l.qty,
+      unit_price:   l.unitPrice,
+      mods:         l.mods,
+    })),
+  );
+
+  const filename = `online-order-${orderId}.html`;
+  const { error } = await supabase.storage
+    .from('receipts')
+    .upload(filename, html, { contentType: 'text/html', upsert: true });
+
+  if (error) console.error('[receipt] upload error:', error.message);
+  else console.log('[receipt] uploaded:', filename);
 }
 
 async function incrementVoucherUsage(voucherCode: string) {

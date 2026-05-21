@@ -59,6 +59,7 @@ interface Order {
   currency:     string;
   created_at:   string;
   reject_reason:string | null;
+  receipt_url:  string | null;
   online_order_items: OrderItem[];
 }
 
@@ -325,6 +326,26 @@ export default function OrderPage() {
             <span>{order.currency} {Number(order.total_paid).toFixed(2)}</span>
           </div>
         </div>
+
+        {/* Receipt link */}
+        {order.receipt_url && (
+          <a
+            href={order.receipt_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              width: '100%', padding: '12px',
+              background: 'transparent',
+              border: `1.5px solid ${hex(INK, .2)}`,
+              borderRadius: R - 8, marginBottom: 14,
+              fontFamily: "'Nunito', system-ui", fontWeight: 700, fontSize: 14, color: INK,
+              textDecoration: 'none',
+            }}
+          >
+            🧾 View Receipt
+          </a>
+        )}
 
         {/* Rejection reason */}
         {order.status === 'rejected' && (
