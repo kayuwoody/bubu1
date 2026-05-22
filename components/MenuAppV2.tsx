@@ -748,6 +748,139 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   );
 }
 
+// ── Promotion Modal ────────────────────────────────────────────────────────
+interface Promo {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  body: string | null;
+  image_url: string | null;
+  cta_text: string | null;
+  cta_url: string | null;
+  bg_color: string | null;
+  text_color: string | null;
+}
+
+function PromotionModal({ promos, onClose }: { promos: Promo[]; onClose: () => void }) {
+  const [idx, setIdx] = useState(0);
+  if (!promos.length) return null;
+
+  const promo   = promos[idx];
+  const total   = promos.length;
+  const isLast  = idx === total - 1;
+  const bgColor = promo.bg_color  || T.primaryColor;
+  const fgColor = promo.text_color || '#ffffff';
+
+  const next = () => isLast ? onClose() : setIdx(i => i + 1);
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:70, display:'flex', alignItems:'center', justifyContent:'center', padding:'16px' }}>
+      {/* Backdrop */}
+      <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,.65)' }} />
+
+      {/* Card */}
+      <div style={{
+        position:'relative', width:'100%', maxWidth:440,
+        background:'#fff', borderRadius:24,
+        overflow:'hidden',
+        boxShadow:'0 24px 64px rgba(0,0,0,.35)',
+        animation:'coSheetIn .22s ease-out',
+      }}>
+        {/* Close */}
+        <button
+          onClick={onClose}
+          style={{ position:'absolute', top:12, right:14, zIndex:2, background:'rgba(0,0,0,.25)', border:'none', borderRadius:'50%', width:32, height:32, display:'grid', placeItems:'center', cursor:'pointer', color:'#fff', fontSize:18, lineHeight:1 }}
+        >
+          ×
+        </button>
+
+        {/* Coloured header — image fills it if present, otherwise just the bg */}
+        <div style={{ background:bgColor, minHeight: promo.image_url ? 0 : 120, position:'relative' }}>
+          {promo.image_url && (
+            <img
+              src={promo.image_url}
+              alt={promo.title}
+              style={{ width:'100%', maxHeight:260, objectFit:'cover', display:'block' }}
+            />
+          )}
+          {/* Gradient overlay so text is readable over images */}
+          {promo.image_url && (
+            <div style={{ position:'absolute', inset:0, background:`linear-gradient(to top, ${bgColor}cc 0%, transparent 60%)` }} />
+          )}
+        </div>
+
+        {/* Body */}
+        <div style={{ background:bgColor, padding:'20px 22px 22px' }}>
+          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:22, color:fgColor, lineHeight:1.15, marginBottom:6 }}>
+            {promo.title}
+          </div>
+          {promo.subtitle && (
+            <div style={{ fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:15, color:fgColor, opacity:.85, marginBottom:6 }}>
+              {promo.subtitle}
+            </div>
+          )}
+          {promo.body && (
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:14, color:fgColor, opacity:.75, lineHeight:1.55, marginBottom:10 }}>
+              {promo.body}
+            </div>
+          )}
+
+          {/* Dots + CTA row */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:14, gap:12 }}>
+            {/* Dot indicators */}
+            {total > 1 ? (
+              <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                {promos.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setIdx(i)}
+                    style={{
+                      width: i === idx ? 20 : 8, height:8, borderRadius:999,
+                      background: i === idx ? '#fff' : 'rgba(255,255,255,.4)',
+                      border:'none', padding:0, cursor:'pointer',
+                      transition:'all .2s',
+                    }}
+                  />
+                ))}
+              </div>
+            ) : <div />}
+
+            <div style={{ display:'flex', gap:8, flexShrink:0 }}>
+              {/* CTA button — links out if url set */}
+              {promo.cta_text && promo.cta_url && (
+                <a
+                  href={promo.cta_url}
+                  target={promo.cta_url.startsWith('http') ? '_blank' : undefined}
+                  rel="noopener noreferrer"
+                  style={{
+                    background:'#fff', color:bgColor,
+                    borderRadius:999, padding:'10px 18px',
+                    fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:14,
+                    textDecoration:'none', display:'inline-block',
+                  }}
+                >
+                  {promo.cta_text}
+                </a>
+              )}
+              {/* Next / Got it */}
+              <button
+                onClick={next}
+                style={{
+                  background:'rgba(255,255,255,.2)', border:'2px solid rgba(255,255,255,.6)',
+                  color:'#fff', borderRadius:999, padding:'10px 18px',
+                  fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:14, cursor:'pointer',
+                }}
+              >
+                {isLast ? 'Got it!' : 'Next →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Loyalty Sheet ─────────────────────────────────────────────────────────
 function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   open: boolean; onClose: () => void;
@@ -1173,6 +1306,8 @@ export default function MenuAppV2() {
   const [pickup,      setPickup]      = useState<'counter'|'curbside'>('counter');
   const [cartOpen,    setCartOpen]    = useState(false);
   const [loyaltyOpen, setLoyaltyOpen] = useState(false);
+  const [promos,      setPromos]      = useState<Promo[]>([]);
+  const [promoOpen,   setPromoOpen]   = useState(false);
   const [sheetProduct, setSheetProduct] = useState<Product | null>(null);
   const [loading,     setLoading]     = useState(true);
   const [isReturning, setIsReturning] = useState(false);
@@ -1182,13 +1317,23 @@ export default function MenuAppV2() {
     Promise.all([
       fetch('/api/menu').then(r => r.json()),
       fetch('/api/loyalty').then(r => r.json()),
-    ]).then(([menu, loyalty]) => {
+      fetch('/api/promotions').then(r => r.json()).catch(() => ({ promotions: [] })),
+    ]).then(([menu, loyalty, promoData]) => {
       setProducts(menu.products ?? []);
       setCategories(menu.categories ?? []);
       setBranch(menu.branch ?? null);
       setIntakePaused(menu.intake_paused ?? false);
       setLoyaltyConfig(loyalty.config ?? null);
       if (menu.categories?.length) setActiveCat(menu.categories[0].id);
+      const activePromos: Promo[] = promoData.promotions ?? [];
+      if (activePromos.length > 0) {
+        setPromos(activePromos);
+        try {
+          const today = new Date().toISOString().slice(0, 10);
+          const lastDismissed = localStorage.getItem('promo_dismissed') ?? '';
+          if (lastDismissed !== today) setPromoOpen(true);
+        } catch { setPromoOpen(true); }
+      }
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -1316,6 +1461,16 @@ export default function MenuAppV2() {
           onOrdersClick={() => router.push('/orders')}
           loyaltyActive={loyaltyConfig?.is_active ?? false}
           onRewardsClick={() => setLoyaltyOpen(true)}
+        />
+      )}
+
+      {promoOpen && (
+        <PromotionModal
+          promos={promos}
+          onClose={() => {
+            setPromoOpen(false);
+            try { localStorage.setItem('promo_dismissed', new Date().toISOString().slice(0, 10)); } catch { /* ignore */ }
+          }}
         />
       )}
 
