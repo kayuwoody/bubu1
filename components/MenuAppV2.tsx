@@ -779,16 +779,20 @@ function PromotionModal({ promos, onClose }: { promos: Promo[]; onClose: () => v
       <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,.65)' }} />
 
       {/* Card */}
-      <div style={{
-        position:'relative', width:'100%', maxWidth:440,
-        background:'#fff', borderRadius:24,
-        overflow:'hidden',
-        boxShadow:'0 24px 64px rgba(0,0,0,.35)',
-        animation:'coSheetIn .22s ease-out',
-      }}>
+      <div
+        onClick={promo.cta_url ? () => { if (promo.cta_url!.startsWith('http')) { window.open(promo.cta_url!, '_blank', 'noopener,noreferrer'); } else { window.location.href = promo.cta_url!; } } : undefined}
+        style={{
+          position:'relative', width:'100%', maxWidth:440,
+          background:'#fff', borderRadius:24,
+          overflow:'hidden',
+          boxShadow:'0 24px 64px rgba(0,0,0,.35)',
+          animation:'coSheetIn .22s ease-out',
+          cursor: promo.cta_url ? 'pointer' : 'default',
+        }}
+      >
         {/* Close */}
         <button
-          onClick={onClose}
+          onClick={e => { e.stopPropagation(); onClose(); }}
           style={{ position:'absolute', top:12, right:14, zIndex:2, background:'rgba(0,0,0,.25)', border:'none', borderRadius:'50%', width:32, height:32, display:'grid', placeItems:'center', cursor:'pointer', color:'#fff', fontSize:18, lineHeight:1 }}
         >
           ×
@@ -833,7 +837,7 @@ function PromotionModal({ promos, onClose }: { promos: Promo[]; onClose: () => v
                 {promos.map((_, i) => (
                   <button
                     key={i}
-                    onClick={() => setIdx(i)}
+                    onClick={e => { e.stopPropagation(); setIdx(i); }}
                     style={{
                       width: i === idx ? 20 : 8, height:8, borderRadius:999,
                       background: i === idx ? '#fff' : 'rgba(255,255,255,.4)',
@@ -846,17 +850,19 @@ function PromotionModal({ promos, onClose }: { promos: Promo[]; onClose: () => v
             ) : <div />}
 
             <div style={{ display:'flex', gap:8, flexShrink:0 }}>
-              {/* CTA button — links out if url set */}
-              {promo.cta_text && promo.cta_url && (
+              {/* CTA button — shown when cta_text is set */}
+              {promo.cta_text && (
                 <a
-                  href={promo.cta_url}
-                  target={promo.cta_url.startsWith('http') ? '_blank' : undefined}
+                  href={promo.cta_url ?? undefined}
+                  onClick={e => e.stopPropagation()}
+                  target={promo.cta_url?.startsWith('http') ? '_blank' : undefined}
                   rel="noopener noreferrer"
                   style={{
                     background:'#fff', color:bgColor,
                     borderRadius:999, padding:'10px 18px',
                     fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:14,
                     textDecoration:'none', display:'inline-block',
+                    cursor: promo.cta_url ? 'pointer' : 'default',
                   }}
                 >
                   {promo.cta_text}
@@ -864,7 +870,7 @@ function PromotionModal({ promos, onClose }: { promos: Promo[]; onClose: () => v
               )}
               {/* Next / Got it */}
               <button
-                onClick={next}
+                onClick={e => { e.stopPropagation(); next(); }}
                 style={{
                   background:'rgba(255,255,255,.2)', border:'2px solid rgba(255,255,255,.6)',
                   color:'#fff', borderRadius:999, padding:'10px 18px',
