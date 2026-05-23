@@ -370,6 +370,7 @@ function CheckoutContent() {
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? 'Checkout failed.'); setLoading(false); return; }
       localStorage.setItem('co_session', data.sessionId);
+      try { localStorage.setItem('co_last_order', JSON.stringify({ items: pending.lines, when: 'Last order' })); } catch { /* ignore */ }
 
       // Load jQuery (required by Fiuu Seamless SDK)
       await loadScript('https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js');
