@@ -17,7 +17,7 @@ export async function GET(req: Request) {
       .limit(40),
     supabase
       .from('pos_orders')
-      .select('id, status, total_paid, created_at, pos_order_items(product_id, product_name, qty, unit_price)')
+      .select('id, status, total_paid, created_at, pos_order_items(product_id, product_name, qty, unit_price, subtotal)')
       .eq('loyalty_member_phone', phone)
       .order('created_at', { ascending: false })
       .limit(40),
