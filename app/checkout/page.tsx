@@ -103,7 +103,9 @@ function CheckoutContent() {
   const [voucherType,    setVoucherType]    = useState<'fixed'|'percent'>('fixed');
 
   type PassOption = { id: string; code: string | null; points_balance: number; loyalty_programs: { id: string; name: string } | null };
+  type PassEligibility = { ok: boolean; reason: string };
   const [availablePasses,  setAvailablePasses]  = useState<PassOption[]>([]);
+  const [passEligibility,  setPassEligibility]  = useState<Record<string, PassEligibility>>({});
   const [selectedPass,     setSelectedPass]     = useState<PassOption | null>(null);
   const [passStatus,       setPassStatus]       = useState<'idle'|'checking'|'valid'|'invalid'>('idle');
   const [passMsg,          setPassMsg]          = useState('');
@@ -212,6 +214,30 @@ function CheckoutContent() {
     }, 700);
     return () => { clearTimeout(timer); setLookingUp(false); };
   }, [phone]);
+
+  // Pre-validate all passes against current cart items
+  useEffect(() => {
+    if (!availablePasses.length || !pending?.lines?.length) return;
+    const results: Record<string, PassEligibility> = {};
+    Promise.all(
+      availablePasses.map(async pass => {
+        if (!pass.code) { results[pass.id] = { ok: false, reason: 'No pass code' }; return; }
+        try {
+          const res = await fetch('/api/passes/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: pass.code, items: pending.lines }),
+          });
+          const d = await res.json();
+          results[pass.id] = d.valid
+            ? { ok: true, reason: '' }
+            : { ok: false, reason: d.reason ?? 'Cannot be applied' };
+        } catch {
+          results[pass.id] = { ok: true, reason: '' }; // fail open — let Apply sort it out
+        }
+      })
+    ).then(() => setPassEligibility({ ...results }));
+  }, [availablePasses, pending?.lines]);
 
   const applyPass = async (pass: PassOption) => {
     if (!pass.code || !pending) return;
@@ -613,26 +639,31 @@ function CheckoutContent() {
                 <label style={labelStyle}>Use a Pass</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {availablePasses.map(pass => {
-                    const isSelected = selectedPass?.id === pass.id;
-                    const isApplied  = passStatus === 'valid' && isSelected;
+                    const isSelected  = selectedPass?.id === pass.id;
+                    const isApplied   = passStatus === 'valid' && isSelected;
+                    const eligibility = passEligibility[pass.id];
+                    const canApply    = !eligibility || eligibility.ok; // optimistic until checked
+                    const ineligibleReason = eligibility && !eligibility.ok ? eligibility.reason : '';
                     return (
                       <div
                         key={pass.id}
                         style={{
-                          background: '#fff', borderRadius: R - 8,
-                          border: `1.5px solid ${isApplied ? '#16A34A' : isSelected ? PRI : hex(INK, .12)}`,
+                          background: canApply ? '#fff' : hex(INK, .03),
+                          borderRadius: R - 8,
+                          border: `1.5px solid ${isApplied ? '#16A34A' : isSelected ? PRI : canApply ? hex(INK, .12) : hex(INK, .07)}`,
                           overflow: 'hidden',
+                          opacity: canApply ? 1 : .6,
                         }}
                       >
                         {/* Pass row */}
                         <div style={{ padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#6B21A8', display: 'grid', placeItems: 'center', flexShrink: 0, fontSize: 16, color: '#fff' }}>🎟</div>
+                          <div style={{ width: 36, height: 36, borderRadius: '50%', background: canApply ? '#6B21A8' : hex(INK, .2), display: 'grid', placeItems: 'center', flexShrink: 0, fontSize: 16, color: '#fff' }}>🎟</div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 14, fontWeight: 700, color: INK, fontFamily: "'Baloo 2', system-ui" }}>
                               {pass.loyalty_programs?.name ?? 'Pass'}
                             </div>
                             <div style={{ fontSize: 12, color: hex(INK, .5), fontFamily: "'Nunito', system-ui" }}>
-                              {pass.points_balance} use{pass.points_balance !== 1 ? 's' : ''} remaining
+                              {ineligibleReason || `${pass.points_balance} use${pass.points_balance !== 1 ? 's' : ''} remaining`}
                             </div>
                           </div>
                           {/* Action buttons */}
@@ -658,19 +689,22 @@ function CheckoutContent() {
                             <button
                               type="button"
                               onClick={isApplied ? removePass : () => applyPass(pass)}
-                              disabled={passStatus === 'checking'}
+                              disabled={!canApply || passStatus === 'checking'}
                               style={{
                                 padding: '6px 12px', borderRadius: 999, border: 'none',
-                                background: isApplied ? '#16A34A' : '#6B21A8',
-                                color: '#fff', fontSize: 12, fontWeight: 700, cursor: passStatus === 'checking' ? 'not-allowed' : 'pointer',
-                                fontFamily: "'Nunito', system-ui", opacity: passStatus === 'checking' && isSelected ? .6 : 1,
+                                background: isApplied ? '#16A34A' : canApply ? '#6B21A8' : hex(INK, .15),
+                                color: canApply ? '#fff' : hex(INK, .4),
+                                fontSize: 12, fontWeight: 700,
+                                cursor: (!canApply || passStatus === 'checking') ? 'not-allowed' : 'pointer',
+                                fontFamily: "'Nunito', system-ui",
+                                opacity: passStatus === 'checking' && isSelected ? .6 : 1,
                               }}
                             >
                               {isApplied ? '✓ Remove' : passStatus === 'checking' && isSelected ? '…' : 'Apply'}
                             </button>
                           </div>
                         </div>
-                        {/* Status message for this pass */}
+                        {/* Status message for this pass (after clicking Apply) */}
                         {(isSelected && passMsg) && (
                           <div style={{ padding: '6px 14px 10px', fontSize: 12, fontWeight: 600, color: passStatus === 'valid' ? '#16A34A' : '#C0392B', fontFamily: "'Nunito', system-ui" }}>
                             {passMsg}
