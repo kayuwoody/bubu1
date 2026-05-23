@@ -819,8 +819,28 @@ function PromotionModal({ promos, onClose, onNavigate }: { promos: Promo[]; onCl
           <div style={{ background:bgColor, minHeight:100 }} />
         )}
 
+        {/* Dot indicators — centered below image, only when multiple promos */}
+        {total > 1 && (
+          <div style={{ background:bgColor, display:'flex', justifyContent:'center', gap:8, paddingTop:14, paddingBottom:2 }}>
+            {promos.map((_, i) => (
+              <button
+                key={i}
+                onClick={e => { e.stopPropagation(); setIdx(i); }}
+                style={{
+                  width: i === idx ? 28 : 10, height:10, borderRadius:999,
+                  background: i === idx ? '#fff' : 'rgba(255,255,255,.35)',
+                  border: i === idx ? 'none' : '1.5px solid rgba(255,255,255,.5)',
+                  padding:0, cursor:'pointer',
+                  transition:'all .25s',
+                  flexShrink:0,
+                }}
+              />
+            ))}
+          </div>
+        )}
+
         {/* Body */}
-        <div style={{ background:bgColor, padding:'20px 22px 22px' }}>
+        <div style={{ background:bgColor, padding:'16px 22px 22px' }}>
           <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:22, color:fgColor, lineHeight:1.15, marginBottom:6 }}>
             {promo.title}
           </div>
@@ -835,51 +855,49 @@ function PromotionModal({ promos, onClose, onNavigate }: { promos: Promo[]; onCl
             </div>
           )}
 
-          {/* Dots + CTA row */}
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:14, gap:12 }}>
-            {/* Dot indicators */}
-            {total > 1 ? (
-              <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                {promos.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={e => { e.stopPropagation(); setIdx(i); }}
-                    style={{
-                      width: i === idx ? 20 : 8, height:8, borderRadius:999,
-                      background: i === idx ? '#fff' : 'rgba(255,255,255,.4)',
-                      border:'none', padding:0, cursor:'pointer',
-                      transition:'all .2s',
-                    }}
-                  />
-                ))}
-              </div>
-            ) : <div />}
+          {/* CTA + Next row */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent: promo.cta_text ? 'space-between' : 'flex-end', marginTop:14, gap:12 }}>
+            {promo.cta_text && (
+              <a
+                href={promo.cta_url ?? undefined}
+                onClick={e => e.stopPropagation()}
+                target={promo.cta_url?.startsWith('http') ? '_blank' : undefined}
+                rel="noopener noreferrer"
+                style={{
+                  background:'#fff', color:bgColor,
+                  borderRadius:999, padding:'10px 18px',
+                  fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:14,
+                  textDecoration:'none', display:'inline-block',
+                  cursor: promo.cta_url ? 'pointer' : 'default',
+                }}
+              >
+                {promo.cta_text}
+              </a>
+            )}
 
-            <div style={{ display:'flex', gap:8, flexShrink:0 }}>
-              {/* CTA button — shown when cta_text is set */}
-              {promo.cta_text && (
-                <a
-                  href={promo.cta_url ?? undefined}
-                  onClick={e => e.stopPropagation()}
-                  target={promo.cta_url?.startsWith('http') ? '_blank' : undefined}
-                  rel="noopener noreferrer"
+            <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+              {total > 1 && (
+                <span style={{ fontFamily:"'Nunito',system-ui", fontSize:13, fontWeight:700, color:fgColor, opacity:.6 }}>
+                  {idx + 1} / {total}
+                </span>
+              )}
+              {idx > 0 && (
+                <button
+                  onClick={e => { e.stopPropagation(); setIdx(i => i - 1); }}
                   style={{
-                    background:'#fff', color:bgColor,
-                    borderRadius:999, padding:'10px 18px',
-                    fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:14,
-                    textDecoration:'none', display:'inline-block',
-                    cursor: promo.cta_url ? 'pointer' : 'default',
+                    background:'rgba(255,255,255,.2)', border:'2px solid rgba(255,255,255,.6)',
+                    color:'#fff', borderRadius:999, padding:'10px 22px',
+                    fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:14, cursor:'pointer',
                   }}
                 >
-                  {promo.cta_text}
-                </a>
+                  ← Back
+                </button>
               )}
-              {/* Next / Got it */}
               <button
                 onClick={e => { e.stopPropagation(); next(); }}
                 style={{
                   background:'rgba(255,255,255,.2)', border:'2px solid rgba(255,255,255,.6)',
-                  color:'#fff', borderRadius:999, padding:'10px 18px',
+                  color:'#fff', borderRadius:999, padding:'10px 22px',
                   fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:14, cursor:'pointer',
                 }}
               >
