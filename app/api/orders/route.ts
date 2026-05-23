@@ -17,14 +17,14 @@ export async function GET(req: Request) {
       .limit(40),
     supabase
       .from('pos_orders')
-      .select('id, status, total_paid, created_at, pos_order_items(product_id, product_name, qty, unit_price, mods)')
+      .select('id, status, total_paid, created_at, pos_order_items(product_id, product_name, qty, unit_price)')
       .eq('loyalty_member_phone', phone)
       .order('created_at', { ascending: false })
       .limit(40),
   ]);
 
   if (onlineRes.error) console.error('[orders] online fetch error:', onlineRes.error.message);
-  if (posRes.error)    console.error('[orders] pos fetch error:',    posRes.error.message);
+  if (posRes.error)    console.error('[orders] pos fetch error:', posRes.error.message, '| phone:', phone);
 
   const online = (onlineRes.data ?? []).map(o => ({
     id:          o.id,
