@@ -826,7 +826,6 @@ function PromotionModal({ promos, onClose, onNavigate }: { promos: Promo[]; onCl
               alt={promo.title}
               style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', display:'block' }}
             />
-            <div style={{ position:'absolute', inset:0, background:`linear-gradient(to top, ${bgColor}cc 0%, transparent 60%)` }} />
           </div>
         ) : (
           <div style={{ background:bgColor, minHeight:100 }} />
