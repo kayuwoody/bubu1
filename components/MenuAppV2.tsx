@@ -195,16 +195,21 @@ function OrderRingIcon({ order, size = 30 }: { order: ActiveOrder; size?: number
 }
 
 // ── Pickup Bar (mobile strip below greeting) ──────────────────────────────
-function PickupBar({ pickup, onToggle }: { pickup: 'counter'|'curbside'; onToggle: () => void }) {
+function PickupBar({ pickup, onToggle, hasPromos, onPromoClick }: { pickup: 'counter'|'curbside'; onToggle: () => void; hasPromos: boolean; onPromoClick: () => void }) {
   const PickupIcon = pickup === 'curbside' ? Icon.Car : Icon.Walk;
   return (
-    <div style={{ padding:'2px 14px 8px' }}>
+    <div style={{ padding:'2px 14px 8px', display:'flex', alignItems:'center', gap:8 }}>
       <button onClick={onToggle} style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px 7px 10px', borderRadius:999, border:`1.5px solid ${hex(T.inkColor,.1)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' }}>
         <PickupIcon width={13} height={13}/>
         <span style={{ opacity:.45, fontWeight:600 }}>Pickup from:</span>
         <span>{pickup === 'curbside' ? 'Curbside' : 'Counter'}</span>
         <span style={{ opacity:.3, fontSize:10 }}>tap to change</span>
       </button>
+      {hasPromos && (
+        <button onClick={onPromoClick} style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:5, padding:'7px 12px', borderRadius:999, border:`1.5px solid ${T.primaryColor}`, background:'#fff', color:T.primaryColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
+          🎁 Offers
+        </button>
+      )}
     </div>
   );
 }
@@ -231,12 +236,13 @@ function BottomNav({ onOrdersClick, loyaltyActive, onRewardsClick }: {
 }
 
 // ── Header ─────────────────────────────────────────────────────────────────
-function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyActive, customerPoints, onLoyaltyClick, onOrdersClick, activeOrder }: {
+function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyActive, customerPoints, onLoyaltyClick, onOrdersClick, activeOrder, hasPromos, onPromoClick }: {
   viewport: Viewport; pickup: 'counter'|'curbside'; setPickup: (v: 'counter'|'curbside') => void;
   cartCount: number; onCartClick: () => void;
   loyaltyActive: boolean; customerPoints: number | null; onLoyaltyClick: () => void;
   onOrdersClick: () => void;
   activeOrder: ActiveOrder | null;
+  hasPromos: boolean; onPromoClick: () => void;
 }) {
   const compact = viewport === 'mobile';
   const toggle  = () => setPickup(pickup === 'curbside' ? 'counter' : 'curbside');
@@ -245,13 +251,20 @@ function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyAc
     <header style={{ position:'sticky', top:0, zIndex:20, background:T.bgColor, borderBottom:`1px solid ${hex(T.inkColor,.08)}`, padding:compact?'5px 12px':'5px 15px', display:'flex', alignItems:'center', gap:8 }}>
       <img src="/co-logo.png" alt="Coffee Oasis" style={{ height:compact?40:80, maxWidth:compact?200:400, width:'auto', objectFit:'contain', flexShrink:0 }}/>
 
-      {/* Pickup pill — desktop only; mobile uses PickupBar below greeting */}
+      {/* Pickup pill + Offers — desktop only; mobile uses PickupBar below greeting */}
       {!compact && (
-        <button onClick={toggle} style={{ marginLeft:8, display:'flex', alignItems:'center', gap:4, padding:'6px 10px 6px 8px', borderRadius:999, border:`1.5px solid ${hex(T.inkColor,.12)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
-          <PickupIcon width={14} height={14}/>
-          <span style={{ opacity:.45, fontWeight:600 }}>Pickup:</span>
-          <span>{pickup === 'curbside' ? 'Curbside' : 'Counter'}</span>
-        </button>
+        <>
+          <button onClick={toggle} style={{ marginLeft:8, display:'flex', alignItems:'center', gap:4, padding:'6px 10px 6px 8px', borderRadius:999, border:`1.5px solid ${hex(T.inkColor,.12)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
+            <PickupIcon width={14} height={14}/>
+            <span style={{ opacity:.45, fontWeight:600 }}>Pickup:</span>
+            <span>{pickup === 'curbside' ? 'Curbside' : 'Counter'}</span>
+          </button>
+          {hasPromos && (
+            <button onClick={onPromoClick} style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', borderRadius:999, border:`1.5px solid ${T.primaryColor}`, background:'#fff', color:T.primaryColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
+              🎁 Offers
+            </button>
+          )}
+        </>
       )}
 
       <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center', flexShrink:0 }}>
@@ -1370,13 +1383,11 @@ export default function MenuAppV2() {
       const activePromos: Promo[] = promoData.promotions ?? [];
       if (activePromos.length > 0) {
         setPromos(activePromos);
-        // TODO: restore once-per-day suppression after testing
-        // try {
-        //   const today = new Date().toISOString().slice(0, 10);
-        //   const lastDismissed = localStorage.getItem('promo_dismissed') ?? '';
-        //   if (lastDismissed !== today) setPromoOpen(true);
-        // } catch { setPromoOpen(true); }
-        setPromoOpen(true);
+        try {
+          const today = new Date().toISOString().slice(0, 10);
+          const lastDismissed = localStorage.getItem('promo_dismissed') ?? '';
+          if (lastDismissed !== today) setPromoOpen(true);
+        } catch { setPromoOpen(true); }
       }
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
@@ -1442,6 +1453,8 @@ export default function MenuAppV2() {
         onLoyaltyClick={() => setLoyaltyOpen(true)}
         onOrdersClick={() => router.push('/orders')}
         activeOrder={activeOrder}
+        hasPromos={promos.length > 0}
+        onPromoClick={() => setPromoOpen(true)}
       />
 
       <GreetingBand
@@ -1450,7 +1463,7 @@ export default function MenuAppV2() {
         lastSummary={lastOrder?.items.map(l => `${l.qty}× ${l.name}`).join(', ') ?? ''}
       />
 
-      {compact && <PickupBar pickup={pickup} onToggle={() => setPickup(pickup === 'curbside' ? 'counter' : 'curbside')}/>}
+      {compact && <PickupBar pickup={pickup} onToggle={() => setPickup(pickup === 'curbside' ? 'counter' : 'curbside')} hasPromos={promos.length > 0} onPromoClick={() => setPromoOpen(true)}/>}
 
       <CatBar cats={categories} active={activeCat} setActive={setActiveCat} viewport={viewport}/>
 
