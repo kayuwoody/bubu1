@@ -269,7 +269,7 @@ function OrdersContent() {
         {[
           { icon: '🏠', label: 'Menu',    onClick: () => router.push('/') },
           { icon: '🧾', label: 'Orders',  active: true },
-          { icon: '★',  label: 'Rewards', onClick: () => router.push('/') },
+          { icon: '★',  label: 'Rewards', onClick: () => router.push('/?rewards=1') },
         ].map(item => (
           <button
             key={item.label}
