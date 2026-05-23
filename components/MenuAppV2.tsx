@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Branch, CartLine, LoyaltyConfig, LoyaltyMember, LoyaltyTransaction, Voucher, Product, SelectionConfig, Viewport, XorGroup } from '@/lib/types';
 
@@ -1297,8 +1297,9 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
 
 // ── Main App ───────────────────────────────────────────────────────────────
 export default function MenuAppV2() {
-  const router      = useRouter();
-  const viewport    = useViewport();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const viewport     = useViewport();
   const activeOrder = useActiveOrder();
   const { lines, addLine, incLine, decLine, qtyFor, incById, decById, count, total } = useCart();
 
@@ -1325,12 +1326,20 @@ export default function MenuAppV2() {
       fetch('/api/loyalty').then(r => r.json()),
       fetch('/api/promotions').then(r => r.json()).catch(() => ({ promotions: [] })),
     ]).then(([menu, loyalty, promoData]) => {
-      setProducts(menu.products ?? []);
+      const loadedProducts: Product[] = menu.products ?? [];
+      setProducts(loadedProducts);
       setCategories(menu.categories ?? []);
       setBranch(menu.branch ?? null);
       setIntakePaused(menu.intake_paused ?? false);
       setLoyaltyConfig(loyalty.config ?? null);
       if (menu.categories?.length) setActiveCat(menu.categories[0].id);
+
+      // Deep-link: ?product=<id> opens that product's customise sheet
+      const deepProductId = searchParams.get('product');
+      if (deepProductId) {
+        const match = loadedProducts.find(p => p.id === deepProductId);
+        if (match) setSheetProduct(match);
+      }
       const activePromos: Promo[] = promoData.promotions ?? [];
       if (activePromos.length > 0) {
         setPromos(activePromos);
