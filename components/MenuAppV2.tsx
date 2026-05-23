@@ -1350,11 +1350,13 @@ export default function MenuAppV2() {
       const activePromos: Promo[] = promoData.promotions ?? [];
       if (activePromos.length > 0) {
         setPromos(activePromos);
-        try {
-          const today = new Date().toISOString().slice(0, 10);
-          const lastDismissed = localStorage.getItem('promo_dismissed') ?? '';
-          if (lastDismissed !== today) setPromoOpen(true);
-        } catch { setPromoOpen(true); }
+        // TODO: restore once-per-day suppression after testing
+        // try {
+        //   const today = new Date().toISOString().slice(0, 10);
+        //   const lastDismissed = localStorage.getItem('promo_dismissed') ?? '';
+        //   if (lastDismissed !== today) setPromoOpen(true);
+        // } catch { setPromoOpen(true); }
+        setPromoOpen(true);
       }
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
