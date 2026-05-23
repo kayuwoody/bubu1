@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Branch, CartLine, LoyaltyConfig, LoyaltyMember, LoyaltyTransaction, Voucher, Product, SelectionConfig, Viewport, XorGroup } from '@/lib/types';
 
@@ -195,16 +195,21 @@ function OrderRingIcon({ order, size = 30 }: { order: ActiveOrder; size?: number
 }
 
 // ── Pickup Bar (mobile strip below greeting) ──────────────────────────────
-function PickupBar({ pickup, onToggle }: { pickup: 'counter'|'curbside'; onToggle: () => void }) {
+function PickupBar({ pickup, onToggle, hasPromos, onPromoClick }: { pickup: 'counter'|'curbside'; onToggle: () => void; hasPromos: boolean; onPromoClick: () => void }) {
   const PickupIcon = pickup === 'curbside' ? Icon.Car : Icon.Walk;
   return (
-    <div style={{ padding:'2px 14px 8px' }}>
+    <div style={{ padding:'2px 14px 8px', display:'flex', alignItems:'center', gap:8 }}>
       <button onClick={onToggle} style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px 7px 10px', borderRadius:999, border:`1.5px solid ${hex(T.inkColor,.1)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' }}>
         <PickupIcon width={13} height={13}/>
         <span style={{ opacity:.45, fontWeight:600 }}>Pickup from:</span>
         <span>{pickup === 'curbside' ? 'Curbside' : 'Counter'}</span>
         <span style={{ opacity:.3, fontSize:10 }}>tap to change</span>
       </button>
+      {hasPromos && (
+        <button onClick={onPromoClick} style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:5, padding:'7px 12px', borderRadius:999, border:`1.5px solid ${T.primaryColor}`, background:'#fff', color:T.primaryColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
+          🎁 Offers
+        </button>
+      )}
     </div>
   );
 }
@@ -231,12 +236,13 @@ function BottomNav({ onOrdersClick, loyaltyActive, onRewardsClick }: {
 }
 
 // ── Header ─────────────────────────────────────────────────────────────────
-function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyActive, customerPoints, onLoyaltyClick, onOrdersClick, activeOrder }: {
+function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyActive, customerPoints, onLoyaltyClick, onOrdersClick, activeOrder, hasPromos, onPromoClick }: {
   viewport: Viewport; pickup: 'counter'|'curbside'; setPickup: (v: 'counter'|'curbside') => void;
   cartCount: number; onCartClick: () => void;
   loyaltyActive: boolean; customerPoints: number | null; onLoyaltyClick: () => void;
   onOrdersClick: () => void;
   activeOrder: ActiveOrder | null;
+  hasPromos: boolean; onPromoClick: () => void;
 }) {
   const compact = viewport === 'mobile';
   const toggle  = () => setPickup(pickup === 'curbside' ? 'counter' : 'curbside');
@@ -245,13 +251,20 @@ function Header({ viewport, pickup, setPickup, cartCount, onCartClick, loyaltyAc
     <header style={{ position:'sticky', top:0, zIndex:20, background:T.bgColor, borderBottom:`1px solid ${hex(T.inkColor,.08)}`, padding:compact?'5px 12px':'5px 15px', display:'flex', alignItems:'center', gap:8 }}>
       <img src="/co-logo.png" alt="Coffee Oasis" style={{ height:compact?40:80, maxWidth:compact?200:400, width:'auto', objectFit:'contain', flexShrink:0 }}/>
 
-      {/* Pickup pill — desktop only; mobile uses PickupBar below greeting */}
+      {/* Pickup pill + Offers — desktop only; mobile uses PickupBar below greeting */}
       {!compact && (
-        <button onClick={toggle} style={{ marginLeft:8, display:'flex', alignItems:'center', gap:4, padding:'6px 10px 6px 8px', borderRadius:999, border:`1.5px solid ${hex(T.inkColor,.12)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
-          <PickupIcon width={14} height={14}/>
-          <span style={{ opacity:.45, fontWeight:600 }}>Pickup:</span>
-          <span>{pickup === 'curbside' ? 'Curbside' : 'Counter'}</span>
-        </button>
+        <>
+          <button onClick={toggle} style={{ marginLeft:8, display:'flex', alignItems:'center', gap:4, padding:'6px 10px 6px 8px', borderRadius:999, border:`1.5px solid ${hex(T.inkColor,.12)}`, background:'#fff', color:T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
+            <PickupIcon width={14} height={14}/>
+            <span style={{ opacity:.45, fontWeight:600 }}>Pickup:</span>
+            <span>{pickup === 'curbside' ? 'Curbside' : 'Counter'}</span>
+          </button>
+          {hasPromos && (
+            <button onClick={onPromoClick} style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', borderRadius:999, border:`1.5px solid ${T.primaryColor}`, background:'#fff', color:T.primaryColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
+              🎁 Offers
+            </button>
+          )}
+        </>
       )}
 
       <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center', flexShrink:0 }}>
@@ -748,6 +761,168 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   );
 }
 
+// ── Promotion Modal ────────────────────────────────────────────────────────
+interface Promo {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  body: string | null;
+  image_url: string | null;
+  cta_text: string | null;
+  cta_url: string | null;
+  bg_color: string | null;
+  text_color: string | null;
+}
+
+function PromotionModal({ promos, onClose, onNavigate }: { promos: Promo[]; onClose: () => void; onNavigate: (url: string) => void }) {
+  const [idx, setIdx] = useState(0);
+  if (!promos.length) return null;
+
+  const promo   = promos[idx];
+  const total   = promos.length;
+  const isLast  = idx === total - 1;
+  const bgColor = promo.bg_color  || T.primaryColor;
+  const fgColor = promo.text_color || '#ffffff';
+
+  const next = () => isLast ? onClose() : setIdx(i => i + 1);
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:70, display:'flex', alignItems:'center', justifyContent:'center', padding:'16px' }}>
+      {/* Backdrop */}
+      <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,.65)' }} />
+
+      {/* Card */}
+      <div
+        onClick={promo.cta_url ? () => {
+          if (promo.cta_url!.startsWith('http')) {
+            window.open(promo.cta_url!, '_blank', 'noopener,noreferrer');
+          } else {
+            onNavigate(promo.cta_url!);
+          }
+        } : undefined}
+        style={{
+          position:'relative', width:'100%', maxWidth:440,
+          background:'#fff', borderRadius:24,
+          overflow:'hidden',
+          boxShadow:'0 24px 64px rgba(0,0,0,.35)',
+          animation:'coSheetIn .22s ease-out',
+          cursor: promo.cta_url ? 'pointer' : 'default',
+          maxHeight:'85vh', overflowY:'auto',
+        }}
+      >
+        {/* Close */}
+        <button
+          onClick={e => { e.stopPropagation(); onClose(); }}
+          style={{ position:'absolute', top:12, right:14, zIndex:2, background:'rgba(0,0,0,.25)', border:'none', borderRadius:'50%', width:32, height:32, display:'grid', placeItems:'center', cursor:'pointer', color:'#fff', fontSize:18, lineHeight:1 }}
+        >
+          ×
+        </button>
+
+        {/* Coloured header — 16:9 image if present, solid colour band otherwise */}
+        {promo.image_url ? (
+          <div style={{ position:'relative', width:'100%', paddingTop:'56.25%', background:bgColor, overflow:'hidden' }}>
+            <img
+              src={promo.image_url}
+              alt={promo.title}
+              style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', display:'block' }}
+            />
+          </div>
+        ) : (
+          <div style={{ background:bgColor, minHeight:100 }} />
+        )}
+
+        {/* Dot indicators — centered below image, only when multiple promos */}
+        {total > 1 && (
+          <div style={{ background:bgColor, display:'flex', justifyContent:'center', gap:8, paddingTop:14, paddingBottom:2 }}>
+            {promos.map((_, i) => (
+              <button
+                key={i}
+                onClick={e => { e.stopPropagation(); setIdx(i); }}
+                style={{
+                  width: i === idx ? 28 : 10, height:10, borderRadius:999,
+                  background: i === idx ? '#fff' : 'rgba(255,255,255,.35)',
+                  border: i === idx ? 'none' : '1.5px solid rgba(255,255,255,.5)',
+                  padding:0, cursor:'pointer',
+                  transition:'all .25s',
+                  flexShrink:0,
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Body */}
+        <div style={{ background:bgColor, padding:'16px 22px 22px' }}>
+          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:22, color:fgColor, lineHeight:1.15, marginBottom:6 }}>
+            {promo.title}
+          </div>
+          {promo.subtitle && (
+            <div style={{ fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:15, color:fgColor, opacity:.85, marginBottom:6 }}>
+              {promo.subtitle}
+            </div>
+          )}
+          {promo.body && (
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:14, color:fgColor, opacity:.75, lineHeight:1.55, marginBottom:10 }}>
+              {promo.body}
+            </div>
+          )}
+
+          {/* CTA + Next row */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent: promo.cta_text ? 'space-between' : 'flex-end', marginTop:14, gap:12 }}>
+            {promo.cta_text && (
+              <a
+                href={promo.cta_url ?? undefined}
+                onClick={e => e.stopPropagation()}
+                target={promo.cta_url?.startsWith('http') ? '_blank' : undefined}
+                rel="noopener noreferrer"
+                style={{
+                  background:'#fff', color:bgColor,
+                  borderRadius:999, padding:'10px 18px',
+                  fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:14,
+                  textDecoration:'none', display:'inline-block',
+                  cursor: promo.cta_url ? 'pointer' : 'default',
+                }}
+              >
+                {promo.cta_text}
+              </a>
+            )}
+
+            <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+              {total > 1 && (
+                <span style={{ fontFamily:"'Nunito',system-ui", fontSize:13, fontWeight:700, color:fgColor, opacity:.6 }}>
+                  {idx + 1} / {total}
+                </span>
+              )}
+              {idx > 0 && (
+                <button
+                  onClick={e => { e.stopPropagation(); setIdx(i => i - 1); }}
+                  style={{
+                    background:'rgba(255,255,255,.2)', border:'2px solid rgba(255,255,255,.6)',
+                    color:'#fff', borderRadius:999, padding:'10px 22px',
+                    fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:14, cursor:'pointer',
+                  }}
+                >
+                  ← Back
+                </button>
+              )}
+              <button
+                onClick={e => { e.stopPropagation(); next(); }}
+                style={{
+                  background:'rgba(255,255,255,.2)', border:'2px solid rgba(255,255,255,.6)',
+                  color:'#fff', borderRadius:999, padding:'10px 22px',
+                  fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:14, cursor:'pointer',
+                }}
+              >
+                {isLast ? 'Got it!' : 'Next →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Loyalty Sheet ─────────────────────────────────────────────────────────
 function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   open: boolean; onClose: () => void;
@@ -1158,8 +1333,9 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
 
 // ── Main App ───────────────────────────────────────────────────────────────
 export default function MenuAppV2() {
-  const router      = useRouter();
-  const viewport    = useViewport();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const viewport     = useViewport();
   const activeOrder = useActiveOrder();
   const { lines, addLine, incLine, decLine, qtyFor, incById, decById, count, total } = useCart();
 
@@ -1173,6 +1349,8 @@ export default function MenuAppV2() {
   const [pickup,      setPickup]      = useState<'counter'|'curbside'>('counter');
   const [cartOpen,    setCartOpen]    = useState(false);
   const [loyaltyOpen, setLoyaltyOpen] = useState(false);
+  const [promos,      setPromos]      = useState<Promo[]>([]);
+  const [promoOpen,   setPromoOpen]   = useState(false);
   const [sheetProduct, setSheetProduct] = useState<Product | null>(null);
   const [loading,     setLoading]     = useState(true);
   const [isReturning, setIsReturning] = useState(false);
@@ -1182,13 +1360,34 @@ export default function MenuAppV2() {
     Promise.all([
       fetch('/api/menu').then(r => r.json()),
       fetch('/api/loyalty').then(r => r.json()),
-    ]).then(([menu, loyalty]) => {
-      setProducts(menu.products ?? []);
+      fetch('/api/promotions').then(r => r.json()).catch(() => ({ promotions: [] })),
+    ]).then(([menu, loyalty, promoData]) => {
+      const loadedProducts: Product[] = menu.products ?? [];
+      setProducts(loadedProducts);
       setCategories(menu.categories ?? []);
       setBranch(menu.branch ?? null);
       setIntakePaused(menu.intake_paused ?? false);
       setLoyaltyConfig(loyalty.config ?? null);
       if (menu.categories?.length) setActiveCat(menu.categories[0].id);
+
+      // Deep-link: ?product=<id> opens that product's customise sheet, then cleans URL
+      const deepProductId = searchParams.get('product');
+      if (deepProductId) {
+        const match = loadedProducts.find(p => p.id === deepProductId);
+        if (match) {
+          setSheetProduct(match);
+          router.replace('/');
+        }
+      }
+      const activePromos: Promo[] = promoData.promotions ?? [];
+      if (activePromos.length > 0) {
+        setPromos(activePromos);
+        try {
+          const today = new Date().toISOString().slice(0, 10);
+          const lastDismissed = localStorage.getItem('promo_dismissed') ?? '';
+          if (lastDismissed !== today) setPromoOpen(true);
+        } catch { setPromoOpen(true); }
+      }
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -1253,6 +1452,8 @@ export default function MenuAppV2() {
         onLoyaltyClick={() => setLoyaltyOpen(true)}
         onOrdersClick={() => router.push('/orders')}
         activeOrder={activeOrder}
+        hasPromos={promos.length > 0}
+        onPromoClick={() => setPromoOpen(true)}
       />
 
       <GreetingBand
@@ -1261,7 +1462,7 @@ export default function MenuAppV2() {
         lastSummary={lastOrder?.items.map(l => `${l.qty}× ${l.name}`).join(', ') ?? ''}
       />
 
-      {compact && <PickupBar pickup={pickup} onToggle={() => setPickup(pickup === 'curbside' ? 'counter' : 'curbside')}/>}
+      {compact && <PickupBar pickup={pickup} onToggle={() => setPickup(pickup === 'curbside' ? 'counter' : 'curbside')} hasPromos={promos.length > 0} onPromoClick={() => setPromoOpen(true)}/>}
 
       <CatBar cats={categories} active={activeCat} setActive={setActiveCat} viewport={viewport}/>
 
@@ -1316,6 +1517,29 @@ export default function MenuAppV2() {
           onOrdersClick={() => router.push('/orders')}
           loyaltyActive={loyaltyConfig?.is_active ?? false}
           onRewardsClick={() => setLoyaltyOpen(true)}
+        />
+      )}
+
+      {promoOpen && (
+        <PromotionModal
+          promos={promos}
+          onClose={() => {
+            setPromoOpen(false);
+            try { localStorage.setItem('promo_dismissed', new Date().toISOString().slice(0, 10)); } catch { /* ignore */ }
+          }}
+          onNavigate={(url) => {
+            setPromoOpen(false);
+            try { localStorage.setItem('promo_dismissed', new Date().toISOString().slice(0, 10)); } catch { /* ignore */ }
+            // Handle /?product=<id> without a page navigation — open the sheet directly
+            try {
+              const productId = new URL(url, 'http://x').searchParams.get('product');
+              if (productId) {
+                const match = products.find(p => p.id === productId);
+                if (match) { setSheetProduct(match); return; }
+              }
+            } catch { /* ignore */ }
+            router.push(url);
+          }}
         />
       )}
 

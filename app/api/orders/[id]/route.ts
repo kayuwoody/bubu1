@@ -19,10 +19,5 @@ export async function GET(
     return NextResponse.json({ error: 'Order not found' }, { status: 404 });
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL ?? '';
-  const receiptUrl = supabaseUrl
-    ? `${supabaseUrl}/storage/v1/object/public/receipts/online-order-${data.id}.html`
-    : null;
-
-  return NextResponse.json({ ...data, receipt_url: receiptUrl });
+  return NextResponse.json({ ...data, receipt_url: `/receipts/online/${data.id}` });
 }
