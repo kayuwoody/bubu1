@@ -761,7 +761,7 @@ interface Promo {
   text_color: string | null;
 }
 
-function PromotionModal({ promos, onClose }: { promos: Promo[]; onClose: () => void }) {
+function PromotionModal({ promos, onClose, onNavigate }: { promos: Promo[]; onClose: () => void; onNavigate: (url: string) => void }) {
   const [idx, setIdx] = useState(0);
   if (!promos.length) return null;
 
@@ -780,7 +780,13 @@ function PromotionModal({ promos, onClose }: { promos: Promo[]; onClose: () => v
 
       {/* Card */}
       <div
-        onClick={promo.cta_url ? () => { if (promo.cta_url!.startsWith('http')) { window.open(promo.cta_url!, '_blank', 'noopener,noreferrer'); } else { window.location.href = promo.cta_url!; } } : undefined}
+        onClick={promo.cta_url ? () => {
+          if (promo.cta_url!.startsWith('http')) {
+            window.open(promo.cta_url!, '_blank', 'noopener,noreferrer');
+          } else {
+            onNavigate(promo.cta_url!);
+          }
+        } : undefined}
         style={{
           position:'relative', width:'100%', maxWidth:440,
           background:'#fff', borderRadius:24,
@@ -788,6 +794,7 @@ function PromotionModal({ promos, onClose }: { promos: Promo[]; onClose: () => v
           boxShadow:'0 24px 64px rgba(0,0,0,.35)',
           animation:'coSheetIn .22s ease-out',
           cursor: promo.cta_url ? 'pointer' : 'default',
+          maxHeight:'85vh', overflowY:'auto',
         }}
       >
         {/* Close */}
@@ -804,7 +811,7 @@ function PromotionModal({ promos, onClose }: { promos: Promo[]; onClose: () => v
             <img
               src={promo.image_url}
               alt={promo.title}
-              style={{ width:'100%', maxHeight:260, objectFit:'cover', display:'block' }}
+              style={{ width:'100%', height:200, objectFit:'cover', display:'block' }}
             />
           )}
           {/* Gradient overlay so text is readable over images */}
@@ -1485,6 +1492,11 @@ export default function MenuAppV2() {
           onClose={() => {
             setPromoOpen(false);
             try { localStorage.setItem('promo_dismissed', new Date().toISOString().slice(0, 10)); } catch { /* ignore */ }
+          }}
+          onNavigate={(url) => {
+            setPromoOpen(false);
+            try { localStorage.setItem('promo_dismissed', new Date().toISOString().slice(0, 10)); } catch { /* ignore */ }
+            router.push(url);
           }}
         />
       )}
