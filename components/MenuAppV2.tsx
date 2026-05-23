@@ -805,20 +805,19 @@ function PromotionModal({ promos, onClose, onNavigate }: { promos: Promo[]; onCl
           ×
         </button>
 
-        {/* Coloured header — image fills it if present, otherwise just the bg */}
-        <div style={{ background:bgColor, minHeight: promo.image_url ? 0 : 120, position:'relative' }}>
-          {promo.image_url && (
+        {/* Coloured header — 16:9 image if present, solid colour band otherwise */}
+        {promo.image_url ? (
+          <div style={{ position:'relative', width:'100%', paddingTop:'56.25%', background:bgColor, overflow:'hidden' }}>
             <img
               src={promo.image_url}
               alt={promo.title}
-              style={{ width:'100%', height:200, objectFit:'cover', display:'block' }}
+              style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', display:'block' }}
             />
-          )}
-          {/* Gradient overlay so text is readable over images */}
-          {promo.image_url && (
             <div style={{ position:'absolute', inset:0, background:`linear-gradient(to top, ${bgColor}cc 0%, transparent 60%)` }} />
-          )}
-        </div>
+          </div>
+        ) : (
+          <div style={{ background:bgColor, minHeight:100 }} />
+        )}
 
         {/* Body */}
         <div style={{ background:bgColor, padding:'20px 22px 22px' }}>
@@ -1341,11 +1340,14 @@ export default function MenuAppV2() {
       setLoyaltyConfig(loyalty.config ?? null);
       if (menu.categories?.length) setActiveCat(menu.categories[0].id);
 
-      // Deep-link: ?product=<id> opens that product's customise sheet
+      // Deep-link: ?product=<id> opens that product's customise sheet, then cleans URL
       const deepProductId = searchParams.get('product');
       if (deepProductId) {
         const match = loadedProducts.find(p => p.id === deepProductId);
-        if (match) setSheetProduct(match);
+        if (match) {
+          setSheetProduct(match);
+          router.replace('/');
+        }
       }
       const activePromos: Promo[] = promoData.promotions ?? [];
       if (activePromos.length > 0) {
@@ -1498,6 +1500,14 @@ export default function MenuAppV2() {
           onNavigate={(url) => {
             setPromoOpen(false);
             try { localStorage.setItem('promo_dismissed', new Date().toISOString().slice(0, 10)); } catch { /* ignore */ }
+            // Handle /?product=<id> without a page navigation — open the sheet directly
+            try {
+              const productId = new URL(url, 'http://x').searchParams.get('product');
+              if (productId) {
+                const match = products.find(p => p.id === productId);
+                if (match) { setSheetProduct(match); return; }
+              }
+            } catch { /* ignore */ }
             router.push(url);
           }}
         />
