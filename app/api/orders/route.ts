@@ -17,7 +17,7 @@ export async function GET(req: Request) {
       .limit(40),
     supabase
       .from('pos_orders')
-      .select('id, status, total_paid, created_at, pos_order_items(product_id, product_name, qty, unit_price, subtotal)')
+      .select('id, status, total, created_at, pos_order_items(product_id, product_name, qty, unit_price, subtotal)')
       .eq('loyalty_member_phone', phone)
       .order('created_at', { ascending: false })
       .limit(40),
@@ -36,12 +36,12 @@ export async function GET(req: Request) {
     items:       o.online_order_items ?? [],
   }));
 
-  const pos = (posRes.data ?? []).map(o => ({
+  const pos = (posRes.data ?? []).map((o: { id: string; status: string; total: number; created_at: string; pos_order_items: unknown[] }) => ({
     id:          o.id,
     source:      'pos' as const,
     status:      o.status ?? 'completed',
     pickup_type: null,
-    total_paid:  o.total_paid,
+    total_paid:  o.total,
     created_at:  o.created_at,
     items:       o.pos_order_items ?? [],
   }));
