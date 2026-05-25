@@ -25,7 +25,7 @@ const NO_MILK_IDS = new Set(['26c985d3-868c-4e50-826d-f5d310d1f7e9', '4e784157-7
 
 const DRINK_MODS = {
   sugar: { label: 'Sugar', options: [{ id: 'zero', label: 'Zero', delta: 0 }, { id: 'less', label: 'Less', delta: 0 }, { id: 'medium', label: 'Medium', delta: 0 }, { id: 'sweet', label: 'Sweet', delta: 0 }] },
-  milk:  { label: 'Milk', options: [{ id: 'full', label: 'Full', delta: 0 }, { id: 'skim', label: 'Skim', delta: 0 }, { id: 'oat', label: 'Oat', delta: 2.00 }, { id: 'almond', label: 'Almond', delta: 2.00 }] },
+  milk:  { label: 'Milk', options: [{ id: 'full', label: 'Full cream', delta: 0 }, { id: 'oat', label: 'Oat', delta: 2.00 }] },
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
