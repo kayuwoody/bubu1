@@ -346,12 +346,120 @@ function CatBar({ cats, active, setActive, viewport }: { cats: Category[]; activ
   );
 }
 
+// ── Notify Modal ───────────────────────────────────────────────────────────
+function NotifyModal({ product, savedEmail, savedPhone, onClose, onSuccess }: {
+  product: Product;
+  savedEmail: string;
+  savedPhone: string;
+  onClose: () => void;
+  onSuccess: (productId: string) => void;
+}) {
+  const [email,      setEmail]      = useState(savedEmail);
+  const [phone,      setPhone]      = useState(savedPhone);
+  const [submitting, setSubmitting] = useState(false);
+  const [done,       setDone]       = useState(false);
+  const [err,        setErr]        = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimEmail = email.trim();
+    const trimPhone = phone.trim();
+    if (!trimEmail && !trimPhone) {
+      setErr('Please enter your email or phone number.');
+      return;
+    }
+    setErr('');
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/notify-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id:   product.id,
+          product_name: product.name,
+          ...(trimEmail ? { email: trimEmail } : {}),
+          ...(trimPhone ? { phone: trimPhone } : {}),
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error((d as { error?: string }).error ?? 'Request failed');
+      }
+      setDone(true);
+      onSuccess(product.id);
+      setTimeout(() => onClose(), 1500);
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : 'Something went wrong. Try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:80, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(58,36,20,.5)' }}/>
+      <div style={{ position:'relative', background:'#fff', borderRadius:20, padding:'28px 24px 24px', width:'100%', maxWidth:380, boxShadow:'0 24px 64px rgba(58,36,20,.25)', animation:'coSheetIn .22s ease-out' }}>
+        {/* Close */}
+        <button
+          onClick={onClose}
+          style={{ position:'absolute', top:14, right:16, background:'transparent', border:'none', cursor:'pointer', color:hex(T.inkColor,.5), fontSize:22, lineHeight:1, display:'grid', placeItems:'center' }}
+          aria-label="Close"
+        >×</button>
+
+        <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:20, color:T.inkColor, lineHeight:1.2, marginBottom:4 }}>
+          {product.name}
+        </div>
+        <div style={{ fontFamily:"'Nunito',system-ui", fontSize:14, color:hex(T.inkColor,.65), marginBottom:18 }}>
+          Get notified when this is back in stock
+        </div>
+
+        {done ? (
+          <div style={{ textAlign:'center', padding:'18px 0', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:17, color:'#16A34A' }}>
+            ✓ You're on the list!
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              style={{ width:'100%', padding:'11px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:12, outline:'none', boxSizing:'border-box' }}
+            />
+            <input
+              type="tel"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="Phone number"
+              style={{ width:'100%', padding:'11px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:12, outline:'none', boxSizing:'border-box' }}
+            />
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.5), marginTop:2 }}>
+              We'll email you, or WhatsApp if email isn't provided
+            </div>
+            {err && (
+              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:'#DC2626', fontWeight:600 }}>{err}</div>
+            )}
+            <button
+              type="submit"
+              disabled={submitting}
+              style={{ marginTop:4, padding:'13px 18px', background:T.primaryColor, color:'#fff', border:'none', borderRadius:12, fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:15, cursor:submitting?'default':'pointer', opacity:submitting?.6:1 }}
+            >
+              {submitting ? 'Saving…' : 'Notify me 🔔'}
+            </button>
+          </form>
+        )}
+      </div>
+      <style>{`@keyframes coSheetIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+    </div>
+  );
+}
+
 // ── Item Card ──────────────────────────────────────────────────────────────
 function qtyBtn(bg: string, fg: string): React.CSSProperties {
   return { width:30, height:30, borderRadius:'50%', background:bg, color:fg, border:'none', display:'grid', placeItems:'center', cursor:'pointer' };
 }
 
-function ItemCard({ product, qty, onAdd, onCustomize, viewport }: { product: Product; qty: number; onAdd: () => void; onCustomize: () => void; viewport: Viewport }) {
+function ItemCard({ product, qty, onAdd, onCustomize, onNotify, alreadyNotified, viewport }: { product: Product; qty: number; onAdd: () => void; onCustomize: () => void; onNotify: () => void; alreadyNotified: boolean; viewport: Viewport }) {
   const sheet = needsSheet(product);
   const compact = viewport === 'mobile';
   const col = catSwatch(product.category);
@@ -377,6 +485,16 @@ function ItemCard({ product, qty, onAdd, onCustomize, viewport }: { product: Pro
       <div style={{ padding:compact?'8px 8px 8px':'8px 8px 8px', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
         <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?12:14, color:T.inkColor, lineHeight:1.25, wordBreak:'break-word' }}>{product.name}</div>
         <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?12:14, color:T.primaryColor, marginTop:'auto', paddingTop:4 }}>RM {product.base_price.toFixed(2)}</div>
+        {soldOut && (
+          alreadyNotified ? (
+            <span style={{ display:'inline-block', marginTop:4, fontSize:11, padding:'3px 10px', borderRadius:999, background:hex(T.inkColor,.08), color:hex(T.inkColor,.5), fontFamily:"'Nunito',system-ui", fontWeight:700, cursor:'default', alignSelf:'flex-start' }}>✓ Notified</span>
+          ) : (
+            <button
+              onClick={e => { e.stopPropagation(); onNotify(); }}
+              style={{ display:'inline-block', marginTop:4, fontSize:11, padding:'3px 10px', borderRadius:999, border:`1px solid ${T.primaryColor}`, color:T.primaryColor, background:'transparent', fontFamily:"'Nunito',system-ui", fontWeight:700, cursor:'pointer', alignSelf:'flex-start' }}
+            >🔔 Notify me</button>
+          )
+        )}
       </div>
     </div>
   );
@@ -1345,6 +1463,7 @@ export default function MenuAppV2() {
   const [intakePaused, setIntakePaused] = useState(false);
   const [loyaltyConfig, setLoyaltyConfig] = useState<LoyaltyConfig | null>(null);
   const [savedPhone,  setSavedPhone]  = useState<string | null>(null);
+  const [savedEmail,  setSavedEmail]  = useState<string>('');
   const [activeCat,   setActiveCat]   = useState('');
   const [pickup,      setPickup]      = useState<'counter'|'curbside'>('counter');
   const [cartOpen,    setCartOpen]    = useState(false);
@@ -1352,6 +1471,8 @@ export default function MenuAppV2() {
   const [promos,      setPromos]      = useState<Promo[]>([]);
   const [promoOpen,   setPromoOpen]   = useState(false);
   const [sheetProduct, setSheetProduct] = useState<Product | null>(null);
+  const [notifyProduct, setNotifyProduct] = useState<Product | null>(null);
+  const [notifiedSet,   setNotifiedSet]   = useState<Set<string>>(new Set());
   const [loading,     setLoading]     = useState(true);
   const [isReturning, setIsReturning] = useState(false);
   const [lastOrder,   setLastOrder]   = useState<{ items: CartLine[]; when: string } | null>(null);
@@ -1405,9 +1526,12 @@ export default function MenuAppV2() {
       if (lo) setLastOrder(JSON.parse(lo));
       const saved = localStorage.getItem('co_form');
       if (saved) {
-        const { phone } = JSON.parse(saved);
+        const { phone, email } = JSON.parse(saved);
         if (phone) setSavedPhone(phone);
+        if (email) setSavedEmail(email);
       }
+      const savedNotified = localStorage.getItem('co_notified');
+      if (savedNotified) setNotifiedSet(new Set(JSON.parse(savedNotified)));
     } catch { /* ignore */ }
   }, []);
 
@@ -1478,6 +1602,8 @@ export default function MenuAppV2() {
             key={p.id} product={p} qty={qtyFor(p.id)}
             onAdd={() => incById(p.id, p.name, p.base_price)}
             onCustomize={() => setSheetProduct(p)}
+            onNotify={() => setNotifyProduct(p)}
+            alreadyNotified={notifiedSet.has(p.id)}
             viewport={viewport}
           />
         ))}
@@ -1545,6 +1671,20 @@ export default function MenuAppV2() {
               }
             } catch { /* ignore */ }
             router.push(url);
+          }}
+        />
+      )}
+
+      {notifyProduct && (
+        <NotifyModal
+          product={notifyProduct}
+          savedEmail={savedEmail}
+          savedPhone={savedPhone ?? ''}
+          onClose={() => setNotifyProduct(null)}
+          onSuccess={(id) => {
+            const next = new Set(notifiedSet).add(id);
+            setNotifiedSet(next);
+            try { localStorage.setItem('co_notified', JSON.stringify([...next])); } catch { /* ignore */ }
           }}
         />
       )}
