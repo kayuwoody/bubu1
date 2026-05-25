@@ -1379,6 +1379,12 @@ export default function MenuAppV2() {
           router.replace('/');
         }
       }
+
+      // Deep-link: ?rewards=1 auto-opens the loyalty sheet
+      if (searchParams.get('rewards') === '1') {
+        setLoyaltyOpen(true);
+        router.replace('/');
+      }
       const activePromos: Promo[] = promoData.promotions ?? [];
       if (activePromos.length > 0) {
         setPromos(activePromos);

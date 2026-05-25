@@ -57,13 +57,14 @@ interface OrderItem {
 }
 
 interface Order {
-  id:          string;
-  source:      'online' | 'pos';
-  status:      string;
-  pickup_type: string | null;
-  total_paid:  number;
-  created_at:  string;
-  items:       OrderItem[];
+  id:           string;
+  order_number?: string;
+  source:       'online' | 'pos';
+  status:       string;
+  pickup_type:  string | null;
+  total_paid:   number;
+  created_at:   string;
+  items:        OrderItem[];
 }
 
 function formatDate(iso: string) {
@@ -139,7 +140,7 @@ function OrdersContent() {
   const heading: React.CSSProperties = { fontFamily: "'Baloo 2', system-ui", fontWeight: 800, color: INK };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#EFE4D1', paddingBottom: 40 }}>
+    <div style={{ minHeight: '100vh', background: '#EFE4D1', paddingBottom: 80 }}>
       {/* Header */}
       <div style={{ background: INK, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 10 }}>
         <button
@@ -190,7 +191,9 @@ function OrdersContent() {
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span style={{ ...heading, fontSize: 16 }}>Order #{order.id}</span>
+                        <span style={{ ...heading, fontSize: 16 }}>
+                          {order.source === 'pos' && order.order_number ? `#${order.order_number}` : `Order #${order.id}`}
+                        </span>
                         <span style={{
                           ...s, fontSize: 12, fontWeight: 700,
                           background: STATUS_BG[status] ?? '#F3F4F6',
@@ -260,6 +263,24 @@ function OrdersContent() {
           </div>
         )}
       </div>
+
+      {/* Bottom nav */}
+      <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, height: 56, zIndex: 14, background: '#EFE4D1', borderTop: `1px solid ${hex(INK, .1)}`, display: 'flex', alignItems: 'center', boxShadow: `0 -4px 16px ${hex(INK, .07)}` }}>
+        {[
+          { icon: '🏠', label: 'Menu',    onClick: () => router.push('/') },
+          { icon: '🧾', label: 'Orders',  active: true },
+          { icon: '★',  label: 'Rewards', onClick: () => router.push('/?rewards=1') },
+        ].map(item => (
+          <button
+            key={item.label}
+            onClick={item.onClick}
+            style={{ flex: 1, height: '100%', border: 'none', background: 'transparent', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, cursor: item.active ? 'default' : 'pointer', color: item.active ? PRI : hex(INK, .5), fontFamily: "'Nunito', system-ui" }}
+          >
+            <span style={{ fontSize: item.label === 'Rewards' ? 16 : 18 }}>{item.icon}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em' }}>{item.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }

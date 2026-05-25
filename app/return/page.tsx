@@ -31,8 +31,15 @@ function ReturnContent() {
         const data = await res.json();
 
         if (data.order_id) {
+          try {
+            const pending = localStorage.getItem('co_pending');
+            if (pending) {
+              const { lines } = JSON.parse(pending);
+              localStorage.setItem('co_last_order', JSON.stringify({ items: lines, when: 'Last order' }));
+              localStorage.setItem('co_session', 'true');
+            }
+          } catch { /* ignore */ }
           localStorage.removeItem('co_pending');
-          localStorage.removeItem('co_session');
           router.replace(`/order/${data.order_id}`);
           return;
         }
