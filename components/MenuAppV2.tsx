@@ -604,8 +604,8 @@ function ComboSection({ cfg, selections, selectedOptionals, onSelect, onToggleOp
         const childGroups = nested.filter(ng => ng.parentProductId === selectedId);
         return (
           <div key={group.uniqueKey} style={{ marginTop:14 }}>
-            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8, display:'flex', gap:6, alignItems:'baseline' }}>
-              {group.groupName} <span style={{ fontSize:11, color:'#D9402F', fontWeight:800 }}>Required</span>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>
+              {group.groupName}
             </div>
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
               {group.items.map(item => {
