@@ -1317,25 +1317,40 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
             </button>
           </div>
         ) : (
-          <form onSubmit={handlePhoneLookup} style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'16px', marginBottom:16, border:`1.5px solid ${hex(T.inkColor,.08)}` }}>
-            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:10 }}>
-              Enter your phone to see your cards
+          <>
+            {/* Welcome hero for new / unauthenticated users */}
+            <div style={{ background:`linear-gradient(135deg,${T.primaryColor} 0%,#FF9A3D 100%)`, borderRadius:T.cornerRadius, padding:'20px 20px 16px', marginBottom:16, display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', gap:8 }}>
+              <img src="/co-mascot.png" alt="" style={{ width:72, height:72, objectFit:'contain', filter:'drop-shadow(0 4px 6px rgba(0,0,0,.18))', marginBottom:2 }} />
+              <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:20, color:'#fff', lineHeight:1.15 }}>Rewards are on us ☕</div>
+              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:'rgba(255,255,255,.88)', lineHeight:1.55, maxWidth:280 }}>
+                Earn stamps with every order, unlock free drinks, and get exclusive member-only vouchers.
+              </div>
             </div>
-            <div style={{ display:'flex', gap:8 }}>
-              <input
-                type="tel"
-                value={phoneInput}
-                onChange={e => { setPhoneInput(e.target.value); setPhoneErr(''); }}
-                placeholder="e.g. 0123456789"
-                style={{ flex:1, padding:'11px 14px', fontSize:15, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, outline:'none', fontFamily:"'Nunito',system-ui" }}
-              />
-              <button type="submit" disabled={fetching}
-                style={{ padding:'11px 16px', borderRadius:T.cornerRadius-10, border:'none', background:T.primaryColor, color:'#fff', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Nunito',system-ui", opacity:fetching ? .6 : 1 }}>
-                {fetching ? '…' : 'Find'}
-              </button>
-            </div>
-            {phoneErr && <div style={{ marginTop:7, fontSize:13, color:'#C0392B', fontWeight:600 }}>{phoneErr}</div>}
-          </form>
+
+            {/* Phone lookup */}
+            <form onSubmit={handlePhoneLookup} style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'16px', marginBottom:16, border:`1.5px solid ${hex(T.inkColor,.08)}` }}>
+              <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:10 }}>
+                Already a member? Enter your phone
+              </div>
+              <div style={{ display:'flex', gap:8 }}>
+                <input
+                  type="tel"
+                  value={phoneInput}
+                  onChange={e => { setPhoneInput(e.target.value); setPhoneErr(''); }}
+                  placeholder="e.g. 0123456789"
+                  style={{ flex:1, padding:'11px 14px', fontSize:15, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, outline:'none', fontFamily:"'Nunito',system-ui" }}
+                />
+                <button type="submit" disabled={fetching}
+                  style={{ padding:'11px 16px', borderRadius:T.cornerRadius-10, border:'none', background:T.primaryColor, color:'#fff', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Nunito',system-ui", opacity:fetching ? .6 : 1 }}>
+                  {fetching ? '…' : 'Find'}
+                </button>
+              </div>
+              {phoneErr && <div style={{ marginTop:7, fontSize:13, color:'#C0392B', fontWeight:600 }}>{phoneErr}</div>}
+              <div style={{ marginTop:10, fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.45), lineHeight:1.5 }}>
+                New here? Just make a purchase — we'll create your account automatically.
+              </div>
+            </form>
+          </>
         )}
 
         {fetching && (
@@ -1365,18 +1380,6 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
           </div>
         )}
 
-        {/* Placeholder when no member loaded yet */}
-        {!fetching && !member && config?.is_active && (
-          <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'14px 16px', marginBottom:10, border:`1.5px solid ${hex(T.inkColor,.08)}`, display:'flex', alignItems:'center', gap:12 }}>
-            <div style={{ width:40, height:40, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:20, color:'#fff' }}>★</div>
-            <div>
-              <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:15, color:T.inkColor }}>Earn stamps & points</div>
-              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.6), marginTop:1 }}>
-                Make a purchase or scan at the counter to start
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Available vouchers */}
         {member && (
