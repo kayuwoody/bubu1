@@ -610,7 +610,7 @@ function ComboSection({ cfg, selections, selectedOptionals, onSelect, onToggleOp
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
               {group.items.map(item => {
                 const on = selectedId === item.id;
-                const priceLabel = item.priceAdjustment > 0 ? `+RM${item.priceAdjustment.toFixed(2)}` : 'Included';
+                const priceLabel = item.priceAdjustment > 0 ? `+RM${item.priceAdjustment.toFixed(2)}` : '';
                 return (
                   <button key={item.id} onClick={() => onSelect(group.uniqueKey, item.id)} style={pillStyle(on)}>
                     {item.name}{!on && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>{priceLabel}</span>}
