@@ -356,7 +356,7 @@ function NotifyModal({ product, savedEmail, savedPhone, onClose, onSuccess }: {
   onSuccess: (productId: string) => void;
 }) {
   const [email,      setEmail]      = useState(savedEmail);
-  const [phone,      setPhone]      = useState(savedPhone);
+  const [phone,      setPhone]      = useState(savedPhone.startsWith('01') ? savedPhone.slice(2) : savedPhone);
   const [submitting, setSubmitting] = useState(false);
   const [done,       setDone]       = useState(false);
   const [err,        setErr]        = useState('');
@@ -364,7 +364,7 @@ function NotifyModal({ product, savedEmail, savedPhone, onClose, onSuccess }: {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimEmail = email.trim();
-    const trimPhone = phone.trim();
+    const trimPhone = phone.trim() ? '01' + phone.trim() : '';
     if (!trimEmail && !trimPhone) {
       setErr('Please enter your email or phone number.');
       return;
@@ -427,13 +427,17 @@ function NotifyModal({ product, savedEmail, savedPhone, onClose, onSuccess }: {
               placeholder="your@email.com"
               style={{ width:'100%', padding:'11px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:12, outline:'none', boxSizing:'border-box' }}
             />
-            <input
-              type="tel"
-              value={phone}
-              onChange={e => setPhone(e.target.value)}
-              placeholder="Phone number"
-              style={{ width:'100%', padding:'11px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:12, outline:'none', boxSizing:'border-box' }}
-            />
+            <div style={{ display:'flex', border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:12, overflow:'hidden', background:T.bgColor }}>
+              <span style={{ padding:'11px 10px 11px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:hex(T.inkColor,.45), userSelect:'none', flexShrink:0 }}>01</span>
+              <input
+                type="tel"
+                value={phone}
+                onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
+                placeholder="X-XXXXXXXX"
+                maxLength={9}
+                style={{ flex:1, padding:'11px 14px 11px 0', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'transparent', border:'none', outline:'none' }}
+              />
+            </div>
             <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.5), marginTop:2 }}>
               We'll email you, or WhatsApp if email isn't provided
             </div>
@@ -1097,8 +1101,8 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
 
   const handlePhoneLookup = async (e: React.FormEvent) => {
     e.preventDefault();
-    const d = normalisePhone(phoneInput);
-    if (!isValidMalaysianPhone(d)) { setPhoneErr('Enter a valid Malaysian phone number (e.g. 0123456789)'); return; }
+    const d = normalisePhone('01' + phoneInput);
+    if (!isValidMalaysianPhone(d)) { setPhoneErr('Enter a valid Malaysian phone number'); return; }
     setPhoneErr('');
     setFetching(true);
     try {
@@ -1389,13 +1393,17 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
                 Already a member? Enter your phone
               </div>
               <div style={{ display:'flex', gap:8 }}>
-                <input
-                  type="tel"
-                  value={phoneInput}
-                  onChange={e => { setPhoneInput(e.target.value); setPhoneErr(''); }}
-                  placeholder="e.g. 0123456789"
-                  style={{ flex:1, padding:'11px 14px', fontSize:15, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, outline:'none', fontFamily:"'Nunito',system-ui" }}
-                />
+                <div style={{ flex:1, display:'flex', border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, overflow:'hidden', background:T.bgColor }}>
+                  <span style={{ padding:'11px 8px 11px 14px', fontSize:15, fontFamily:"'Nunito',system-ui", color:hex(T.inkColor,.45), userSelect:'none', flexShrink:0 }}>01</span>
+                  <input
+                    type="tel"
+                    value={phoneInput}
+                    onChange={e => { setPhoneInput(e.target.value.replace(/\D/g, '')); setPhoneErr(''); }}
+                    placeholder="X-XXXXXXXX"
+                    maxLength={9}
+                    style={{ flex:1, padding:'11px 14px 11px 0', fontSize:15, color:T.inkColor, background:'transparent', border:'none', outline:'none', fontFamily:"'Nunito',system-ui" }}
+                  />
+                </div>
                 <button type="submit" disabled={fetching}
                   style={{ padding:'11px 16px', borderRadius:T.cornerRadius-10, border:'none', background:T.primaryColor, color:'#fff', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Nunito',system-ui", opacity:fetching ? .6 : 1 }}>
                   {fetching ? '…' : 'Find'}

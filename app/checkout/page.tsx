@@ -583,7 +583,18 @@ function CheckoutContent() {
             {/* Phone + loyalty chip */}
             <div>
               <label style={labelStyle}>Phone</label>
-              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. 0123456789" required style={inputStyle} />
+              <div style={{ display:'flex', border:'1.5px solid rgba(58,36,20,.12)', borderRadius:10, overflow:'hidden', background:'#FFF6E8' }}>
+                <span style={{ padding:'12px 8px 12px 14px', fontSize:15, fontFamily:"'Nunito',system-ui", color:'rgba(58,36,20,.4)', userSelect:'none', flexShrink:0 }}>01</span>
+                <input
+                  type="tel"
+                  value={phone.startsWith('01') ? phone.slice(2) : phone}
+                  onChange={e => setPhone('01' + e.target.value.replace(/\D/g, ''))}
+                  placeholder="X-XXXXXXXX"
+                  maxLength={9}
+                  required
+                  style={{ ...inputStyle, flex:1, border:'none', borderRadius:0, padding:'12px 14px 12px 0', background:'transparent', outline:'none' }}
+                />
+              </div>
               <LoyaltyChip
                 config={loyaltyConfig}
                 member={loyaltyMember}
