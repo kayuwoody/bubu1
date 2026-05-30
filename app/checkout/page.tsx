@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
-import { normalisePhone } from '@/lib/normalisePhone';
+import { normalisePhone, isValidMalaysianPhone } from '@/lib/normalisePhone';
 import type { CartLine, LoyaltyConfig } from '@/lib/types';
 
 const INK  = '#3A2414';
@@ -374,6 +374,7 @@ function CheckoutContent() {
     e.preventDefault();
     setError('');
     if (!name.trim() || !phone.trim()) { setError('Name and phone are required.'); return; }
+    if (!isValidMalaysianPhone(normalisePhone(phone))) { setError('Enter a valid Malaysian phone number (e.g. 0123456789).'); return; }
     if (!channel) { setError('Please select a payment method.'); return; }
     // Persist form fields so they survive a cancel/retry cycle
     try { localStorage.setItem('co_form', JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim(), channel })); } catch { /* ignore */ }

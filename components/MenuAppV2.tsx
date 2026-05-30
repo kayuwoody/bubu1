@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
-import { normalisePhone } from '@/lib/normalisePhone';
+import { normalisePhone, isValidMalaysianPhone } from '@/lib/normalisePhone';
 import type { Branch, CartLine, LoyaltyConfig, LoyaltyMember, LoyaltyTransaction, Voucher, Product, SelectionConfig, Viewport, XorGroup } from '@/lib/types';
 
 interface Category { id: string; label: string }
@@ -1065,6 +1065,8 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   const [copied,          setCopied]          = useState<string | null>(null);
   const [nameInput,       setNameInput]       = useState('');
   const [savingName,      setSavingName]      = useState(false);
+  const [editingName,     setEditingName]     = useState(false);
+  const [namePromptDone,  setNamePromptDone]  = useState(false);
 
   const digits = normalisePhone(phone ?? '');
   const hasPhone = digits.length >= 8;
@@ -1096,7 +1098,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   const handlePhoneLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     const d = normalisePhone(phoneInput);
-    if (d.length < 8) { setPhoneErr('Enter a valid phone number'); return; }
+    if (!isValidMalaysianPhone(d)) { setPhoneErr('Enter a valid Malaysian phone number (e.g. 0123456789)'); return; }
     setPhoneErr('');
     setFetching(true);
     try {
@@ -1116,7 +1118,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
     });
   };
 
-  const reset = () => { onPhoneSave(''); setMember(null); setVouchers([]); setTransactions([]); setProgramBalances([]); setPhoneInput(''); setNameInput(''); };
+  const reset = () => { onPhoneSave(''); setMember(null); setVouchers([]); setTransactions([]); setProgramBalances([]); setPhoneInput(''); setNameInput(''); setEditingName(false); setNamePromptDone(false); };
 
   const handleSaveName = async () => {
     const n = nameInput.trim();
@@ -1124,7 +1126,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
     setSavingName(true);
     try {
       const res = await fetch('/api/loyalty/member', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, name: n }) });
-      if (res.ok) { const d = await res.json(); setMember(prev => prev ? { ...prev, name: d.member.name } : prev); setNameInput(''); }
+      if (res.ok) { const d = await res.json(); setMember(prev => prev ? { ...prev, name: d.member.name } : prev); setNameInput(''); setEditingName(false); setNamePromptDone(true); }
     } catch { /* silent */ } finally { setSavingName(false); }
   };
 
@@ -1333,16 +1335,24 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
                 Not you?
               </button>
             </div>
-            {member && !member.name && (
+            {/* Name prompt — skippable, also shows edit option when name is set */}
+            {member && (editingName || (!member.name && !namePromptDone)) && (
               <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'12px 14px', marginTop:8, border:`1.5px solid ${hex(T.inkColor,.08)}` }}>
-                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:T.inkColor, marginBottom:8 }}>What should we call you? <span style={{ fontWeight:400, opacity:.5 }}>(optional)</span></div>
+                <div style={{ display:'flex', alignItems:'center', marginBottom:8 }}>
+                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:T.inkColor, flex:1 }}>
+                    {editingName ? 'Update your name' : 'What should we call you?'}{' '}
+                    <span style={{ fontWeight:400, opacity:.5 }}>(optional)</span>
+                  </div>
+                  <button onClick={() => { setEditingName(false); setNamePromptDone(true); setNameInput(''); }}
+                    style={{ background:'none', border:'none', cursor:'pointer', color:hex(T.inkColor,.4), fontSize:18, lineHeight:1, padding:'0 0 0 8px' }}>×</button>
+                </div>
                 <div style={{ display:'flex', gap:8 }}>
                   <input
                     type="text"
                     value={nameInput}
                     onChange={e => setNameInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); }}
-                    placeholder="Your name or nickname"
+                    placeholder={member.name ?? 'Your name or nickname'}
                     maxLength={50}
                     style={{ flex:1, padding:'9px 12px', fontSize:14, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, outline:'none', fontFamily:"'Nunito',system-ui" }}
                   />
@@ -1354,6 +1364,12 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
                   </button>
                 </div>
               </div>
+            )}
+            {member?.name && !editingName && (
+              <button onClick={() => { setEditingName(true); setNameInput(member.name ?? ''); }}
+                style={{ background:'none', border:'none', cursor:'pointer', fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.4), padding:'4px 0 0', display:'block', marginTop:2 }}>
+                ✏️ Edit name
+              </button>
             )}
           </div>
         ) : (

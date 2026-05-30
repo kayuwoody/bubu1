@@ -9,3 +9,11 @@ export function normalisePhone(raw: string): string {
   }
   return digits;
 }
+
+/**
+ * Returns true for a plausible Malaysian phone number:
+ * starts with 01 (mobile) or 03/04/05/06/07/09 (landline), 10–11 digits total.
+ */
+export function isValidMalaysianPhone(normalised: string): boolean {
+  return /^0[1-9]\d{7,9}$/.test(normalised);
+}

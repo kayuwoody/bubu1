@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/online/supabase';
-import { normalisePhone } from '@/lib/normalisePhone';
+import { normalisePhone, isValidMalaysianPhone } from '@/lib/normalisePhone';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   const phone = normalisePhone(body.phone ?? '');
   const slug  = (body.slug ?? '').trim().toLowerCase();
 
-  if (!phone || phone.length < 8) return NextResponse.json({ error: 'Please enter a valid phone number' }, { status: 400 });
+  if (!isValidMalaysianPhone(phone)) return NextResponse.json({ error: 'Please enter a valid Malaysian phone number' }, { status: 400 });
   if (!slug) return NextResponse.json({ error: 'Invalid pass' }, { status: 400 });
 
   // Fetch pass config

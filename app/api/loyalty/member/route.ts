@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/online/supabase';
-import { normalisePhone } from '@/lib/normalisePhone';
+import { normalisePhone, isValidMalaysianPhone } from '@/lib/normalisePhone';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const phone = normalisePhone(searchParams.get('phone') ?? '');
-  if (phone.length < 8) return NextResponse.json({ member: null, vouchers: [], usedVouchers: [], transactions: [], programBalances: [] });
+  if (!isValidMalaysianPhone(phone)) return NextResponse.json({ member: null, vouchers: [], usedVouchers: [], transactions: [], programBalances: [] });
 
   const { data: member } = await supabase
     .from('loyalty_members')
@@ -70,7 +70,7 @@ export async function PATCH(req: Request) {
   const phone = normalisePhone(body.phone ?? '');
   const name  = (body.name ?? '').trim().slice(0, 50);
 
-  if (phone.length < 8) return NextResponse.json({ error: 'Invalid phone' }, { status: 400 });
+  if (!isValidMalaysianPhone(phone)) return NextResponse.json({ error: 'Invalid phone' }, { status: 400 });
 
   const { data, error } = await supabase
     .from('loyalty_members')
