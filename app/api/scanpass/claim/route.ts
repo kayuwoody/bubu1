@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/online/supabase';
+import { normalisePhone } from '@/lib/normalisePhone';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'Invalid request' }, { status: 400 }); }
 
-  const phone = (body.phone ?? '').replace(/\D/g, '');
+  const phone = normalisePhone(body.phone ?? '');
   const slug  = (body.slug ?? '').trim().toLowerCase();
 
   if (!phone || phone.length < 8) return NextResponse.json({ error: 'Please enter a valid phone number' }, { status: 400 });

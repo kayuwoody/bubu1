@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
+import { normalisePhone } from '@/lib/normalisePhone';
 import type { CartLine, LoyaltyConfig } from '@/lib/types';
 
 const INK  = '#3A2414';
@@ -188,7 +189,7 @@ function CheckoutContent() {
 
   // Debounced loyalty member lookup by phone
   useEffect(() => {
-    const digits = phone.replace(/\D/g, '');
+    const digits = normalisePhone(phone);
     if (digits.length < 8) { setLoyaltyMember(null); return; }
     setLookingUp(true);
     const timer = setTimeout(async () => {

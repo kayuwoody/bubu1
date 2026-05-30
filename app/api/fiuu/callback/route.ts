@@ -3,6 +3,7 @@ import { supabase } from '@/lib/online/supabase';
 import { verifyFiuuCallback, isFiuuSuccess } from '@/lib/online/fiuu';
 import { nextOrderNumber } from '@/lib/online/orderNumber';
 import { generateReceiptHtml } from '@/lib/online/receiptGenerator';
+import { normalisePhone } from '@/lib/normalisePhone';
 import type { CartLine, CheckoutSession } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -223,7 +224,7 @@ async function awardLoyaltyPoints(
   orderId: string,
   now: string,
 ) {
-  const phone = session.customer_phone.replace(/\D/g, '');
+  const phone = normalisePhone(session.customer_phone);
   if (!phone) { console.warn('[loyalty] empty phone, skipping'); return; }
 
   // Fetch all active purchase-triggered programs

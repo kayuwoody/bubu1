@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
+import { normalisePhone } from '@/lib/normalisePhone';
 import type { Branch, CartLine, LoyaltyConfig, LoyaltyMember, LoyaltyTransaction, Voucher, Product, SelectionConfig, Viewport, XorGroup } from '@/lib/types';
 
 interface Category { id: string; label: string }
@@ -1062,8 +1063,10 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   const [phoneInput,      setPhoneInput]      = useState('');
   const [phoneErr,        setPhoneErr]        = useState('');
   const [copied,          setCopied]          = useState<string | null>(null);
+  const [nameInput,       setNameInput]       = useState('');
+  const [savingName,      setSavingName]      = useState(false);
 
-  const digits = (phone ?? '').replace(/\D/g, '');
+  const digits = normalisePhone(phone ?? '');
   const hasPhone = digits.length >= 8;
 
   const CACHE_KEY = `loyalty_cache_${digits}`;
@@ -1092,7 +1095,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
 
   const handlePhoneLookup = async (e: React.FormEvent) => {
     e.preventDefault();
-    const d = phoneInput.replace(/\D/g, '');
+    const d = normalisePhone(phoneInput);
     if (d.length < 8) { setPhoneErr('Enter a valid phone number'); return; }
     setPhoneErr('');
     setFetching(true);
@@ -1113,7 +1116,17 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
     });
   };
 
-  const reset = () => { onPhoneSave(''); setMember(null); setVouchers([]); setTransactions([]); setProgramBalances([]); setPhoneInput(''); };
+  const reset = () => { onPhoneSave(''); setMember(null); setVouchers([]); setTransactions([]); setProgramBalances([]); setPhoneInput(''); setNameInput(''); };
+
+  const handleSaveName = async () => {
+    const n = nameInput.trim();
+    if (!n || !digits) return;
+    setSavingName(true);
+    try {
+      const res = await fetch('/api/loyalty/member', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, name: n }) });
+      if (res.ok) { const d = await res.json(); setMember(prev => prev ? { ...prev, name: d.member.name } : prev); setNameInput(''); }
+    } catch { /* silent */ } finally { setSavingName(false); }
+  };
 
   if (!open) return null;
 
@@ -1305,16 +1318,43 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
 
         {/* QR / phone lookup */}
         {hasPhone ? (
-          <div style={{ background:T.inkColor, borderRadius:T.cornerRadius, padding:'18px 18px 14px', marginBottom:16, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
-            <div style={{ background:'#fff', borderRadius:12, padding:10, display:'inline-flex' }}>
-              <QRCodeSVG value={digits} size={130} />
+          <div style={{ marginBottom:16 }}>
+            <div style={{ background:T.inkColor, borderRadius:T.cornerRadius, padding:'18px 18px 14px', display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+              <div style={{ background:'#fff', borderRadius:12, padding:10, display:'inline-flex' }}>
+                <QRCodeSVG value={digits} size={130} />
+              </div>
+              <div style={{ color:'#fff', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:15, textAlign:'center' }}>
+                {member?.name ? `Hey, ${member.name}! 👋` : 'Hey there! 👋'}
+              </div>
+              <div style={{ color:'#fff', fontFamily:"'Nunito',system-ui", fontSize:13, opacity:.75, textAlign:'center' }}>
+                Show this QR at the counter to earn stamps
+              </div>
+              <button onClick={reset} style={{ background:'transparent', border:`1px solid rgba(255,255,255,.3)`, borderRadius:999, padding:'4px 12px', color:'rgba(255,255,255,.65)', fontSize:12, cursor:'pointer', fontFamily:"'Nunito',system-ui" }}>
+                Not you?
+              </button>
             </div>
-            <div style={{ color:'#fff', fontFamily:"'Nunito',system-ui", fontSize:13, opacity:.8, textAlign:'center' }}>
-              Show this QR at the counter to earn stamps
-            </div>
-            <button onClick={reset} style={{ background:'transparent', border:`1px solid rgba(255,255,255,.3)`, borderRadius:999, padding:'4px 12px', color:'rgba(255,255,255,.65)', fontSize:12, cursor:'pointer', fontFamily:"'Nunito',system-ui" }}>
-              Not you?
-            </button>
+            {member && !member.name && (
+              <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'12px 14px', marginTop:8, border:`1.5px solid ${hex(T.inkColor,.08)}` }}>
+                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:T.inkColor, marginBottom:8 }}>What should we call you? <span style={{ fontWeight:400, opacity:.5 }}>(optional)</span></div>
+                <div style={{ display:'flex', gap:8 }}>
+                  <input
+                    type="text"
+                    value={nameInput}
+                    onChange={e => setNameInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); }}
+                    placeholder="Your name or nickname"
+                    maxLength={50}
+                    style={{ flex:1, padding:'9px 12px', fontSize:14, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, outline:'none', fontFamily:"'Nunito',system-ui" }}
+                  />
+                  <button
+                    onClick={handleSaveName}
+                    disabled={savingName || !nameInput.trim()}
+                    style={{ padding:'9px 14px', borderRadius:T.cornerRadius-10, border:'none', background:T.primaryColor, color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer', fontFamily:"'Nunito',system-ui", opacity:(savingName || !nameInput.trim()) ? .5 : 1 }}>
+                    {savingName ? '…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <>

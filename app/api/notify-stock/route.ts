@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/online/supabase';
+import { normalisePhone } from '@/lib/normalisePhone';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { product_id, product_name, email } = body;
-  const phone = body.phone ? body.phone.replace(/\D/g, '') : undefined;
+  const phone = body.phone ? normalisePhone(body.phone) : undefined;
 
   if (!product_id || !product_name) {
     return NextResponse.json({ error: 'product_id and product_name are required' }, { status: 400 });
