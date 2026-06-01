@@ -72,8 +72,8 @@ export function buildFiuuSeamlessParams(opts: {
   // Fiuu expects mobile without country code prefix (e.g. 0123456789 or 123456789)
   const mobile    = (opts.customerPhone ?? '').replace(/^\+?60/, '0').replace(/\D/g, '');
 
-  const vcode = md5(amountStr + merchantId + orderId + verifyKey + currency);
-  console.log('[fiuu/build] amount:', amountStr, 'merchantId:', merchantId, 'orderId:', orderId, 'currency:', currency, 'vcode:', vcode);
+  const vcode = md5(amountStr + merchantId + orderId + verifyKey);
+  console.log('[fiuu/build] amount:', amountStr, 'merchantId:', merchantId, 'orderId:', orderId, 'vcode:', vcode);
 
   const isSandbox = fiuuBase.includes('sandbox');
   const scriptUrl = isSandbox
