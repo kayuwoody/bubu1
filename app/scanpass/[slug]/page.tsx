@@ -22,14 +22,26 @@ function fmtExpiry(iso: string) {
   });
 }
 
+interface LoyaltyProgram {
+  id: string;
+  name: string;
+  threshold: number;
+  voucher_type: string;
+  voucher_discount_value: number;
+}
+
 interface Pass {
   id: string;
   slug: string;
   name: string;
   description: string | null;
   image_url: string | null;
+  pass_type: 'voucher' | 'stamp';
+  // voucher pass fields
   voucher_type: 'fixed' | 'percent';
   voucher_value: number;
+  // stamp pass fields
+  loyalty_programs: LoyaltyProgram | null;
 }
 
 interface ClaimedVoucher {
@@ -37,6 +49,33 @@ interface ClaimedVoucher {
   type:       'fixed' | 'percent';
   value:      number;
   expires_at: string;
+}
+
+interface StampResult {
+  program_name:   string;
+  stamps_now:     number;
+  threshold:      number;
+  voucher_issued: boolean;
+  voucher?:       ClaimedVoucher;
+}
+
+function StampDots({ stamped, total }: { stamped: number; total: number }) {
+  return (
+    <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center' }}>
+      {Array.from({ length: total }).map((_, i) => (
+        <div key={i} style={{
+          width:36, height:36, borderRadius:'50%',
+          background: i < stamped ? PRI : 'transparent',
+          border: i < stamped ? 'none' : `2.5px dashed ${hex(INK, .25)}`,
+          display:'grid', placeItems:'center',
+          fontSize:16, color:'#fff',
+          transition:'all .3s',
+        }}>
+          {i < stamped ? '✦' : ''}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function ScanPassContent() {
@@ -48,13 +87,15 @@ function ScanPassContent() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
 
-  const [phone,     setPhone]     = useState('');
-  const [claiming,  setClaiming]  = useState(false);
-  const [claimErr,  setClaimErr]  = useState('');
-  const [voucher,   setVoucher]   = useState<ClaimedVoucher | null>(null);
-  const [wasClaimed, setWasClaimed] = useState(false); // already had it today
-  const [showQR,    setShowQR]    = useState(false);
-  const [copied,    setCopied]    = useState(false);
+  const [phoneSuffix, setPhoneSuffix] = useState('');
+  const [claiming,    setClaiming]    = useState(false);
+  const [claimErr,    setClaimErr]    = useState('');
+
+  const [voucher,    setVoucher]    = useState<ClaimedVoucher | null>(null);
+  const [stamp,      setStamp]      = useState<StampResult | null>(null);
+  const [wasClaimed, setWasClaimed] = useState(false);
+  const [showQR,     setShowQR]     = useState(false);
+  const [copied,     setCopied]     = useState(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -67,33 +108,35 @@ function ScanPassContent() {
       .catch(() => setError('Could not load offer. Please try again.'))
       .finally(() => setLoading(false));
 
-    // Pre-fill phone if saved
     try {
       const saved = JSON.parse(localStorage.getItem('co_form') ?? '{}');
-      if (saved.phone) setPhone(saved.phone);
+      if (saved.phone) {
+        const full = saved.phone.replace(/\D/g, '');
+        setPhoneSuffix(full.startsWith('01') ? full.slice(2) : full);
+      }
     } catch { /* ignore */ }
   }, [slug]);
 
   const claim = async (e: React.FormEvent) => {
     e.preventDefault();
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length < 8) { setClaimErr('Please enter a valid phone number'); return; }
+    const fullPhone = '01' + phoneSuffix.replace(/\D/g, '');
+    if (fullPhone.length < 10) { setClaimErr('Please enter a valid phone number'); return; }
     setClaimErr('');
     setClaiming(true);
     try {
       const res = await fetch('/api/scanpass/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, phone: digits }),
+        body: JSON.stringify({ slug, phone: fullPhone }),
       });
       const d = await res.json();
       if (!res.ok || d.error) { setClaimErr(d.error ?? 'Something went wrong'); return; }
-      setVoucher(d.voucher);
       setWasClaimed(d.already_claimed ?? false);
-      // Save phone for future use
+      if (d.voucher) setVoucher(d.voucher);
+      if (d.stamp)   setStamp(d.stamp);
       try {
         const existing = JSON.parse(localStorage.getItem('co_form') ?? '{}');
-        localStorage.setItem('co_form', JSON.stringify({ ...existing, phone: digits }));
+        localStorage.setItem('co_form', JSON.stringify({ ...existing, phone: fullPhone }));
       } catch { /* ignore */ }
     } catch { setClaimErr('Network error. Please try again.'); }
     finally { setClaiming(false); }
@@ -129,11 +172,108 @@ function ScanPassContent() {
 
   if (!pass) return null;
 
-  const discountLabel = pass.voucher_type === 'percent'
-    ? `${pass.voucher_value}% off`
-    : `RM ${Number(pass.voucher_value).toFixed(2)} off`;
+  // ── Stamp result screen ──────────────────────────────────────────────────
+  if (stamp) {
+    const prog = pass.loyalty_programs;
+    const rewardLabel = prog
+      ? (prog.voucher_type === 'percent' ? `${prog.voucher_discount_value}% off` : `RM ${prog.voucher_discount_value.toFixed(2)} off`)
+      : 'your reward';
 
-  // ── Voucher claimed — success screen ────────────────────────────────────
+    return (
+      <div style={{ minHeight:'100vh', background:BG, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'24px 16px' }}>
+        {/* QR overlay for issued voucher */}
+        {showQR && stamp.voucher && (
+          <div onClick={() => setShowQR(false)} style={{ position:'fixed', inset:0, zIndex:100, background:'rgba(0,0,0,.85)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background:'#FFF6E8', borderRadius:R, padding:'28px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', gap:16, maxWidth:320, width:'100%', border:`3px solid ${INK}` }}>
+              <div style={{ ...heading, fontSize:20, textAlign:'center' }}>{rewardLabel}</div>
+              <div style={{ background:'#fff', padding:16, borderRadius:14, border:`2px solid ${hex(INK,.12)}` }}>
+                <QRCodeSVG value={stamp.voucher.code} size={200} fgColor={INK} bgColor="#ffffff" level="M" />
+              </div>
+              <div style={{ textAlign:'center' }}>
+                <div style={{ ...s, fontSize:11, fontWeight:700, color:hex(INK,.4), textTransform:'uppercase', letterSpacing:'.08em', marginBottom:4 }}>Voucher code</div>
+                <div style={{ ...heading, fontSize:18, letterSpacing:'.06em' }}>{stamp.voucher.code}</div>
+                <div style={{ ...s, fontSize:12, color:hex(INK,.45), marginTop:4 }}>Expires today at {fmtExpiry(stamp.voucher.expires_at)}</div>
+              </div>
+              <button onClick={() => setShowQR(false)} style={{ background:INK, color:'#fff', border:'none', borderRadius:999, padding:'10px 32px', ...heading, fontSize:14, cursor:'pointer' }}>Close</button>
+            </div>
+          </div>
+        )}
+
+        <div style={{ width:'100%', maxWidth:420 }}>
+          {/* Hero */}
+          <div style={{ background:INK, borderRadius:R, padding:'28px 24px 24px', marginBottom:16, textAlign:'center' }}>
+            <div style={{ fontSize:52, marginBottom:12 }}>{wasClaimed ? '☕' : '✦'}</div>
+            <div style={{ ...heading, fontSize:24, color:'#fff', marginBottom:6 }}>
+              {wasClaimed
+                ? 'Already checked in today'
+                : stamp.voucher_issued
+                  ? 'Stamp card complete! 🎉'
+                  : 'Stamp added!'}
+            </div>
+            <div style={{ ...s, fontSize:14, color:'rgba(255,255,255,.7)' }}>
+              {wasClaimed
+                ? `Come back tomorrow for your next stamp.`
+                : stamp.voucher_issued
+                  ? `You've earned ${rewardLabel} — voucher below`
+                  : `${stamp.stamps_now} of ${stamp.threshold} stamps toward ${rewardLabel}`}
+            </div>
+          </div>
+
+          {/* Stamp progress card */}
+          <div style={{ background:'#fff', borderRadius:R-2, padding:'20px', marginBottom:14, border:`1.5px solid ${hex(INK,.1)}` }}>
+            <div style={{ ...s, fontSize:11, fontWeight:700, color:hex(INK,.4), textTransform:'uppercase', letterSpacing:'.07em', marginBottom:14, textAlign:'center' }}>
+              {stamp.program_name}
+            </div>
+            <StampDots stamped={stamp.stamps_now} total={stamp.threshold} />
+            <div style={{ ...s, fontSize:13, color:hex(INK,.5), textAlign:'center', marginTop:12 }}>
+              {stamp.stamps_now >= stamp.threshold
+                ? `Card complete!`
+                : `${stamp.threshold - stamp.stamps_now} more stamp${stamp.threshold - stamp.stamps_now !== 1 ? 's' : ''} to unlock ${rewardLabel}`}
+            </div>
+          </div>
+
+          {/* Issued voucher (if threshold crossed) */}
+          {stamp.voucher_issued && stamp.voucher && (
+            <div style={{ background:'#fff', borderRadius:R-2, overflow:'hidden', border:`2px solid ${PRI}`, marginBottom:14 }}>
+              <div style={{ background:PRI, padding:'14px 18px', display:'flex', alignItems:'center', gap:14 }}>
+                <div style={{ width:46, height:46, borderRadius:'50%', background:'rgba(255,255,255,.2)', display:'grid', placeItems:'center', fontSize:24, flexShrink:0 }}>🎁</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ ...heading, fontSize:20, color:'#fff' }}>{rewardLabel}</div>
+                  <div style={{ ...s, fontSize:12, color:'rgba(255,255,255,.8)', marginTop:1 }}>Valid today until {fmtExpiry(stamp.voucher.expires_at)}</div>
+                </div>
+              </div>
+              <div style={{ padding:'14px 18px' }}>
+                <div style={{ ...s, fontSize:11, fontWeight:700, color:hex(INK,.4), textTransform:'uppercase', letterSpacing:'.06em', marginBottom:4 }}>Voucher code</div>
+                <div style={{ ...heading, fontSize:18, letterSpacing:'.05em', marginBottom:14 }}>{stamp.voucher.code}</div>
+                <div style={{ display:'flex', gap:8 }}>
+                  <button onClick={() => setShowQR(true)} style={{ flex:1, padding:'11px', background:INK, color:'#fff', border:'none', borderRadius:R-8, ...s, fontWeight:700, fontSize:14, cursor:'pointer' }}>
+                    Show QR →
+                  </button>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(stamp.voucher!.code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }}
+                    style={{ padding:'11px 18px', border:`1.5px solid ${INK}`, borderRadius:R-8, background: copied ? INK : 'transparent', color: copied ? '#fff' : INK, ...s, fontWeight:700, fontSize:14, cursor:'pointer', flexShrink:0, transition:'all .2s' }}
+                  >
+                    {copied ? '✓ Copied' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {stamp.voucher_issued && stamp.voucher && (
+            <a href={`/checkout?voucher=${encodeURIComponent(stamp.voucher.code)}`} style={{ display:'block', width:'100%', padding:'14px', background:PRI, color:'#fff', border:'none', borderRadius:R, ...heading, fontSize:16, cursor:'pointer', textAlign:'center', textDecoration:'none', boxShadow:`0 6px 0 ${hex(PRI,.4)}`, marginBottom:12 }}>
+              Order online now →
+            </a>
+          )}
+          <button onClick={() => router.push('/')} style={{ width:'100%', padding:'12px', background:'transparent', border:`1.5px solid ${hex(INK,.2)}`, borderRadius:R, ...s, fontWeight:700, fontSize:14, color:hex(INK,.6), cursor:'pointer' }}>
+            Browse menu
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Voucher result screen ────────────────────────────────────────────────
   if (voucher) {
     const vLabel = voucher.type === 'percent'
       ? `${voucher.value}% off`
@@ -141,12 +281,8 @@ function ScanPassContent() {
 
     return (
       <div style={{ minHeight:'100vh', background:BG, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'24px 16px' }}>
-        {/* QR overlay */}
         {showQR && (
-          <div
-            onClick={() => setShowQR(false)}
-            style={{ position:'fixed', inset:0, zIndex:100, background:'rgba(0,0,0,.85)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}
-          >
+          <div onClick={() => setShowQR(false)} style={{ position:'fixed', inset:0, zIndex:100, background:'rgba(0,0,0,.85)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
             <div onClick={e => e.stopPropagation()} style={{ background:'#FFF6E8', borderRadius:R, padding:'28px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', gap:16, maxWidth:320, width:'100%', border:`3px solid ${INK}` }}>
               <div style={{ ...heading, fontSize:20, textAlign:'center' }}>{vLabel}</div>
               <div style={{ background:'#fff', padding:16, borderRadius:14, border:`2px solid ${hex(INK,.12)}` }}>
@@ -164,71 +300,40 @@ function ScanPassContent() {
         )}
 
         <div style={{ width:'100%', maxWidth:420 }}>
-          {/* Hero */}
           <div style={{ background:INK, borderRadius:R, padding:'28px 24px 24px', marginBottom:16, textAlign:'center' }}>
             <div style={{ fontSize:52, marginBottom:12 }}>🎉</div>
             <div style={{ ...heading, fontSize:24, color:'#fff', marginBottom:6 }}>
               {wasClaimed ? 'Your voucher' : "You're all set!"}
             </div>
             <div style={{ ...s, fontSize:14, color:'rgba(255,255,255,.7)' }}>
-              {wasClaimed
-                ? "You already claimed this today — here it is again."
-                : `${discountLabel} voucher added to your account`}
+              {wasClaimed ? "You already claimed this today — here it is again." : `${vLabel} voucher added to your account`}
             </div>
           </div>
 
-          {/* Voucher card */}
           <div style={{ background:'#fff', borderRadius:R-2, overflow:'hidden', border:`2px solid ${PRI}`, marginBottom:14 }}>
             <div style={{ background:PRI, padding:'14px 18px', display:'flex', alignItems:'center', gap:14 }}>
               <div style={{ width:46, height:46, borderRadius:'50%', background:'rgba(255,255,255,.2)', display:'grid', placeItems:'center', fontSize:24, flexShrink:0 }}>☕</div>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ ...heading, fontSize:20, color:'#fff' }}>{vLabel}</div>
-                <div style={{ ...s, fontSize:12, color:'rgba(255,255,255,.8)', marginTop:1 }}>
-                  Valid today until {fmtExpiry(voucher.expires_at)}
-                </div>
+                <div style={{ ...s, fontSize:12, color:'rgba(255,255,255,.8)', marginTop:1 }}>Valid today until {fmtExpiry(voucher.expires_at)}</div>
               </div>
             </div>
             <div style={{ padding:'14px 18px' }}>
               <div style={{ ...s, fontSize:11, fontWeight:700, color:hex(INK,.4), textTransform:'uppercase', letterSpacing:'.06em', marginBottom:4 }}>Voucher code</div>
               <div style={{ ...heading, fontSize:18, letterSpacing:'.05em', marginBottom:14 }}>{voucher.code}</div>
-
               <div style={{ display:'flex', gap:8 }}>
-                <button
-                  onClick={() => setShowQR(true)}
-                  style={{ flex:1, padding:'11px', background:INK, color:'#fff', border:'none', borderRadius:R-8, ...s, fontWeight:700, fontSize:14, cursor:'pointer' }}
-                >
-                  Show QR →
-                </button>
-                <button
-                  onClick={copyCode}
-                  style={{
-                    padding:'11px 18px', border:`1.5px solid ${INK}`, borderRadius:R-8,
-                    background: copied ? INK : 'transparent', color: copied ? '#fff' : INK,
-                    ...s, fontWeight:700, fontSize:14, cursor:'pointer', flexShrink:0, transition:'all .2s',
-                  }}
-                >
+                <button onClick={() => setShowQR(true)} style={{ flex:1, padding:'11px', background:INK, color:'#fff', border:'none', borderRadius:R-8, ...s, fontWeight:700, fontSize:14, cursor:'pointer' }}>Show QR →</button>
+                <button onClick={copyCode} style={{ padding:'11px 18px', border:`1.5px solid ${INK}`, borderRadius:R-8, background: copied ? INK : 'transparent', color: copied ? '#fff' : INK, ...s, fontWeight:700, fontSize:14, cursor:'pointer', flexShrink:0, transition:'all .2s' }}>
                   {copied ? '✓ Copied' : 'Copy'}
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Use at checkout CTA */}
-          <a
-            href={`/checkout?voucher=${encodeURIComponent(voucher.code)}`}
-            style={{
-              display:'block', width:'100%', padding:'14px',
-              background:PRI, color:'#fff', border:'none', borderRadius:R,
-              ...heading, fontSize:16, cursor:'pointer', textAlign:'center', textDecoration:'none',
-              boxShadow:`0 6px 0 ${hex(PRI,.4)}`,
-            }}
-          >
+          <a href={`/checkout?voucher=${encodeURIComponent(voucher.code)}`} style={{ display:'block', width:'100%', padding:'14px', background:PRI, color:'#fff', border:'none', borderRadius:R, ...heading, fontSize:16, cursor:'pointer', textAlign:'center', textDecoration:'none', boxShadow:`0 6px 0 ${hex(PRI,.4)}` }}>
             Order online now →
           </a>
-          <button
-            onClick={() => router.push('/')}
-            style={{ marginTop:12, width:'100%', padding:'12px', background:'transparent', border:`1.5px solid ${hex(INK,.2)}`, borderRadius:R, ...s, fontWeight:700, fontSize:14, color:hex(INK,.6), cursor:'pointer' }}
-          >
+          <button onClick={() => router.push('/')} style={{ marginTop:12, width:'100%', padding:'12px', background:'transparent', border:`1.5px solid ${hex(INK,.2)}`, borderRadius:R, ...s, fontWeight:700, fontSize:14, color:hex(INK,.6), cursor:'pointer' }}>
             Browse menu
           </button>
         </div>
@@ -237,81 +342,69 @@ function ScanPassContent() {
   }
 
   // ── Claim form ───────────────────────────────────────────────────────────
+  const isStamp = pass.pass_type === 'stamp';
+  const prog = pass.loyalty_programs;
+  const discountLabel = isStamp
+    ? (prog ? (prog.voucher_type === 'percent' ? `${prog.voucher_discount_value}% off` : `RM ${prog.voucher_discount_value.toFixed(2)} off`) : 'a reward')
+    : (pass.voucher_type === 'percent' ? `${pass.voucher_value}% off` : `RM ${Number(pass.voucher_value).toFixed(2)} off`);
+
   return (
     <div style={{ minHeight:'100vh', background:BG, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'24px 16px' }}>
       <div style={{ width:'100%', maxWidth:420 }}>
-        {/* Hero image or coloured banner */}
-        <div style={{
-          borderRadius:R, overflow:'hidden', marginBottom:18,
-          background: pass.image_url ? '#000' : INK,
-          minHeight: pass.image_url ? 0 : 180,
-          position:'relative',
-        }}>
+        {/* Hero */}
+        <div style={{ borderRadius:R, overflow:'hidden', marginBottom:18, background: pass.image_url ? '#000' : INK, minHeight: pass.image_url ? 0 : 180, position:'relative' }}>
           {pass.image_url && (
             <img src={pass.image_url} alt={pass.name} style={{ width:'100%', maxHeight:260, objectFit:'cover', display:'block', opacity:.85 }} />
           )}
-          <div style={{
-            position: pass.image_url ? 'absolute' : 'relative',
-            bottom:0, left:0, right:0,
-            padding:'24px',
-            background: pass.image_url ? 'linear-gradient(to top, rgba(0,0,0,.8) 0%, transparent 100%)' : 'transparent',
-          }}>
-            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:26, color:'#fff', lineHeight:1.1, marginBottom:6 }}>
-              {pass.name}
-            </div>
-            {pass.description && (
-              <div style={{ ...s, fontSize:14, color:'rgba(255,255,255,.8)', lineHeight:1.5 }}>
-                {pass.description}
-              </div>
-            )}
+          <div style={{ position: pass.image_url ? 'absolute' : 'relative', bottom:0, left:0, right:0, padding:'24px', background: pass.image_url ? 'linear-gradient(to top, rgba(0,0,0,.8) 0%, transparent 100%)' : 'transparent' }}>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:26, color:'#fff', lineHeight:1.1, marginBottom:6 }}>{pass.name}</div>
+            {pass.description && <div style={{ ...s, fontSize:14, color:'rgba(255,255,255,.8)', lineHeight:1.5 }}>{pass.description}</div>}
           </div>
         </div>
 
         {/* What you get */}
         <div style={{ background:'#fff', borderRadius:R-2, padding:'16px 18px', marginBottom:16, display:'flex', alignItems:'center', gap:14, border:`2px solid ${PRI}` }}>
-          <div style={{ width:50, height:50, borderRadius:'50%', background:PRI, display:'grid', placeItems:'center', flexShrink:0, fontSize:24 }}>☕</div>
+          <div style={{ width:50, height:50, borderRadius:'50%', background:PRI, display:'grid', placeItems:'center', flexShrink:0, fontSize:24 }}>
+            {isStamp ? '✦' : '☕'}
+          </div>
           <div>
-            <div style={{ ...heading, fontSize:18 }}>Get {discountLabel} today</div>
-            <div style={{ ...s, fontSize:13, color:hex(INK,.6), marginTop:2 }}>
-              Enter your phone and claim your voucher — valid until midnight tonight
-            </div>
+            {isStamp
+              ? <>
+                  <div style={{ ...heading, fontSize:18 }}>Earn a stamp today</div>
+                  <div style={{ ...s, fontSize:13, color:hex(INK,.6), marginTop:2 }}>
+                    Collect {prog?.threshold ?? '?'} stamps to unlock {discountLabel}
+                  </div>
+                </>
+              : <>
+                  <div style={{ ...heading, fontSize:18 }}>Get {discountLabel} today</div>
+                  <div style={{ ...s, fontSize:13, color:hex(INK,.6), marginTop:2 }}>Enter your phone and claim your voucher — valid until midnight tonight</div>
+                </>
+            }
           </div>
         </div>
 
         {/* Phone form */}
         <form onSubmit={claim} style={{ display:'flex', flexDirection:'column', gap:10 }}>
-          <input
-            type="tel"
-            value={phone}
-            onChange={e => { setPhone(e.target.value); setClaimErr(''); }}
-            placeholder="Your phone number (e.g. 0123456789)"
-            style={{
-              width:'100%', padding:'16px', fontSize:16, color:INK,
-              background:'#fff', border:`1.5px solid ${hex(INK,.15)}`,
-              borderRadius:R-8, outline:'none',
-              fontFamily:"'Nunito', system-ui",
-            }}
-          />
-          {claimErr && (
-            <div style={{ ...s, fontSize:13, color:'#C0392B', fontWeight:600 }}>{claimErr}</div>
-          )}
-          <button
-            type="submit"
-            disabled={claiming}
-            style={{
-              padding:'15px', background: claiming ? hex(PRI,.6) : PRI,
-              color:'#fff', border:'none', borderRadius:R,
-              ...heading, fontSize:16, cursor: claiming ? 'not-allowed' : 'pointer',
-              boxShadow: claiming ? 'none' : `0 6px 0 ${hex(PRI,.4)}`,
-            }}
-          >
-            {claiming ? 'Claiming…' : `Claim ${discountLabel} voucher →`}
+          <div style={{ display:'flex', border:`1.5px solid ${hex(INK,.15)}`, borderRadius:R-8, overflow:'hidden', background:'#fff' }}>
+            <span style={{ padding:'16px 10px 16px 16px', fontSize:16, fontFamily:"'Nunito',system-ui", color:hex(INK,.4), userSelect:'none', flexShrink:0 }}>01</span>
+            <input
+              type="tel"
+              value={phoneSuffix}
+              onChange={e => { setPhoneSuffix(e.target.value.replace(/\D/g, '')); setClaimErr(''); }}
+              placeholder="X-XXXXXXXX"
+              maxLength={9}
+              style={{ flex:1, padding:'16px 16px 16px 0', fontSize:16, color:INK, background:'transparent', border:'none', outline:'none', fontFamily:"'Nunito', system-ui" }}
+            />
+          </div>
+          {claimErr && <div style={{ ...s, fontSize:13, color:'#C0392B', fontWeight:600 }}>{claimErr}</div>}
+          <button type="submit" disabled={claiming} style={{ padding:'15px', background: claiming ? hex(PRI,.6) : PRI, color:'#fff', border:'none', borderRadius:R, ...heading, fontSize:16, cursor: claiming ? 'not-allowed' : 'pointer', boxShadow: claiming ? 'none' : `0 6px 0 ${hex(PRI,.4)}` }}>
+            {claiming ? 'Submitting…' : isStamp ? 'Claim my stamp →' : `Claim ${discountLabel} voucher →`}
           </button>
         </form>
 
         <div style={{ ...s, fontSize:12, color:hex(INK,.4), textAlign:'center', marginTop:14, lineHeight:1.6 }}>
-          One voucher per phone number per day.<br />
-          Redeemable online or at the counter.
+          One {isStamp ? 'stamp' : 'voucher'} per phone number per day.
+          {!isStamp && <><br />Redeemable online or at the counter.</>}
         </div>
       </div>
     </div>
