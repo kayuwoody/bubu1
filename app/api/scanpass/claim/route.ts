@@ -59,20 +59,16 @@ export async function POST(req: Request) {
   const today = todayMYT();
   const refId = `sp:${slug}:${phone}:${today}`;
   const now   = new Date().toISOString();
+  // Start of today in MYT (UTC+8) expressed as UTC timestamp for range queries
+  const [ty, tm, td] = today.split('-').map(Number);
+  const startOfTodayMYT = new Date(Date.UTC(ty, tm - 1, td, -8, 0, 0)).toISOString();
 
   // ── Stamp pass ────────────────────────────────────────────────────────────
   if (pass.pass_type === 'stamp') {
     const prog = pass.loyalty_programs as { id: string; name: string; threshold: number; voucher_type: string; voucher_discount_value: number } | null;
     if (!prog) return NextResponse.json({ error: 'Stamp program not configured' }, { status: 500 });
 
-    // Dedup: check loyalty_transactions for today's stamp from this pass
-    const { data: existingTx } = await supabase
-      .from('loyalty_transactions')
-      .select('id')
-      .eq('reference_id', refId)
-      .maybeSingle();
-
-    // Upsert loyalty member
+    // Upsert loyalty member first (needed for member_id dedup check)
     const { data: member, error: memberErr } = await supabase
       .from('loyalty_members')
       .upsert({ phone, updated_at: now }, { onConflict: 'phone' })
@@ -98,6 +94,17 @@ export async function POST(req: Request) {
       console.error('[scanpass/stamp] enrollment upsert error:', mpErr?.message);
       return NextResponse.json({ error: 'Could not load loyalty account. Please try again.' }, { status: 500 });
     }
+
+    // Dedup: check for ANY stamp on this program today — catches both scan-pass
+    // and POS in-person stamps so a customer can't double-dip across sources.
+    const { data: existingTx } = await supabase
+      .from('loyalty_transactions')
+      .select('id, type')
+      .eq('member_id', member.id)
+      .eq('program_id', prog.id)
+      .gte('created_at', startOfTodayMYT)
+      .limit(1)
+      .maybeSingle();
 
     if (existingTx) {
       return NextResponse.json({
