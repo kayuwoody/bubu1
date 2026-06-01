@@ -2,13 +2,15 @@
 
 import { QRCodeSVG } from 'qrcode.react';
 
-const SITE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://order.coffeeoasis.my';
+const SITE_URL    = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://order.coffeeoasis.my';
+const MASCOT_URL  = 'https://82fs0epyy9esp8a5.public.blob.vercel-storage.com/assets/binbean.webp';
+const LOGO_URL    = 'https://82fs0epyy9esp8a5.public.blob.vercel-storage.com/assets/co-logo.webp';
 
 export default function QrCardPage() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800;900&family=Nunito:wght@600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@600;700&display=swap');
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: #f5efe8; font-family: 'Nunito', system-ui, sans-serif; }
         @media print {
@@ -19,7 +21,7 @@ export default function QrCardPage() {
       `}</style>
 
       {/* Print button */}
-      <div className="no-print" style={{ textAlign:'center', padding:'24px 16px 0', fontFamily:"'Nunito',system-ui" }}>
+      <div className="no-print" style={{ textAlign:'center', padding:'24px 16px 0' }}>
         <button
           onClick={() => window.print()}
           style={{ background:'#F58220', color:'#fff', border:'none', borderRadius:999, padding:'10px 28px', fontWeight:700, fontSize:15, cursor:'pointer', fontFamily:"'Nunito',system-ui" }}>
@@ -41,9 +43,17 @@ export default function QrCardPage() {
           }}
         >
           {/* Header band */}
-          <div style={{ background:'linear-gradient(135deg,#F58220 0%,#FF9A3D 100%)', padding:'28px 24px 22px', display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
-            <img src="/co-mascot.png" alt="Coffee Oasis mascot" style={{ width:80, height:80, objectFit:'contain', filter:'drop-shadow(0 4px 8px rgba(0,0,0,.2))' }} />
-            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:900, fontSize:26, color:'#fff', lineHeight:1.1, textAlign:'center' }}>Coffee Oasis</div>
+          <div style={{ background:'linear-gradient(135deg,#F58220 0%,#FF9A3D 100%)', padding:'28px 24px 22px', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+            <img
+              src={MASCOT_URL}
+              alt="Coffee Oasis mascot"
+              style={{ width:100, height:100, objectFit:'contain', filter:'drop-shadow(0 4px 10px rgba(0,0,0,.22))' }}
+            />
+            <img
+              src={LOGO_URL}
+              alt="Coffee Oasis"
+              style={{ height:36, objectFit:'contain', filter:'brightness(0) invert(1)' }}
+            />
             <div style={{ fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:14, color:'rgba(255,255,255,.92)', letterSpacing:'.03em', textAlign:'center' }}>
               Skip the queue. Order from your phone.
             </div>
@@ -61,7 +71,7 @@ export default function QrCardPage() {
               />
             </div>
 
-            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:15, color:'#3A2414', textAlign:'center' }}>
+            <div style={{ fontFamily:"'Nunito',system-ui", fontWeight:800, fontSize:15, color:'#3A2414', textAlign:'center' }}>
               Scan to order now
             </div>
 
