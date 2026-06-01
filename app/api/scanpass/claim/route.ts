@@ -65,7 +65,7 @@ export async function POST(req: Request) {
 
   // ── Stamp pass ────────────────────────────────────────────────────────────
   if (pass.pass_type === 'stamp') {
-    const prog = pass.loyalty_programs as { id: string; name: string; threshold: number; voucher_type: string; voucher_discount_value: number } | null;
+    const prog = (Array.isArray(pass.loyalty_programs) ? pass.loyalty_programs[0] : pass.loyalty_programs) as { id: string; name: string; threshold: number; voucher_type: string; voucher_discount_value: number } | null;
     if (!prog) return NextResponse.json({ error: 'Stamp program not configured' }, { status: 500 });
 
     // Upsert loyalty member first (needed for member_id dedup check)
