@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useParams } from 'next/navigation';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 
 const INK     = '#3A2414';
 const PRI     = '#F58220';
@@ -16,6 +16,7 @@ function PrintContent() {
 
   const [pass, setPass] = useState<{ name: string; description: string | null; pass_type: string } | null>(null);
   const [error, setError] = useState('');
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -27,6 +28,15 @@ function PrintContent() {
 
   const claimUrl = `${SITE}/scanpass/${slug}`;
   const isStamp  = pass?.pass_type === 'stamp';
+
+  const downloadQR = () => {
+    const canvas = canvasRef.current?.querySelector('canvas');
+    if (!canvas) return;
+    const link = document.createElement('a');
+    link.download = `qr-${slug}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
 
   return (
     <>
@@ -41,13 +51,24 @@ function PrintContent() {
         }
       `}</style>
 
-      <div className="no-print" style={{ textAlign: 'center', padding: '20px 16px 0' }}>
+      <div className="no-print" style={{ textAlign: 'center', padding: '20px 16px 0', display: 'flex', justifyContent: 'center', gap: 10 }}>
         <button
           onClick={() => window.print()}
           style={{ background: PRI, color: '#fff', border: 'none', borderRadius: 999, padding: '10px 28px', fontWeight: 700, fontSize: 15, cursor: 'pointer', fontFamily: "'Nunito',system-ui" }}
         >
           Print / Save as PDF
         </button>
+        <button
+          onClick={downloadQR}
+          style={{ background: INK, color: '#fff', border: 'none', borderRadius: 999, padding: '10px 28px', fontWeight: 700, fontSize: 15, cursor: 'pointer', fontFamily: "'Nunito',system-ui" }}
+        >
+          Download QR PNG
+        </button>
+      </div>
+
+      {/* Hidden high-res canvas for download — 800px for crisp printing */}
+      <div ref={canvasRef} style={{ position: 'absolute', left: -9999, top: -9999, visibility: 'hidden' }}>
+        <QRCodeCanvas value={claimUrl} size={800} bgColor="#ffffff" fgColor={INK} level="H" />
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 16px 48px' }}>
@@ -59,7 +80,7 @@ function PrintContent() {
             <img src={LOGO} alt="Coffee Oasis" style={{ height: 32, objectFit: 'contain' }} />
           </div>
 
-          {/* Pass name + instruction */}
+          {/* Pass name + description */}
           <div style={{ background: INK, padding: '18px 24px', textAlign: 'center' }}>
             {error ? (
               <div style={{ fontFamily: "'Nunito',system-ui", fontSize: 14, color: 'rgba(255,255,255,.6)' }}>{error}</div>
@@ -82,20 +103,14 @@ function PrintContent() {
           {/* QR code */}
           <div style={{ padding: '28px 24px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
             <div style={{ background: '#FFF6E8', borderRadius: 18, padding: 18, border: `2.5px solid ${PRI}` }}>
-              <QRCodeSVG
-                value={claimUrl}
-                size={210}
-                bgColor="#FFF6E8"
-                fgColor={INK}
-                level="M"
-              />
+              <QRCodeSVG value={claimUrl} size={210} bgColor="#FFF6E8" fgColor={INK} level="M" />
             </div>
 
             <div style={{ fontFamily: "'Baloo 2',system-ui", fontWeight: 800, fontSize: 16, color: INK, textAlign: 'center' }}>
               {isStamp ? 'Scan to earn your stamp' : 'Scan to claim your offer'}
             </div>
 
-            <div style={{ fontFamily: "'Nunito',system-ui", fontSize: 12, color: `rgba(58,36,20,.45)`, textAlign: 'center', wordBreak: 'break-all' }}>
+            <div style={{ fontFamily: "'Nunito',system-ui", fontSize: 12, color: 'rgba(58,36,20,.45)', textAlign: 'center', wordBreak: 'break-all' }}>
               {claimUrl}
             </div>
 
