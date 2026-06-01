@@ -69,6 +69,8 @@ export function buildFiuuSeamlessParams(opts: {
   const amountStr = opts.amount.toFixed(2);
   const currency  = opts.currency ?? 'MYR';
   const orderId   = opts.sessionId.replace(/-/g, '');
+  // Fiuu expects mobile without country code prefix (e.g. 0123456789 or 123456789)
+  const mobile    = (opts.customerPhone ?? '').replace(/^\+?60/, '0').replace(/\D/g, '');
 
   const vcode = md5(amountStr + merchantId + orderId + verifyKey + currency);
   console.log('[fiuu/build] amount:', amountStr, 'merchantId:', merchantId, 'orderId:', orderId, 'currency:', currency, 'vcode:', vcode);
@@ -84,9 +86,9 @@ export function buildFiuuSeamlessParams(opts: {
     mpschannel:     opts.channel,
     mpsamount:      amountStr,
     mpsorderid:     orderId,
-    mpsbill_name:   opts.customerName  ?? '',
+    mpsbill_name:   (opts.customerName ?? '').replace(/[^a-zA-Z0-9 ]/g, ' ').trim().slice(0, 30) || 'Customer',
     mpsbill_email:  opts.customerEmail || 'noreply@coffeeoasis.my',
-    mpsbill_mobile: opts.customerPhone ?? '',
+    mpsbill_mobile: mobile,
     mpsbill_desc:   'Coffee Oasis Order',
     mpscountry:     'MY',
     mpsvcode:       vcode,
