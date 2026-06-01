@@ -52,7 +52,7 @@ export default function QrCardPage() {
             <img
               src={LOGO_URL}
               alt="Coffee Oasis"
-              style={{ height:36, objectFit:'contain', filter:'brightness(0) invert(1)' }}
+              style={{ height:36, objectFit:'contain' }}
             />
             <div style={{ fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:14, color:'rgba(255,255,255,.92)', letterSpacing:'.03em', textAlign:'center' }}>
               Skip the queue. Order from your phone.
