@@ -1635,19 +1635,25 @@ export default function MenuAppV2() {
 
   // Returning-user detection, last order, saved phone
   useEffect(() => {
-    try {
-      setIsReturning(!!localStorage.getItem('co_session'));
-      const lo = localStorage.getItem('co_last_order');
-      if (lo) setLastOrder(JSON.parse(lo));
-      const saved = localStorage.getItem('co_form');
-      if (saved) {
-        const { phone, email } = JSON.parse(saved);
-        if (phone) setSavedPhone(phone);
-        if (email) setSavedEmail(email);
-      }
-      const savedNotified = localStorage.getItem('co_notified');
-      if (savedNotified) setNotifiedSet(new Set(JSON.parse(savedNotified)));
-    } catch { /* ignore */ }
+    const readStorage = () => {
+      try {
+        setIsReturning(!!localStorage.getItem('co_session'));
+        const lo = localStorage.getItem('co_last_order');
+        if (lo) setLastOrder(JSON.parse(lo));
+        const saved = localStorage.getItem('co_form');
+        if (saved) {
+          const { phone, email } = JSON.parse(saved);
+          if (phone) setSavedPhone(phone);
+          if (email) setSavedEmail(email);
+        }
+        const savedNotified = localStorage.getItem('co_notified');
+        if (savedNotified) setNotifiedSet(new Set(JSON.parse(savedNotified)));
+      } catch { /* ignore */ }
+    };
+    readStorage();
+    // Re-read on bfcache restore (iOS Safari back/forward navigation)
+    window.addEventListener('pageshow', readStorage);
+    return () => window.removeEventListener('pageshow', readStorage);
   }, []);
 
   const handlePay = () => {

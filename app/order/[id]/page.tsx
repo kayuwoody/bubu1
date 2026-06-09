@@ -176,11 +176,11 @@ export default function OrderPage() {
         setOrder(data);
         persistActive(data);
         try {
+          localStorage.setItem('co_session', 'true');
           const pending = localStorage.getItem('co_pending');
           if (pending) {
             const { lines } = JSON.parse(pending);
             localStorage.setItem('co_last_order', JSON.stringify({ items: lines, when: 'Last order' }));
-            localStorage.setItem('co_session', 'true');
             localStorage.removeItem('co_pending');
           }
         } catch { /* ignore */ }
