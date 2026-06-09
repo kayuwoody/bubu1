@@ -62,7 +62,31 @@ export async function GET(req: Request) {
   });
 }
 
-export async function PATCH(req: Request) {
+export async function POST(req: Request) {
+  let body: { phone: string; name?: string };
+  try { body = await req.json(); }
+  catch { return NextResponse.json({ error: 'Invalid request' }, { status: 400 }); }
+
+  const phone = normalisePhone(body.phone ?? '');
+  const name  = (body.name ?? '').trim().slice(0, 50) || null;
+
+  if (!isValidMalaysianPhone(phone)) return NextResponse.json({ error: 'Invalid phone number' }, { status: 400 });
+
+  const now = new Date().toISOString();
+
+  const { data: member, error } = await supabase
+    .from('loyalty_members')
+    .upsert({ phone, name, updated_at: now }, { onConflict: 'phone', ignoreDuplicates: false })
+    .select('*')
+    .single();
+
+  if (error || !member) {
+    console.error('[loyalty/member] create error:', error?.message);
+    return NextResponse.json({ error: 'Could not create account' }, { status: 500 });
+  }
+
+  return NextResponse.json({ member, vouchers: [], usedVouchers: [], transactions: [], programBalances: [] });
+}
   let body: { phone: string; name: string };
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'Invalid request' }, { status: 400 }); }

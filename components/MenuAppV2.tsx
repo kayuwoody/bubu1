@@ -1067,6 +1067,10 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   const [phoneInput,      setPhoneInput]      = useState('');
   const [phoneErr,        setPhoneErr]        = useState('');
   const [copied,          setCopied]          = useState<string | null>(null);
+  const [showJoin,        setShowJoin]        = useState(false);
+  const [joinPhone,       setJoinPhone]       = useState('');
+  const [joinName,        setJoinName]        = useState('');
+  const [joining,         setJoining]         = useState(false);
   const [nameInput,       setNameInput]       = useState('');
   const [savingName,      setSavingName]      = useState(false);
   const [editingName,     setEditingName]     = useState(false);
@@ -1108,11 +1112,29 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
     try {
       const res = await fetch(`/api/loyalty/member?phone=${d}`);
       const data = await res.json();
-      if (!data.member) { setPhoneErr('No loyalty account found for this number'); return; }
+      if (!data.member) { setJoinPhone(d); setShowJoin(true); return; }
       onPhoneSave(d);
       loadMember(data, true);
     } catch { setPhoneErr('Could not look up account. Try again.'); }
     finally  { setFetching(false); }
+  };
+
+  const handleJoin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setJoining(true);
+    try {
+      const res = await fetch('/api/loyalty/member', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: joinPhone, name: joinName.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.member) { setPhoneErr(data.error ?? 'Could not create account'); setShowJoin(false); return; }
+      onPhoneSave(joinPhone);
+      loadMember(data, true);
+      setShowJoin(false);
+    } catch { setPhoneErr('Could not create account. Try again.'); setShowJoin(false); }
+    finally  { setJoining(false); }
   };
 
   const copyCode = (code: string) => {
@@ -1122,7 +1144,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
     });
   };
 
-  const reset = () => { onPhoneSave(''); setMember(null); setVouchers([]); setTransactions([]); setProgramBalances([]); setPhoneInput(''); setNameInput(''); setEditingName(false); setNamePromptDone(false); };
+  const reset = () => { onPhoneSave(''); setMember(null); setVouchers([]); setTransactions([]); setProgramBalances([]); setPhoneInput(''); setNameInput(''); setEditingName(false); setNamePromptDone(false); setShowJoin(false); setJoinPhone(''); setJoinName(''); };
 
   const handleSaveName = async () => {
     const n = nameInput.trim();
@@ -1387,33 +1409,59 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
               </div>
             </div>
 
-            {/* Phone lookup */}
-            <form onSubmit={handlePhoneLookup} style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'16px', marginBottom:16, border:`1.5px solid ${hex(T.inkColor,.08)}` }}>
-              <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:10 }}>
-                Already a member? Enter your phone
-              </div>
-              <div style={{ display:'flex', gap:8 }}>
-                <div style={{ flex:1, display:'flex', border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, overflow:'hidden', background:T.bgColor }}>
-                  <span style={{ padding:'11px 8px 11px 14px', fontSize:15, fontFamily:"'Nunito',system-ui", color:hex(T.inkColor,.45), userSelect:'none', flexShrink:0 }}>01</span>
-                  <input
-                    type="tel"
-                    value={phoneInput}
-                    onChange={e => { setPhoneInput(e.target.value.replace(/\D/g, '')); setPhoneErr(''); }}
-                    placeholder="X-XXXXXXXX"
-                    maxLength={9}
-                    style={{ flex:1, padding:'11px 14px 11px 0', fontSize:15, color:T.inkColor, background:'transparent', border:'none', outline:'none', fontFamily:"'Nunito',system-ui" }}
-                  />
+            {/* Phone lookup / join */}
+            {showJoin ? (
+              <form onSubmit={handleJoin} style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'16px', marginBottom:16, border:`1.5px solid ${hex(T.inkColor,.08)}` }}>
+                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:4 }}>
+                  Welcome! You're new here ☕
                 </div>
-                <button type="submit" disabled={fetching}
-                  style={{ padding:'11px 16px', borderRadius:T.cornerRadius-10, border:'none', background:T.primaryColor, color:'#fff', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Nunito',system-ui", opacity:fetching ? .6 : 1 }}>
-                  {fetching ? '…' : 'Find'}
-                </button>
-              </div>
-              {phoneErr && <div style={{ marginTop:7, fontSize:13, color:'#C0392B', fontWeight:600 }}>{phoneErr}</div>}
-              <div style={{ marginTop:10, fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.45), lineHeight:1.5 }}>
-                New here? Just make a purchase — we'll create your account automatically.
-              </div>
-            </form>
+                <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.5), marginBottom:12 }}>
+                  Create your rewards account for {joinPhone}
+                </div>
+                <input
+                  type="text"
+                  value={joinName}
+                  onChange={e => setJoinName(e.target.value)}
+                  placeholder="Your name (optional)"
+                  maxLength={50}
+                  style={{ width:'100%', padding:'10px 12px', fontSize:14, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, outline:'none', fontFamily:"'Nunito',system-ui", marginBottom:10, boxSizing:'border-box' }}
+                />
+                <div style={{ display:'flex', gap:8 }}>
+                  <button type="submit" disabled={joining}
+                    style={{ flex:1, padding:'11px', borderRadius:T.cornerRadius-10, border:'none', background:T.primaryColor, color:'#fff', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Nunito',system-ui", opacity:joining ? .6 : 1 }}>
+                    {joining ? '…' : 'Create account'}
+                  </button>
+                  <button type="button" onClick={() => { setShowJoin(false); setJoinPhone(''); setJoinName(''); }}
+                    style={{ padding:'11px 14px', borderRadius:T.cornerRadius-10, border:`1.5px solid ${hex(T.inkColor,.15)}`, background:'transparent', color:hex(T.inkColor,.6), fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Nunito',system-ui" }}>
+                    Back
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handlePhoneLookup} style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'16px', marginBottom:16, border:`1.5px solid ${hex(T.inkColor,.08)}` }}>
+                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:10 }}>
+                  Enter your phone number
+                </div>
+                <div style={{ display:'flex', gap:8 }}>
+                  <div style={{ flex:1, display:'flex', border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, overflow:'hidden', background:T.bgColor }}>
+                    <span style={{ padding:'11px 8px 11px 14px', fontSize:15, fontFamily:"'Nunito',system-ui", color:hex(T.inkColor,.45), userSelect:'none', flexShrink:0 }}>01</span>
+                    <input
+                      type="tel"
+                      value={phoneInput}
+                      onChange={e => { setPhoneInput(e.target.value.replace(/\D/g, '')); setPhoneErr(''); }}
+                      placeholder="X-XXXXXXXX"
+                      maxLength={9}
+                      style={{ flex:1, padding:'11px 14px 11px 0', fontSize:15, color:T.inkColor, background:'transparent', border:'none', outline:'none', fontFamily:"'Nunito',system-ui" }}
+                    />
+                  </div>
+                  <button type="submit" disabled={fetching}
+                    style={{ padding:'11px 16px', borderRadius:T.cornerRadius-10, border:'none', background:T.primaryColor, color:'#fff', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Nunito',system-ui", opacity:fetching ? .6 : 1 }}>
+                    {fetching ? '…' : 'Go'}
+                  </button>
+                </div>
+                {phoneErr && <div style={{ marginTop:7, fontSize:13, color:'#C0392B', fontWeight:600 }}>{phoneErr}</div>}
+              </form>
+            )}
           </>
         )}
 
