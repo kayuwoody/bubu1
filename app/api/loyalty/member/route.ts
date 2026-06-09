@@ -87,6 +87,8 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ member, vouchers: [], usedVouchers: [], transactions: [], programBalances: [] });
 }
+
+export async function PATCH(req: Request) {
   let body: { phone: string; name: string };
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'Invalid request' }, { status: 400 }); }
