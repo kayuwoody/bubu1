@@ -180,7 +180,7 @@ function ScanPassContent() {
       : 'your reward';
 
     return (
-      <div style={{ minHeight:'100vh', background:BG, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'24px 16px' }}>
+      <div style={{ minHeight:'100vh', background:BG, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-start', padding:'24px 16px' }}>
         {/* QR overlay for issued voucher */}
         {showQR && stamp.voucher && (
           <div onClick={() => setShowQR(false)} style={{ position:'fixed', inset:0, zIndex:100, background:'rgba(0,0,0,.85)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
@@ -280,7 +280,7 @@ function ScanPassContent() {
       : `RM ${Number(voucher.value).toFixed(2)} off`;
 
     return (
-      <div style={{ minHeight:'100vh', background:BG, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'24px 16px' }}>
+      <div style={{ minHeight:'100vh', background:BG, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-start', padding:'24px 16px' }}>
         {showQR && (
           <div onClick={() => setShowQR(false)} style={{ position:'fixed', inset:0, zIndex:100, background:'rgba(0,0,0,.85)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
             <div onClick={e => e.stopPropagation()} style={{ background:'#FFF6E8', borderRadius:R, padding:'28px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', gap:16, maxWidth:320, width:'100%', border:`3px solid ${INK}` }}>
@@ -349,7 +349,7 @@ function ScanPassContent() {
     : (pass.voucher_type === 'percent' ? `${pass.voucher_value}% off` : `RM ${Number(pass.voucher_value).toFixed(2)} off`);
 
   return (
-    <div style={{ minHeight:'100vh', background:BG, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'24px 16px' }}>
+    <div style={{ minHeight:'100vh', background:BG, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-start', padding:'24px 16px' }}>
       <div style={{ width:'100%', maxWidth:420 }}>
         {/* Hero */}
         <div style={{ borderRadius:R, overflow:'hidden', marginBottom:18, background: pass.image_url ? '#000' : INK, minHeight: pass.image_url ? 0 : 180, position:'relative' }}>
