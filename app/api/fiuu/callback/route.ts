@@ -338,7 +338,7 @@ async function issueVoucher(
     is_active:       true,
     type:            prog.voucher_type,
     discount_value: prog.voucher_discount_value,
-    min_order:       prog.voucher_min_order,
+    min_order_amount: prog.voucher_min_order ?? 0,
     expires_at:      expiresAt,
     times_used:      0,
     max_uses:        1,

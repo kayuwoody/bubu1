@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ valid: false, reason: 'Voucher has already been used' });
   }
 
-  const minOrder = voucher.min_order != null ? Number(voucher.min_order) : null;
+  const minOrder = voucher.min_order_amount != null ? Number(voucher.min_order_amount) : null;
   if (minOrder != null && orderTotal < minOrder) {
     return NextResponse.json({
       valid: false,
