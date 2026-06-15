@@ -335,12 +335,18 @@ function GreetingBand({ viewport, isReturning, hasReorder, onReorder, lastSummar
 // ── Category Chips ─────────────────────────────────────────────────────────
 function CatBar({ cats, active, setActive, viewport }: { cats: Category[]; active: string; setActive: (id: string) => void; viewport: Viewport }) {
   const compact = viewport === 'mobile';
+  const activeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [active]);
+
   return (
     <div style={{ position:'sticky', top:compact?12:18, zIndex:10, background:`linear-gradient(to bottom,${T.bgColor} 70%,transparent)`, padding:compact?'10px 12px 10px':'10px 24px 13px' }}>
       <div className="hide-scroll" style={{ display:'flex', gap:3, overflowX:'auto', scrollbarWidth:'thin' }}>
         {cats.map(c => {
           const on = active === c.id;
-          return <button key={c.id} onClick={() => setActive(c.id)} style={{ flexShrink:0, padding:'10px 16px', borderRadius:999, border:'none', background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?14:18, cursor:'pointer', boxShadow:on?`0 3px 0 ${hex(T.inkColor,.25)}`:`0 1px 0 ${hex(T.inkColor,.06)}`, transition:'all .12s' }}>{c.label}</button>;
+          return <button ref={on ? activeRef : undefined} key={c.id} onClick={() => setActive(c.id)} style={{ flexShrink:0, padding:'10px 16px', borderRadius:999, border:'none', background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?14:18, cursor:'pointer', boxShadow:on?`0 3px 0 ${hex(T.inkColor,.25)}`:`0 1px 0 ${hex(T.inkColor,.06)}`, transition:'all .12s' }}>{c.label}</button>;
         })}
       </div>
     </div>
@@ -1675,6 +1681,26 @@ export default function MenuAppV2() {
     .filter(p => p.category === activeCat)
     .sort((a, b) => Number(isUnavail(a)) - Number(isUnavail(b)));
 
+  // Swipe left/right to switch category (mobile)
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const handleCatTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  };
+  const handleCatTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const idx = categories.findIndex(c => c.id === activeCat);
+    if (idx === -1) return;
+    if (dx < 0 && idx < categories.length - 1) setActiveCat(categories[idx + 1].id);
+    else if (dx > 0 && idx > 0) setActiveCat(categories[idx - 1].id);
+  };
+
   if (loading) return (
     <div style={{ minHeight:'100vh', background:T.bgColor, display:'grid', placeItems:'center' }}>
       <div style={{ width:40, height:40, border:`3px solid ${hex(T.primaryColor,.3)}`, borderTopColor:T.primaryColor, borderRadius:'50%', animation:'spin .8s linear infinite' }}/>
@@ -1717,7 +1743,10 @@ export default function MenuAppV2() {
 
       <CatBar cats={categories} active={activeCat} setActive={setActiveCat} viewport={viewport}/>
 
-      <main style={{ padding:compact?'0 10px 180px':'0 24px 60px', display:'grid', gridTemplateColumns:viewport==='mobile'?'minmax(0,1fr) minmax(0,1fr)':viewport==='tablet'?'repeat(3,minmax(0,1fr))':'repeat(5,minmax(0,1fr))', gap:compact?6:8 }}>
+      <main
+        onTouchStart={compact ? handleCatTouchStart : undefined}
+        onTouchEnd={compact ? handleCatTouchEnd : undefined}
+        style={{ padding:compact?'0 10px 180px':'0 24px 60px', display:'grid', gridTemplateColumns:viewport==='mobile'?'minmax(0,1fr) minmax(0,1fr)':viewport==='tablet'?'repeat(3,minmax(0,1fr))':'repeat(5,minmax(0,1fr))', gap:compact?6:8 }}>
         {filtered.map(p => (
           <ItemCard
             key={p.id} product={p} qty={qtyFor(p.id)}
