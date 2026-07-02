@@ -1662,6 +1662,20 @@ export default function MenuAppV2() {
     return () => window.removeEventListener('pageshow', readStorage);
   }, []);
 
+  // Auto daily check-in — fires once per day when a known phone is loaded
+  useEffect(() => {
+    if (!savedPhone) return;
+    const todayMYT = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
+    if (localStorage.getItem('co_checkin') === todayMYT) return;
+    fetch('/api/loyalty/checkin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: savedPhone }),
+    }).then(() => {
+      try { localStorage.setItem('co_checkin', todayMYT); } catch { /* ignore */ }
+    }).catch(() => { /* silent — non-critical */ });
+  }, [savedPhone]);
+
   const handlePay = () => {
     try { localStorage.setItem('co_pending', JSON.stringify({ lines, pickup, total })); } catch { /* ignore */ }
     router.push('/checkout');
