@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
+import { normalisePhone, isValidMalaysianPhone } from '@/lib/normalisePhone';
 import type { CartLine, LoyaltyConfig } from '@/lib/types';
 
 const INK  = '#3A2414';
@@ -188,7 +189,7 @@ function CheckoutContent() {
 
   // Debounced loyalty member lookup by phone
   useEffect(() => {
-    const digits = phone.replace(/\D/g, '');
+    const digits = normalisePhone(phone);
     if (digits.length < 8) { setLoyaltyMember(null); return; }
     setLookingUp(true);
     const timer = setTimeout(async () => {
@@ -373,6 +374,7 @@ function CheckoutContent() {
     e.preventDefault();
     setError('');
     if (!name.trim() || !phone.trim()) { setError('Name and phone are required.'); return; }
+    if (!isValidMalaysianPhone(normalisePhone(phone))) { setError('Enter a valid Malaysian phone number (e.g. 0123456789).'); return; }
     if (!channel) { setError('Please select a payment method.'); return; }
     // Persist form fields so they survive a cancel/retry cycle
     try { localStorage.setItem('co_form', JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim(), channel })); } catch { /* ignore */ }
@@ -581,7 +583,18 @@ function CheckoutContent() {
             {/* Phone + loyalty chip */}
             <div>
               <label style={labelStyle}>Phone</label>
-              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. 0123456789" required style={inputStyle} />
+              <div style={{ display:'flex', border:'1.5px solid rgba(58,36,20,.12)', borderRadius:10, overflow:'hidden', background:'#FFF6E8' }}>
+                <span style={{ padding:'12px 8px 12px 14px', fontSize:15, fontFamily:"'Nunito',system-ui", color:'rgba(58,36,20,.4)', userSelect:'none', flexShrink:0 }}>01</span>
+                <input
+                  type="tel"
+                  value={phone.startsWith('01') ? phone.slice(2) : phone}
+                  onChange={e => setPhone('01' + e.target.value.replace(/\D/g, ''))}
+                  placeholder="X-XXXXXXXX"
+                  maxLength={9}
+                  required
+                  style={{ ...inputStyle, flex:1, border:'none', borderRadius:0, padding:'12px 14px 12px 0', background:'transparent', outline:'none' }}
+                />
+              </div>
               <LoyaltyChip
                 config={loyaltyConfig}
                 member={loyaltyMember}

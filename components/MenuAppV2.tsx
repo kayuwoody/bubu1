@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
+import { normalisePhone, isValidMalaysianPhone } from '@/lib/normalisePhone';
 import type { Branch, CartLine, LoyaltyConfig, LoyaltyMember, LoyaltyTransaction, Voucher, Product, SelectionConfig, Viewport, XorGroup } from '@/lib/types';
 
 interface Category { id: string; label: string }
@@ -25,7 +26,7 @@ const NO_MILK_IDS = new Set(['26c985d3-868c-4e50-826d-f5d310d1f7e9', '4e784157-7
 
 const DRINK_MODS = {
   sugar: { label: 'Sugar', options: [{ id: 'zero', label: 'Zero', delta: 0 }, { id: 'less', label: 'Less', delta: 0 }, { id: 'medium', label: 'Medium', delta: 0 }, { id: 'sweet', label: 'Sweet', delta: 0 }] },
-  milk:  { label: 'Milk', options: [{ id: 'full', label: 'Full', delta: 0 }, { id: 'skim', label: 'Skim', delta: 0 }, { id: 'oat', label: 'Oat', delta: 2.00 }, { id: 'almond', label: 'Almond', delta: 2.00 }] },
+  milk:  { label: 'Milk', options: [{ id: 'full', label: 'Full cream', delta: 0 }, { id: 'oat', label: 'Oat', delta: 2.00 }] },
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -334,14 +335,132 @@ function GreetingBand({ viewport, isReturning, hasReorder, onReorder, lastSummar
 // ── Category Chips ─────────────────────────────────────────────────────────
 function CatBar({ cats, active, setActive, viewport }: { cats: Category[]; active: string; setActive: (id: string) => void; viewport: Viewport }) {
   const compact = viewport === 'mobile';
+  const activeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [active]);
+
   return (
     <div style={{ position:'sticky', top:compact?12:18, zIndex:10, background:`linear-gradient(to bottom,${T.bgColor} 70%,transparent)`, padding:compact?'10px 12px 10px':'10px 24px 13px' }}>
       <div className="hide-scroll" style={{ display:'flex', gap:3, overflowX:'auto', scrollbarWidth:'thin' }}>
         {cats.map(c => {
           const on = active === c.id;
-          return <button key={c.id} onClick={() => setActive(c.id)} style={{ flexShrink:0, padding:'10px 16px', borderRadius:999, border:'none', background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?14:18, cursor:'pointer', boxShadow:on?`0 3px 0 ${hex(T.inkColor,.25)}`:`0 1px 0 ${hex(T.inkColor,.06)}`, transition:'all .12s' }}>{c.label}</button>;
+          return <button ref={on ? activeRef : undefined} key={c.id} onClick={() => setActive(c.id)} style={{ flexShrink:0, padding:'10px 16px', borderRadius:999, border:'none', background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?14:18, cursor:'pointer', boxShadow:on?`0 3px 0 ${hex(T.inkColor,.25)}`:`0 1px 0 ${hex(T.inkColor,.06)}`, transition:'all .12s' }}>{c.label}</button>;
         })}
       </div>
+    </div>
+  );
+}
+
+// ── Notify Modal ───────────────────────────────────────────────────────────
+function NotifyModal({ product, savedEmail, savedPhone, onClose, onSuccess }: {
+  product: Product;
+  savedEmail: string;
+  savedPhone: string;
+  onClose: () => void;
+  onSuccess: (productId: string) => void;
+}) {
+  const [email,      setEmail]      = useState(savedEmail);
+  const [phone,      setPhone]      = useState(savedPhone.startsWith('01') ? savedPhone.slice(2) : savedPhone);
+  const [submitting, setSubmitting] = useState(false);
+  const [done,       setDone]       = useState(false);
+  const [err,        setErr]        = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimEmail = email.trim();
+    const trimPhone = phone.trim() ? '01' + phone.trim() : '';
+    if (!trimEmail && !trimPhone) {
+      setErr('Please enter your email or phone number.');
+      return;
+    }
+    setErr('');
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/notify-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id:   product.id,
+          product_name: product.name,
+          ...(trimEmail ? { email: trimEmail } : {}),
+          ...(trimPhone ? { phone: trimPhone } : {}),
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error((d as { error?: string }).error ?? 'Request failed');
+      }
+      setDone(true);
+      onSuccess(product.id);
+      setTimeout(() => onClose(), 1500);
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : 'Something went wrong. Try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:80, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(58,36,20,.5)' }}/>
+      <div style={{ position:'relative', background:'#fff', borderRadius:20, padding:'28px 24px 24px', width:'100%', maxWidth:380, boxShadow:'0 24px 64px rgba(58,36,20,.25)', animation:'coSheetIn .22s ease-out' }}>
+        {/* Close */}
+        <button
+          onClick={onClose}
+          style={{ position:'absolute', top:14, right:16, background:'transparent', border:'none', cursor:'pointer', color:hex(T.inkColor,.5), fontSize:22, lineHeight:1, display:'grid', placeItems:'center' }}
+          aria-label="Close"
+        >×</button>
+
+        <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:20, color:T.inkColor, lineHeight:1.2, marginBottom:4 }}>
+          {product.name}
+        </div>
+        <div style={{ fontFamily:"'Nunito',system-ui", fontSize:14, color:hex(T.inkColor,.65), marginBottom:18 }}>
+          Get notified when this is back in stock
+        </div>
+
+        {done ? (
+          <div style={{ textAlign:'center', padding:'18px 0', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:17, color:'#16A34A' }}>
+            ✓ You're on the list!
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              style={{ width:'100%', padding:'11px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:12, outline:'none', boxSizing:'border-box' }}
+            />
+            <div style={{ display:'flex', border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:12, overflow:'hidden', background:T.bgColor }}>
+              <span style={{ padding:'11px 10px 11px 14px', fontFamily:"'Nunito',system-ui", fontSize:14, color:hex(T.inkColor,.45), userSelect:'none', flexShrink:0 }}>01</span>
+              <input
+                type="tel"
+                value={phone}
+                onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
+                placeholder="X-XXXXXXXX"
+                maxLength={9}
+                style={{ flex:1, padding:'11px 14px 11px 0', fontFamily:"'Nunito',system-ui", fontSize:14, color:T.inkColor, background:'transparent', border:'none', outline:'none' }}
+              />
+            </div>
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.5), marginTop:2 }}>
+              We'll email you, or WhatsApp if email isn't provided
+            </div>
+            {err && (
+              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:'#DC2626', fontWeight:600 }}>{err}</div>
+            )}
+            <button
+              type="submit"
+              disabled={submitting}
+              style={{ marginTop:4, padding:'13px 18px', background:T.primaryColor, color:'#fff', border:'none', borderRadius:12, fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:15, cursor:submitting?'default':'pointer', opacity:submitting?.6:1 }}
+            >
+              {submitting ? 'Saving…' : 'Notify me 🔔'}
+            </button>
+          </form>
+        )}
+      </div>
+      <style>{`@keyframes coSheetIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
     </div>
   );
 }
@@ -351,7 +470,7 @@ function qtyBtn(bg: string, fg: string): React.CSSProperties {
   return { width:30, height:30, borderRadius:'50%', background:bg, color:fg, border:'none', display:'grid', placeItems:'center', cursor:'pointer' };
 }
 
-function ItemCard({ product, qty, onAdd, onCustomize, viewport }: { product: Product; qty: number; onAdd: () => void; onCustomize: () => void; viewport: Viewport }) {
+function ItemCard({ product, qty, onAdd, onCustomize, onNotify, alreadyNotified, viewport }: { product: Product; qty: number; onAdd: () => void; onCustomize: () => void; onNotify: () => void; alreadyNotified: boolean; viewport: Viewport }) {
   const sheet = needsSheet(product);
   const compact = viewport === 'mobile';
   const col = catSwatch(product.category);
@@ -377,6 +496,16 @@ function ItemCard({ product, qty, onAdd, onCustomize, viewport }: { product: Pro
       <div style={{ padding:compact?'8px 8px 8px':'8px 8px 8px', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
         <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?12:14, color:T.inkColor, lineHeight:1.25, wordBreak:'break-word' }}>{product.name}</div>
         <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:compact?12:14, color:T.primaryColor, marginTop:'auto', paddingTop:4 }}>RM {product.base_price.toFixed(2)}</div>
+        {soldOut && (
+          alreadyNotified ? (
+            <span style={{ display:'inline-block', marginTop:4, fontSize:11, padding:'3px 10px', borderRadius:999, background:hex(T.inkColor,.08), color:hex(T.inkColor,.5), fontFamily:"'Nunito',system-ui", fontWeight:700, cursor:'default', alignSelf:'flex-start' }}>✓ Notified</span>
+          ) : (
+            <button
+              onClick={e => { e.stopPropagation(); onNotify(); }}
+              style={{ display:'inline-block', marginTop:4, fontSize:11, padding:'3px 10px', borderRadius:999, border:`1px solid ${T.primaryColor}`, color:T.primaryColor, background:'transparent', fontFamily:"'Nunito',system-ui", fontWeight:700, cursor:'pointer', alignSelf:'flex-start' }}
+            >🔔 Notify me</button>
+          )
+        )}
       </div>
     </div>
   );
@@ -486,13 +615,13 @@ function ComboSection({ cfg, selections, selectedOptionals, onSelect, onToggleOp
         const childGroups = nested.filter(ng => ng.parentProductId === selectedId);
         return (
           <div key={group.uniqueKey} style={{ marginTop:14 }}>
-            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8, display:'flex', gap:6, alignItems:'baseline' }}>
-              {group.groupName} <span style={{ fontSize:11, color:'#D9402F', fontWeight:800 }}>Required</span>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:8 }}>
+              {group.groupName}
             </div>
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
               {group.items.map(item => {
                 const on = selectedId === item.id;
-                const priceLabel = item.priceAdjustment > 0 ? `+RM${item.priceAdjustment.toFixed(2)}` : 'Included';
+                const priceLabel = item.priceAdjustment > 0 ? `+RM${item.priceAdjustment.toFixed(2)}` : '';
                 return (
                   <button key={item.id} onClick={() => onSelect(group.uniqueKey, item.id)} style={pillStyle(on)}>
                     {item.name}{!on && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>{priceLabel}</span>}
@@ -944,8 +1073,16 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
   const [phoneInput,      setPhoneInput]      = useState('');
   const [phoneErr,        setPhoneErr]        = useState('');
   const [copied,          setCopied]          = useState<string | null>(null);
+  const [showJoin,        setShowJoin]        = useState(false);
+  const [joinPhone,       setJoinPhone]       = useState('');
+  const [joinName,        setJoinName]        = useState('');
+  const [joining,         setJoining]         = useState(false);
+  const [nameInput,       setNameInput]       = useState('');
+  const [savingName,      setSavingName]      = useState(false);
+  const [editingName,     setEditingName]     = useState(false);
+  const [namePromptDone,  setNamePromptDone]  = useState(false);
 
-  const digits = (phone ?? '').replace(/\D/g, '');
+  const digits = normalisePhone(phone ?? '');
   const hasPhone = digits.length >= 8;
 
   const CACHE_KEY = `loyalty_cache_${digits}`;
@@ -974,18 +1111,36 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
 
   const handlePhoneLookup = async (e: React.FormEvent) => {
     e.preventDefault();
-    const d = phoneInput.replace(/\D/g, '');
-    if (d.length < 8) { setPhoneErr('Enter a valid phone number'); return; }
+    const d = normalisePhone('01' + phoneInput);
+    if (!isValidMalaysianPhone(d)) { setPhoneErr('Enter a valid Malaysian phone number'); return; }
     setPhoneErr('');
     setFetching(true);
     try {
       const res = await fetch(`/api/loyalty/member?phone=${d}`);
       const data = await res.json();
-      if (!data.member) { setPhoneErr('No loyalty account found for this number'); return; }
+      if (!data.member) { setJoinPhone(d); setShowJoin(true); return; }
       onPhoneSave(d);
       loadMember(data, true);
     } catch { setPhoneErr('Could not look up account. Try again.'); }
     finally  { setFetching(false); }
+  };
+
+  const handleJoin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setJoining(true);
+    try {
+      const res = await fetch('/api/loyalty/member', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: joinPhone, name: joinName.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.member) { setPhoneErr(data.error ?? 'Could not create account'); setShowJoin(false); return; }
+      onPhoneSave(joinPhone);
+      loadMember(data, true);
+      setShowJoin(false);
+    } catch { setPhoneErr('Could not create account. Try again.'); setShowJoin(false); }
+    finally  { setJoining(false); }
   };
 
   const copyCode = (code: string) => {
@@ -995,7 +1150,17 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
     });
   };
 
-  const reset = () => { onPhoneSave(''); setMember(null); setVouchers([]); setTransactions([]); setProgramBalances([]); setPhoneInput(''); };
+  const reset = () => { onPhoneSave(''); setMember(null); setVouchers([]); setTransactions([]); setProgramBalances([]); setPhoneInput(''); setNameInput(''); setEditingName(false); setNamePromptDone(false); setShowJoin(false); setJoinPhone(''); setJoinName(''); };
+
+  const handleSaveName = async () => {
+    const n = nameInput.trim();
+    if (!n || !digits) return;
+    setSavingName(true);
+    try {
+      const res = await fetch('/api/loyalty/member', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, name: n }) });
+      if (res.ok) { const d = await res.json(); setMember(prev => prev ? { ...prev, name: d.member.name } : prev); setNameInput(''); setEditingName(false); setNamePromptDone(true); }
+    } catch { /* silent */ } finally { setSavingName(false); }
+  };
 
   if (!open) return null;
 
@@ -1187,37 +1352,123 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
 
         {/* QR / phone lookup */}
         {hasPhone ? (
-          <div style={{ background:T.inkColor, borderRadius:T.cornerRadius, padding:'18px 18px 14px', marginBottom:16, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
-            <div style={{ background:'#fff', borderRadius:12, padding:10, display:'inline-flex' }}>
-              <QRCodeSVG value={digits} size={130} />
-            </div>
-            <div style={{ color:'#fff', fontFamily:"'Nunito',system-ui", fontSize:13, opacity:.8, textAlign:'center' }}>
-              Show this QR at the counter to earn stamps
-            </div>
-            <button onClick={reset} style={{ background:'transparent', border:`1px solid rgba(255,255,255,.3)`, borderRadius:999, padding:'4px 12px', color:'rgba(255,255,255,.65)', fontSize:12, cursor:'pointer', fontFamily:"'Nunito',system-ui" }}>
-              Not you?
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={handlePhoneLookup} style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'16px', marginBottom:16, border:`1.5px solid ${hex(T.inkColor,.08)}` }}>
-            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:10 }}>
-              Enter your phone to see your cards
-            </div>
-            <div style={{ display:'flex', gap:8 }}>
-              <input
-                type="tel"
-                value={phoneInput}
-                onChange={e => { setPhoneInput(e.target.value); setPhoneErr(''); }}
-                placeholder="e.g. 0123456789"
-                style={{ flex:1, padding:'11px 14px', fontSize:15, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, outline:'none', fontFamily:"'Nunito',system-ui" }}
-              />
-              <button type="submit" disabled={fetching}
-                style={{ padding:'11px 16px', borderRadius:T.cornerRadius-10, border:'none', background:T.primaryColor, color:'#fff', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Nunito',system-ui", opacity:fetching ? .6 : 1 }}>
-                {fetching ? '…' : 'Find'}
+          <div style={{ marginBottom:16 }}>
+            <div style={{ background:T.inkColor, borderRadius:T.cornerRadius, padding:'18px 18px 14px', display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+              <div style={{ background:'#fff', borderRadius:12, padding:10, display:'inline-flex' }}>
+                <QRCodeSVG value={digits} size={130} />
+              </div>
+              <div style={{ color:'#fff', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:15, textAlign:'center' }}>
+                {member?.name ? `Hey, ${member.name}! 👋` : 'Hey there! 👋'}
+              </div>
+              <div style={{ color:'#fff', fontFamily:"'Nunito',system-ui", fontSize:13, opacity:.75, textAlign:'center' }}>
+                Show this QR at the counter to earn stamps
+              </div>
+              <button onClick={reset} style={{ background:'transparent', border:`1px solid rgba(255,255,255,.3)`, borderRadius:999, padding:'4px 12px', color:'rgba(255,255,255,.65)', fontSize:12, cursor:'pointer', fontFamily:"'Nunito',system-ui" }}>
+                Not you?
               </button>
             </div>
-            {phoneErr && <div style={{ marginTop:7, fontSize:13, color:'#C0392B', fontWeight:600 }}>{phoneErr}</div>}
-          </form>
+            {/* Name prompt — skippable, also shows edit option when name is set */}
+            {member && (editingName || (!member.name && !namePromptDone)) && (
+              <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'12px 14px', marginTop:8, border:`1.5px solid ${hex(T.inkColor,.08)}` }}>
+                <div style={{ display:'flex', alignItems:'center', marginBottom:8 }}>
+                  <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, color:T.inkColor, flex:1 }}>
+                    {editingName ? 'Update your name' : 'What should we call you?'}{' '}
+                    <span style={{ fontWeight:400, opacity:.5 }}>(optional)</span>
+                  </div>
+                  <button onClick={() => { setEditingName(false); setNamePromptDone(true); setNameInput(''); }}
+                    style={{ background:'none', border:'none', cursor:'pointer', color:hex(T.inkColor,.4), fontSize:18, lineHeight:1, padding:'0 0 0 8px' }}>×</button>
+                </div>
+                <div style={{ display:'flex', gap:8 }}>
+                  <input
+                    type="text"
+                    value={nameInput}
+                    onChange={e => setNameInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); }}
+                    placeholder={member.name ?? 'Your name or nickname'}
+                    maxLength={50}
+                    style={{ flex:1, padding:'9px 12px', fontSize:14, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, outline:'none', fontFamily:"'Nunito',system-ui" }}
+                  />
+                  <button
+                    onClick={handleSaveName}
+                    disabled={savingName || !nameInput.trim()}
+                    style={{ padding:'9px 14px', borderRadius:T.cornerRadius-10, border:'none', background:T.primaryColor, color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer', fontFamily:"'Nunito',system-ui", opacity:(savingName || !nameInput.trim()) ? .5 : 1 }}>
+                    {savingName ? '…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            )}
+            {member?.name && !editingName && (
+              <button onClick={() => { setEditingName(true); setNameInput(member.name ?? ''); }}
+                style={{ background:'none', border:'none', cursor:'pointer', fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.4), padding:'4px 0 0', display:'block', marginTop:2 }}>
+                ✏️ Edit name
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Welcome hero for new / unauthenticated users */}
+            <div style={{ background:`linear-gradient(135deg,${T.primaryColor} 0%,#FF9A3D 100%)`, borderRadius:T.cornerRadius, padding:'20px 20px 16px', marginBottom:16, display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', gap:8 }}>
+              <img src="/co-mascot.png" alt="" style={{ width:72, height:72, objectFit:'contain', filter:'drop-shadow(0 4px 6px rgba(0,0,0,.18))', marginBottom:2 }} />
+              <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:20, color:'#fff', lineHeight:1.15 }}>Rewards are on us ☕</div>
+              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:13, color:'rgba(255,255,255,.88)', lineHeight:1.55, maxWidth:280 }}>
+                Earn stamps with every order, unlock free drinks, and get exclusive member-only vouchers.
+              </div>
+            </div>
+
+            {/* Phone lookup / join */}
+            {showJoin ? (
+              <form onSubmit={handleJoin} style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'16px', marginBottom:16, border:`1.5px solid ${hex(T.inkColor,.08)}` }}>
+                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:4 }}>
+                  Welcome! You're new here ☕
+                </div>
+                <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.5), marginBottom:12 }}>
+                  Create your rewards account for {joinPhone}
+                </div>
+                <input
+                  type="text"
+                  value={joinName}
+                  onChange={e => setJoinName(e.target.value)}
+                  placeholder="Your name (optional)"
+                  maxLength={50}
+                  style={{ width:'100%', padding:'10px 12px', fontSize:14, color:T.inkColor, background:T.bgColor, border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, outline:'none', fontFamily:"'Nunito',system-ui", marginBottom:10, boxSizing:'border-box' }}
+                />
+                <div style={{ display:'flex', gap:8 }}>
+                  <button type="submit" disabled={joining}
+                    style={{ flex:1, padding:'11px', borderRadius:T.cornerRadius-10, border:'none', background:T.primaryColor, color:'#fff', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Nunito',system-ui", opacity:joining ? .6 : 1 }}>
+                    {joining ? '…' : 'Create account'}
+                  </button>
+                  <button type="button" onClick={() => { setShowJoin(false); setJoinPhone(''); setJoinName(''); }}
+                    style={{ padding:'11px 14px', borderRadius:T.cornerRadius-10, border:`1.5px solid ${hex(T.inkColor,.15)}`, background:'transparent', color:hex(T.inkColor,.6), fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Nunito',system-ui" }}>
+                    Back
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handlePhoneLookup} style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'16px', marginBottom:16, border:`1.5px solid ${hex(T.inkColor,.08)}` }}>
+                <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:T.inkColor, marginBottom:10 }}>
+                  Enter your phone number
+                </div>
+                <div style={{ display:'flex', gap:8 }}>
+                  <div style={{ flex:1, display:'flex', border:`1.5px solid ${hex(T.inkColor,.12)}`, borderRadius:T.cornerRadius-10, overflow:'hidden', background:T.bgColor }}>
+                    <span style={{ padding:'11px 8px 11px 14px', fontSize:15, fontFamily:"'Nunito',system-ui", color:hex(T.inkColor,.45), userSelect:'none', flexShrink:0 }}>01</span>
+                    <input
+                      type="tel"
+                      value={phoneInput}
+                      onChange={e => { setPhoneInput(e.target.value.replace(/\D/g, '')); setPhoneErr(''); }}
+                      placeholder="X-XXXXXXXX"
+                      maxLength={9}
+                      style={{ flex:1, padding:'11px 14px 11px 0', fontSize:15, color:T.inkColor, background:'transparent', border:'none', outline:'none', fontFamily:"'Nunito',system-ui" }}
+                    />
+                  </div>
+                  <button type="submit" disabled={fetching}
+                    style={{ padding:'11px 16px', borderRadius:T.cornerRadius-10, border:'none', background:T.primaryColor, color:'#fff', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:"'Nunito',system-ui", opacity:fetching ? .6 : 1 }}>
+                    {fetching ? '…' : 'Go'}
+                  </button>
+                </div>
+                {phoneErr && <div style={{ marginTop:7, fontSize:13, color:'#C0392B', fontWeight:600 }}>{phoneErr}</div>}
+              </form>
+            )}
+          </>
         )}
 
         {fetching && (
@@ -1247,18 +1498,6 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
           </div>
         )}
 
-        {/* Placeholder when no member loaded yet */}
-        {!fetching && !member && config?.is_active && (
-          <div style={{ background:'#fff', borderRadius:T.cornerRadius-4, padding:'14px 16px', marginBottom:10, border:`1.5px solid ${hex(T.inkColor,.08)}`, display:'flex', alignItems:'center', gap:12 }}>
-            <div style={{ width:40, height:40, borderRadius:'50%', background:T.primaryColor, display:'grid', placeItems:'center', flexShrink:0, fontSize:20, color:'#fff' }}>★</div>
-            <div>
-              <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:15, color:T.inkColor }}>Earn stamps & points</div>
-              <div style={{ fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.6), marginTop:1 }}>
-                Make a purchase or scan at the counter to start
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Available vouchers */}
         {member && (
@@ -1345,6 +1584,7 @@ export default function MenuAppV2() {
   const [intakePaused, setIntakePaused] = useState(false);
   const [loyaltyConfig, setLoyaltyConfig] = useState<LoyaltyConfig | null>(null);
   const [savedPhone,  setSavedPhone]  = useState<string | null>(null);
+  const [savedEmail,  setSavedEmail]  = useState<string>('');
   const [activeCat,   setActiveCat]   = useState('');
   const [pickup,      setPickup]      = useState<'counter'|'curbside'>('counter');
   const [cartOpen,    setCartOpen]    = useState(false);
@@ -1352,6 +1592,8 @@ export default function MenuAppV2() {
   const [promos,      setPromos]      = useState<Promo[]>([]);
   const [promoOpen,   setPromoOpen]   = useState(false);
   const [sheetProduct, setSheetProduct] = useState<Product | null>(null);
+  const [notifyProduct, setNotifyProduct] = useState<Product | null>(null);
+  const [notifiedSet,   setNotifiedSet]   = useState<Set<string>>(new Set());
   const [loading,     setLoading]     = useState(true);
   const [isReturning, setIsReturning] = useState(false);
   const [lastOrder,   setLastOrder]   = useState<{ items: CartLine[]; when: string } | null>(null);
@@ -1399,16 +1641,25 @@ export default function MenuAppV2() {
 
   // Returning-user detection, last order, saved phone
   useEffect(() => {
-    try {
-      setIsReturning(!!localStorage.getItem('co_session'));
-      const lo = localStorage.getItem('co_last_order');
-      if (lo) setLastOrder(JSON.parse(lo));
-      const saved = localStorage.getItem('co_form');
-      if (saved) {
-        const { phone } = JSON.parse(saved);
-        if (phone) setSavedPhone(phone);
-      }
-    } catch { /* ignore */ }
+    const readStorage = () => {
+      try {
+        setIsReturning(!!localStorage.getItem('co_session'));
+        const lo = localStorage.getItem('co_last_order');
+        if (lo) setLastOrder(JSON.parse(lo));
+        const saved = localStorage.getItem('co_form');
+        if (saved) {
+          const { phone, email } = JSON.parse(saved);
+          if (phone) setSavedPhone(phone);
+          if (email) setSavedEmail(email);
+        }
+        const savedNotified = localStorage.getItem('co_notified');
+        if (savedNotified) setNotifiedSet(new Set(JSON.parse(savedNotified)));
+      } catch { /* ignore */ }
+    };
+    readStorage();
+    // Re-read on bfcache restore (iOS Safari back/forward navigation)
+    window.addEventListener('pageshow', readStorage);
+    return () => window.removeEventListener('pageshow', readStorage);
   }, []);
 
   const handlePay = () => {
@@ -1429,6 +1680,26 @@ export default function MenuAppV2() {
   const filtered = products
     .filter(p => p.category === activeCat)
     .sort((a, b) => Number(isUnavail(a)) - Number(isUnavail(b)));
+
+  // Swipe left/right to switch category (mobile)
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const handleCatTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  };
+  const handleCatTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const idx = categories.findIndex(c => c.id === activeCat);
+    if (idx === -1) return;
+    if (dx < 0 && idx < categories.length - 1) setActiveCat(categories[idx + 1].id);
+    else if (dx > 0 && idx > 0) setActiveCat(categories[idx - 1].id);
+  };
 
   if (loading) return (
     <div style={{ minHeight:'100vh', background:T.bgColor, display:'grid', placeItems:'center' }}>
@@ -1472,12 +1743,17 @@ export default function MenuAppV2() {
 
       <CatBar cats={categories} active={activeCat} setActive={setActiveCat} viewport={viewport}/>
 
-      <main style={{ padding:compact?'0 10px 180px':'0 24px 60px', display:'grid', gridTemplateColumns:viewport==='mobile'?'minmax(0,1fr) minmax(0,1fr)':viewport==='tablet'?'repeat(3,minmax(0,1fr))':'repeat(5,minmax(0,1fr))', gap:compact?6:8 }}>
+      <main
+        onTouchStart={compact ? handleCatTouchStart : undefined}
+        onTouchEnd={compact ? handleCatTouchEnd : undefined}
+        style={{ padding:compact?'0 10px 180px':'0 24px 60px', display:'grid', gridTemplateColumns:viewport==='mobile'?'minmax(0,1fr) minmax(0,1fr)':viewport==='tablet'?'repeat(3,minmax(0,1fr))':'repeat(5,minmax(0,1fr))', gap:compact?6:8 }}>
         {filtered.map(p => (
           <ItemCard
             key={p.id} product={p} qty={qtyFor(p.id)}
             onAdd={() => incById(p.id, p.name, p.base_price)}
             onCustomize={() => setSheetProduct(p)}
+            onNotify={() => setNotifyProduct(p)}
+            alreadyNotified={notifiedSet.has(p.id)}
             viewport={viewport}
           />
         ))}
@@ -1545,6 +1821,20 @@ export default function MenuAppV2() {
               }
             } catch { /* ignore */ }
             router.push(url);
+          }}
+        />
+      )}
+
+      {notifyProduct && (
+        <NotifyModal
+          product={notifyProduct}
+          savedEmail={savedEmail}
+          savedPhone={savedPhone ?? ''}
+          onClose={() => setNotifyProduct(null)}
+          onSuccess={(id) => {
+            const next = new Set(notifiedSet).add(id);
+            setNotifiedSet(next);
+            try { localStorage.setItem('co_notified', JSON.stringify([...next])); } catch { /* ignore */ }
           }}
         />
       )}

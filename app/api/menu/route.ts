@@ -7,9 +7,10 @@ export async function GET() {
   const [productsRes, settingsRes, branchRes, catsRes, defaultsRes] = await Promise.all([
     supabase
       .from('products')
-      .select('id, name, category, base_price, image_url, combo_price_override, selection_config, available_online, stock_quantity')
+      .select('id, name, category, base_price, image_url, combo_price_override, selection_config, available_online, stock_quantity, sort_order')
       .eq('available_online', true)
       .order('category')
+      .order('sort_order')
       .order('name'),
     supabase
       .from('outlet_settings')

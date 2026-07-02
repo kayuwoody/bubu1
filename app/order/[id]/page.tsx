@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { createBrowserClient } from '@/lib/online/supabase-browser';
+import { normalisePhone } from '@/lib/normalisePhone';
 import type { Branch } from '@/lib/types';
 
 const INK = '#3A2414';
@@ -144,6 +145,10 @@ export default function OrderPage() {
   const [arrived,  setArrived]  = useState(false);
   const [arriving, setArriving] = useState(false);
 
+  const phone = (() => {
+    try { return normalisePhone(JSON.parse(localStorage.getItem('co_form') ?? '{}').phone ?? ''); } catch { return ''; }
+  })();
+
   // Persist active order to localStorage so the main-page icon can read it
   const persistActive = useCallback((o: Order) => {
     if (TERMINAL.has(o.status)) {
@@ -164,18 +169,18 @@ export default function OrderPage() {
   // Initial load
   useEffect(() => {
     if (!id) return;
-    fetch(`/api/orders/${id}`)
+    fetch(`/api/orders/${id}${phone ? `?phone=${encodeURIComponent(phone)}` : ''}`)
       .then(r => r.json())
       .then(data => {
         if (data.error) { setError(data.error); return; }
         setOrder(data);
         persistActive(data);
         try {
+          localStorage.setItem('co_session', 'true');
           const pending = localStorage.getItem('co_pending');
           if (pending) {
             const { lines } = JSON.parse(pending);
             localStorage.setItem('co_last_order', JSON.stringify({ items: lines, when: 'Last order' }));
-            localStorage.setItem('co_session', 'true');
             localStorage.removeItem('co_pending');
           }
         } catch { /* ignore */ }
@@ -207,7 +212,7 @@ export default function OrderPage() {
   useEffect(() => {
     if (!id) return;
     const tick = setInterval(async () => {
-      const data = await fetch(`/api/orders/${id}`).then(r => r.json()).catch(() => null);
+      const data = await fetch(`/api/orders/${id}${phone ? `?phone=${encodeURIComponent(phone)}` : ''}`).then(r => r.json()).catch(() => null);
       if (data && !data.error) {
         setOrder(prev => {
           if (prev && TERMINAL.has(prev.status)) { clearInterval(tick); return prev; }

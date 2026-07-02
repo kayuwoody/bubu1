@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/online/supabase';
+import { normalisePhone, isValidMalaysianPhone } from '@/lib/normalisePhone';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const phone = (searchParams.get('phone') ?? '').replace(/\D/g, '');
-  if (phone.length < 8) return NextResponse.json({ member: null, vouchers: [], usedVouchers: [], transactions: [], programBalances: [] });
+  const phone = normalisePhone(searchParams.get('phone') ?? '');
+  if (!isValidMalaysianPhone(phone)) return NextResponse.json({ member: null, vouchers: [], usedVouchers: [], transactions: [], programBalances: [] });
 
   const { data: member } = await supabase
     .from('loyalty_members')
@@ -59,4 +60,52 @@ export async function GET(req: Request) {
     transactions:  transactions ?? [],
     programBalances: programBalances ?? [],
   });
+}
+
+export async function POST(req: Request) {
+  let body: { phone: string; name?: string };
+  try { body = await req.json(); }
+  catch { return NextResponse.json({ error: 'Invalid request' }, { status: 400 }); }
+
+  const phone = normalisePhone(body.phone ?? '');
+  const name  = (body.name ?? '').trim().slice(0, 50) || null;
+
+  if (!isValidMalaysianPhone(phone)) return NextResponse.json({ error: 'Invalid phone number' }, { status: 400 });
+
+  const now = new Date().toISOString();
+
+  const { data: member, error } = await supabase
+    .from('loyalty_members')
+    .upsert({ phone, name, updated_at: now }, { onConflict: 'phone', ignoreDuplicates: false })
+    .select('*')
+    .single();
+
+  if (error || !member) {
+    console.error('[loyalty/member] create error:', error?.message);
+    return NextResponse.json({ error: 'Could not create account' }, { status: 500 });
+  }
+
+  return NextResponse.json({ member, vouchers: [], usedVouchers: [], transactions: [], programBalances: [] });
+}
+
+export async function PATCH(req: Request) {
+  let body: { phone: string; name: string };
+  try { body = await req.json(); }
+  catch { return NextResponse.json({ error: 'Invalid request' }, { status: 400 }); }
+
+  const phone = normalisePhone(body.phone ?? '');
+  const name  = (body.name ?? '').trim().slice(0, 50);
+
+  if (!isValidMalaysianPhone(phone)) return NextResponse.json({ error: 'Invalid phone' }, { status: 400 });
+
+  const { data, error } = await supabase
+    .from('loyalty_members')
+    .update({ name })
+    .eq('phone', phone)
+    .select('id, phone, name')
+    .single();
+
+  if (error || !data) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
+
+  return NextResponse.json({ member: data });
 }

@@ -48,7 +48,7 @@ function QROverlay({ voucher, onClose }: { voucher: any; onClose: () => void }) 
           <div style={{ fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 22, color: INK, lineHeight: 1.1 }}>
             {label}
           </div>
-          {voucher.min_order_amount != null && (
+          {voucher.min_order_amount != null && voucher.min_order_amount > 0 && (
             <div style={{ fontFamily: "'Nunito', system-ui", fontSize: 13, color: hex(INK, .55), marginTop: 3 }}>
               Min. order RM {Number(voucher.min_order_amount).toFixed(2)}
             </div>
@@ -235,7 +235,7 @@ function VouchersContent() {
                         <div style={{ ...heading, fontSize: 18, color: eligible ? '#fff' : INK }}>
                           {v.type === 'percent' ? `${amt}% off` : `RM ${amt.toFixed(2)} off`}
                         </div>
-                        {v.min_order_amount != null && (
+                        {v.min_order_amount != null && v.min_order_amount > 0 && (
                           <div style={{ ...s, fontSize: 12, color: eligible ? 'rgba(255,255,255,.75)' : hex(INK, .5) }}>
                             Min. order RM {Number(v.min_order_amount).toFixed(2)}
                           </div>
