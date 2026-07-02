@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { createBrowserClient } from '@/lib/online/supabase-browser';
 import { normalisePhone } from '@/lib/normalisePhone';
 import type { Branch } from '@/lib/types';
 
@@ -188,27 +187,8 @@ export default function OrderPage() {
       .catch(() => setError('Could not load order.'));
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Realtime subscription
-  useEffect(() => {
-    if (!id) return;
-    const sb = createBrowserClient();
-    const channel = sb
-      .channel(`order:${id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'online_orders', filter: `id=eq.${id}` },
-        payload => {
-          setOrder(prev => {
-            if (!prev) return prev;
-            const updated = { ...prev, ...(payload.new as Partial<Order>) };
-            persistActive(updated);
-            return updated;
-          });
-        }
-      )
-      .subscribe();
-    return () => { sb.removeChannel(channel); };
-  }, [id, persistActive]);
-
-  // Polling fallback every 30s
+  // Poll for status updates every 5s (replaces Supabase Realtime — keeps the
+  // anon key out of the browser bundle so the DB can't be queried directly)
   useEffect(() => {
     if (!id) return;
     const tick = setInterval(async () => {
@@ -220,7 +200,7 @@ export default function OrderPage() {
           return data;
         });
       }
-    }, 30_000);
+    }, 5_000);
     return () => clearInterval(tick);
   }, [id, persistActive]);
 
