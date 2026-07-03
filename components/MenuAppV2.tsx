@@ -1662,18 +1662,32 @@ export default function MenuAppV2() {
     return () => window.removeEventListener('pageshow', readStorage);
   }, []);
 
-  // Auto daily check-in — fires once per day when a known phone is loaded
+  // Auto daily check-in — fires once per day when a known phone is loaded.
+  // Afterwards, prefetch loyalty data into the sheet's localStorage cache so
+  // opening the loyalty sheet feels instant.
   useEffect(() => {
     if (!savedPhone) return;
+    const digits = normalisePhone(savedPhone);
+    const prefetchLoyalty = () => {
+      fetch(`/api/loyalty/member?phone=${digits}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d?.member) {
+            try { localStorage.setItem(`loyalty_cache_${digits}`, JSON.stringify(d)); } catch { /* quota */ }
+          }
+        })
+        .catch(() => { /* silent — non-critical */ });
+    };
     const todayMYT = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
-    if (localStorage.getItem('co_checkin') === todayMYT) return;
+    if (localStorage.getItem('co_checkin') === todayMYT) { prefetchLoyalty(); return; }
     fetch('/api/loyalty/checkin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone: savedPhone }),
     }).then(() => {
       try { localStorage.setItem('co_checkin', todayMYT); } catch { /* ignore */ }
-    }).catch(() => { /* silent — non-critical */ });
+    }).catch(() => { /* silent — non-critical */ })
+      .finally(prefetchLoyalty);
   }, [savedPhone]);
 
   const handlePay = () => {
