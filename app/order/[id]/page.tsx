@@ -143,6 +143,24 @@ export default function OrderPage() {
   const [branch,   setBranch]   = useState<Branch | null>(null);
   const [arrived,  setArrived]  = useState(false);
   const [arriving, setArriving] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [nowTick,  setNowTick]  = useState(Date.now());
+
+  // Tick every 30s so the elapsed-time label stays current
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Receipt overlay: push a history entry so the Android back button closes
+  // the overlay instead of exiting the app (standalone PWA has no browser UI)
+  useEffect(() => {
+    if (!showReceipt) return;
+    const onPop = () => setShowReceipt(false);
+    history.pushState({ receipt: true }, '');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [showReceipt]);
 
   const phone = (() => {
     try { return normalisePhone(JSON.parse(localStorage.getItem('co_form') ?? '{}').phone ?? ''); } catch { return ''; }
@@ -250,6 +268,16 @@ export default function OrderPage() {
         <div style={{ marginTop: 8, fontSize: 13, opacity: .7 }}>
           Order {order.id} · {isCurbside ? 'Curbside' : 'Counter pickup'}
         </div>
+        <div style={{ marginTop: 4, fontSize: 13, opacity: .7 }}>
+          Placed {new Date(order.created_at).toLocaleTimeString('en-MY', { hour: 'numeric', minute: '2-digit' })}
+          {' · '}
+          {(() => {
+            const mins = Math.max(0, Math.floor((nowTick - new Date(order.created_at).getTime()) / 60_000));
+            if (mins < 1)  return 'just now';
+            if (mins < 60) return `${mins} min ago`;
+            return `${Math.floor(mins / 60)}h ${mins % 60}m ago`;
+          })()}
+        </div>
       </div>
 
       <div style={{ maxWidth: 420, margin: '0 auto', padding: '0 16px' }}>
@@ -314,10 +342,8 @@ export default function OrderPage() {
 
         {/* Receipt link */}
         {order.receipt_url && (
-          <a
-            href={order.receipt_url}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => setShowReceipt(true)}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               width: '100%', padding: '12px',
@@ -325,11 +351,31 @@ export default function OrderPage() {
               border: `1.5px solid ${hex(INK, .2)}`,
               borderRadius: R - 8, marginBottom: 14,
               fontFamily: "'Nunito', system-ui", fontWeight: 700, fontSize: 14, color: INK,
-              textDecoration: 'none',
+              cursor: 'pointer',
             }}
           >
             🧾 View Receipt
-          </a>
+          </button>
+        )}
+
+        {/* Receipt overlay — in-app so the installed PWA keeps a close control */}
+        {showReceipt && order.receipt_url && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: '#fff', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: `1px solid ${hex(INK, .1)}`, background: BG, flexShrink: 0 }}>
+              <span style={{ fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 16, color: INK }}>Receipt</span>
+              <button
+                onClick={() => history.back()}
+                style={{
+                  padding: '7px 14px', borderRadius: 999, border: `1.5px solid ${hex(INK, .15)}`,
+                  background: '#fff', color: INK, fontFamily: "'Baloo 2', system-ui",
+                  fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                }}
+              >
+                ✕ Close
+              </button>
+            </div>
+            <iframe src={order.receipt_url} title="Receipt" style={{ flex: 1, border: 'none', width: '100%' }} />
+          </div>
         )}
 
         {/* Rejection reason */}
