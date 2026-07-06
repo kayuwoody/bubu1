@@ -40,6 +40,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
           }
+          // Suppress Chrome's automatic install banner. Manual install via the
+          // browser menu still works. To build an opt-in install button later,
+          // stash the event here and call .prompt() on it from the UI.
+          window.addEventListener('beforeinstallprompt', e => e.preventDefault());
         `}} />
       </body>
     </html>
