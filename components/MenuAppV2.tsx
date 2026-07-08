@@ -784,7 +784,8 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
     if (drink) {
       mods = {
         ...(product.category.toLowerCase() === 'coffee' ? { sugar: DRINK_MODS.sugar.options.find(o => o.id === drinkSel.sugar)?.label } : {}),
-        ...(drinkSel.milk ? { milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label } : {}),
+        // TEMP: milk disabled pending add-ons
+        // ...(drinkSel.milk ? { milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label } : {}),
         ...(drinkSel.notes ? { notes: drinkSel.notes } : {}),
       };
     } else if (cfg) {
@@ -794,7 +795,8 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
       mods = {
         combo_selections: cs,
         ...(drinkSel.sugar ? { sugar: DRINK_MODS.sugar.options.find(o => o.id === drinkSel.sugar)?.label } : {}),
-        ...(drinkSel.milk ? { milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label } : {}),
+        // TEMP: milk disabled pending add-ons
+        // ...(drinkSel.milk ? { milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label } : {}),
         ...(so.length > 0 ? { selected_optionals: so } : {}),
         ...(notes ? { notes } : {}),
       };
@@ -831,7 +833,10 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
             const isCoffee = isDrink(product.category)
               ? product.category.toLowerCase() === 'coffee'
               : comboHasCoffee;
-            const showMilk = isCoffee && !NO_MILK_IDS.has(effectiveDrinkId ?? '');
+            // TEMP: milk options disabled — being replaced by add-ons (backend in progress)
+            // const showMilk = isCoffee && !NO_MILK_IDS.has(effectiveDrinkId ?? '');
+            const showMilk = false;
+            void isCoffee; void effectiveDrinkId;
 
             const SugarRow = () => (
               <div style={{ marginTop:14 }}>
