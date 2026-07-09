@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/online/supabase';
 import { normalisePhone, isValidMalaysianPhone } from '@/lib/normalisePhone';
+import { issueWelcomeVoucher } from '@/lib/online/welcomeVoucher';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,6 +52,8 @@ export async function POST(req: Request) {
     console.error('[checkin] member upsert error:', memberErr?.message);
     return NextResponse.json({ error: 'Could not load account' }, { status: 500 });
   }
+
+  await issueWelcomeVoucher(member.id);
 
   const prog = programs[0];
 

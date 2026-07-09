@@ -4,6 +4,7 @@ import { verifyFiuuCallback, isFiuuSuccess } from '@/lib/online/fiuu';
 import { nextOrderNumber } from '@/lib/online/orderNumber';
 import { generateReceiptHtml } from '@/lib/online/receiptGenerator';
 import { normalisePhone } from '@/lib/normalisePhone';
+import { issueWelcomeVoucher } from '@/lib/online/welcomeVoucher';
 import type { CartLine, CheckoutSession } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -252,6 +253,8 @@ async function awardLoyaltyPoints(
     console.error('[loyalty] member upsert error:', memberErr?.message);
     return;
   }
+
+  await issueWelcomeVoucher(member.id);
 
   for (const prog of programs) {
     // Skip if order is below program's min order requirement
