@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import { normalisePhone, isValidMalaysianPhone } from '@/lib/normalisePhone';
-import type { Branch, CartLine, LoyaltyConfig, LoyaltyMember, LoyaltyTransaction, Voucher, Product, SelectionConfig, Viewport, XorGroup } from '@/lib/types';
+import type { Branch, CartLine, LoyaltyConfig, LoyaltyMember, LoyaltyTransaction, Voucher, Product, SelectionConfig, Viewport, XorGroup, OptionalItem } from '@/lib/types';
 
 interface Category { id: string; label: string }
 
@@ -602,12 +602,16 @@ function pillStyle(on: boolean): React.CSSProperties {
   return { padding:'8px 14px', borderRadius:999, border:on?`2px solid ${T.inkColor}`:`1.5px solid ${hex(T.inkColor,.12)}`, background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5 };
 }
 
-function ComboSection({ cfg, selections, selectedOptionals, onSelect, onToggleOptional }: {
-  cfg: SelectionConfig; selections: Record<string,string>; selectedOptionals: Set<string>;
+function ComboSection({ cfg, hasOverride, selections, selectedOptionals, onSelect, onToggleOptional }: {
+  cfg: SelectionConfig; hasOverride: boolean; selections: Record<string,string>; selectedOptionals: Set<string>;
   onSelect: (key: string, id: string) => void; onToggleOptional: (id: string) => void;
 }) {
   const topLevel = cfg.xorGroups.filter((g: XorGroup) => !g.parentProductId);
   const nested   = cfg.xorGroups.filter((g: XorGroup) => !!g.parentProductId);
+  // Price shown on an add-on pill must match what's charged: priceAdjustment
+  // for override-priced combos, pwpPrice ?? basePrice otherwise
+  const optCharge = (o: { priceAdjustment: number; pwpPrice?: number | null; basePrice: number }) =>
+    hasOverride ? o.priceAdjustment : (o.pwpPrice ?? o.basePrice);
   return (
     <>
       {topLevel.map(group => {
@@ -649,7 +653,8 @@ function ComboSection({ cfg, selections, selectedOptionals, onSelect, onToggleOp
           <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
             {cfg.optionalItems.map(opt => {
               const checked = selectedOptionals.has(opt.id);
-              return <button key={opt.id} onClick={() => onToggleOptional(opt.id)} style={{ ...pillStyle(checked), outline:checked?`2px solid ${T.primaryColor}`:'none' }}>{opt.name}{!checked && opt.priceAdjustment > 0 && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>+RM{opt.priceAdjustment.toFixed(2)}</span>}</button>;
+              const charge  = optCharge(opt);
+              return <button key={opt.id} onClick={() => onToggleOptional(opt.id)} style={{ ...pillStyle(checked), outline:checked?`2px solid ${T.primaryColor}`:'none' }}>{opt.name}{!checked && charge > 0 && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>+RM{charge.toFixed(2)}</span>}</button>;
             })}
           </div>
         </div>
@@ -689,6 +694,31 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   const cfg   = product?.selection_config ?? null;
   const drink = !!product && isDrink(product.category) && !cfg;
   const nestedGroups = useMemo(() => cfg?.xorGroups.filter(g => !!g.parentProductId) ?? [], [cfg]);
+
+  // Branch scoping: XOR options that are NOT the current selection are
+  // inactive, and everything parented to an inactive product (nested groups,
+  // add-ons) is inactive too. Prevents a combo with N drink options from
+  // showing/counting N copies of each per-drink add-on.
+  const inactiveIds = useMemo(() => {
+    const inactive = new Set<string>();
+    if (!cfg) return inactive;
+    for (const g of cfg.xorGroups) {
+      const selId = selections[g.uniqueKey];
+      for (const it of g.items) if (it.id !== selId) inactive.add(it.id);
+    }
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const g of cfg.xorGroups) {
+        if (g.parentProductId && inactive.has(g.parentProductId)) {
+          for (const it of g.items) if (!inactive.has(it.id)) { inactive.add(it.id); changed = true; }
+        }
+      }
+    }
+    return inactive;
+  }, [cfg, selections]);
+  const groupActive    = (g: XorGroup)     => !g.parentProductId || !inactiveIds.has(g.parentProductId);
+  const optionalActive = (o: OptionalItem) => !o.parentProductId || !inactiveIds.has(o.parentProductId);
 
   const comboHasCoffee = useMemo(() => {
     if (!cfg) return false;
@@ -773,10 +803,18 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   const unitPrice = (() => {
     if (drink) return product.base_price;
     if (!cfg) return product.base_price;
+    const activeGroups = cfg.xorGroups.filter(groupActive);
+    const activeOpts   = cfg.optionalItems.filter(o => optionalActive(o) && selectedOptionals.has(o.id));
+    if (product.combo_price_override != null) {
+      let adj = 0;
+      for (const g of activeGroups) { const item = g.items.find(i => i.id === selections[g.uniqueKey]); if (item) adj += item.priceAdjustment; }
+      for (const opt of activeOpts) adj += opt.priceAdjustment;
+      return product.combo_price_override + adj;
+    }
     let adj = 0;
-    for (const g of cfg.xorGroups) { const item = g.items.find(i => i.id === selections[g.uniqueKey]); if (item) adj += item.priceAdjustment; }
-    for (const opt of cfg.optionalItems) { if (selectedOptionals.has(opt.id)) adj += opt.priceAdjustment; }
-    return (product.combo_price_override ?? product.base_price) + adj;
+    for (const g of activeGroups) { const item = g.items.find(i => i.id === selections[g.uniqueKey]); if (item) adj += item.basePrice; }
+    for (const opt of activeOpts) adj += opt.pwpPrice ?? opt.basePrice;
+    return product.base_price + adj;
   })();
 
   const handleConfirm = () => {
@@ -790,8 +828,8 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
       };
     } else if (cfg) {
       const cs: Record<string,{ id: string; name: string }> = {};
-      for (const g of cfg.xorGroups) { const sid = selections[g.uniqueKey]; if (sid) { const item = g.items.find(i => i.id === sid); if (item) cs[g.uniqueKey] = { id: sid, name: item.name }; } }
-      const so = cfg.optionalItems.filter(o => selectedOptionals.has(o.id)).map(o => ({ id: o.id, name: o.name }));
+      for (const g of cfg.xorGroups.filter(groupActive)) { const sid = selections[g.uniqueKey]; if (sid) { const item = g.items.find(i => i.id === sid); if (item) cs[g.uniqueKey] = { id: sid, name: item.name }; } }
+      const so = cfg.optionalItems.filter(o => optionalActive(o) && selectedOptionals.has(o.id)).map(o => ({ id: o.id, name: o.name }));
       mods = {
         combo_selections: cs,
         ...(drinkSel.sugar ? { sugar: DRINK_MODS.sugar.options.find(o => o.id === drinkSel.sugar)?.label } : {}),
@@ -867,7 +905,7 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
             );
             if (cfg) return (
               <>
-                <ComboSection cfg={cfg} selections={selections} selectedOptionals={selectedOptionals} onSelect={handleSelect} onToggleOptional={toggleOpt}/>
+                <ComboSection cfg={{ ...cfg, optionalItems: cfg.optionalItems.filter(optionalActive) }} hasOverride={product.combo_price_override != null} selections={selections} selectedOptionals={selectedOptionals} onSelect={handleSelect} onToggleOptional={toggleOpt}/>
                 <SugarRow />
                 {showMilk && <MilkRow />}
                 <div style={{ marginTop:14 }}>

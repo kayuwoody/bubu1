@@ -106,6 +106,7 @@ export interface OptionalItem {
   id: string;
   name: string;
   basePrice: number;
+  pwpPrice?: number | null;
   priceAdjustment: number;
   isCoffee: boolean;
   parentProductId?: string;
