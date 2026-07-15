@@ -163,6 +163,8 @@ export interface CheckoutSession {
   order_id: string | null;
   voucher_code: string | null;
   voucher_discount: number | null;
+  code: string | null;
+  pass_discount: number | null;
   status: 'pending' | 'paid' | 'failed';
   created_at: string;
 }

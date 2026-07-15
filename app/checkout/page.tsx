@@ -396,7 +396,7 @@ function CheckoutContent() {
           total: discountedTotal,
           channel,
           ...(voucherStatus === 'valid' && voucherCode ? { voucher_code: voucherCode.trim().toUpperCase(), voucher_discount: Number(voucherDiscountRM.toFixed(2)) } : {}),
-          ...(passStatus === 'valid' && selectedPass?.code ? { pass_code: selectedPass.code } : {}),
+          ...(passStatus === 'valid' && selectedPass?.code ? { pass_code: selectedPass.code, pass_discount: Number(passDiscount.toFixed(2)) } : {}),
         }),
       });
       const data = await res.json();

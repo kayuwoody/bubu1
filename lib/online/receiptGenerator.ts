@@ -15,6 +15,8 @@ interface ReceiptOrder {
   total_paid:       number;
   voucher_code?:    string | null;
   voucher_discount?: number | null;
+  pass_code?:       string | null;
+  pass_discount?:   number | null;
   created_at:       string;
 }
 
@@ -215,15 +217,27 @@ export function generateReceiptHtml(order: ReceiptOrder, items: ReceiptItem[]): 
       <tbody>${itemRows}</tbody>
     </table>
 
-    ${order.voucher_discount != null && order.voucher_discount > 0 ? `
+    ${(() => {
+      const voucherAmt = Number(order.voucher_discount ?? 0);
+      const passAmt    = Number(order.pass_discount ?? 0);
+      if (voucherAmt <= 0 && passAmt <= 0) return '';
+      let rows = `
     <div class="sub-row">
       <span>Subtotal</span>
-      <span>RM ${(Number(order.total_paid) + Number(order.voucher_discount)).toFixed(2)}</span>
-    </div>
+      <span>RM ${(Number(order.total_paid) + voucherAmt + passAmt).toFixed(2)}</span>
+    </div>`;
+      if (voucherAmt > 0) rows += `
     <div class="sub-row">
       <span>Voucher${order.voucher_code ? ` (${order.voucher_code})` : ''}</span>
-      <span class="discount-amount">−RM ${Number(order.voucher_discount).toFixed(2)}</span>
-    </div>` : ''}
+      <span class="discount-amount">−RM ${voucherAmt.toFixed(2)}</span>
+    </div>`;
+      if (passAmt > 0) rows += `
+    <div class="sub-row">
+      <span>Pass${order.pass_code ? ` (${order.pass_code})` : ''}</span>
+      <span class="discount-amount">−RM ${passAmt.toFixed(2)}</span>
+    </div>`;
+      return rows;
+    })()}
     <div class="total-row">
       <span class="total-label">Total paid</span>
       <span class="total-amount">RM ${Number(order.total_paid).toFixed(2)}</span>

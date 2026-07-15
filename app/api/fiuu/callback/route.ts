@@ -121,6 +121,8 @@ export async function POST(req: Request) {
     currency:            'MYR',
     voucher_code:        session.voucher_code ?? null,
     voucher_discount:    session.voucher_discount ?? null,
+    pass_code:           session.code ?? null,
+    pass_discount:       session.pass_discount ?? null,
     created_at:          now,
     updated_at:          now,
   });
@@ -183,6 +185,8 @@ async function generateAndUploadReceipt(orderId: string, session: CheckoutSessio
       total_paid:       session.total_amount,
       voucher_code:     session.voucher_code ?? null,
       voucher_discount: session.voucher_discount ?? null,
+      pass_code:        session.code ?? null,
+      pass_discount:    session.pass_discount ?? null,
       created_at:       new Date().toISOString(),
     },
     items.map(l => ({
