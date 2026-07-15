@@ -119,6 +119,8 @@ export async function POST(req: Request) {
     customer_phone:      session.customer_phone,
     total_paid:          session.total_amount,
     currency:            'MYR',
+    voucher_code:        session.voucher_code ?? null,
+    voucher_discount:    session.voucher_discount ?? null,
     created_at:          now,
     updated_at:          now,
   });
@@ -175,11 +177,13 @@ export async function POST(req: Request) {
 async function generateAndUploadReceipt(orderId: string, session: CheckoutSession, items: CartLine[]) {
   const html = generateReceiptHtml(
     {
-      id:            orderId,
-      customer_name: session.customer_name,
-      pickup_type:   session.pickup_type,
-      total_paid:    session.total_amount,
-      created_at:    new Date().toISOString(),
+      id:               orderId,
+      customer_name:    session.customer_name,
+      pickup_type:      session.pickup_type,
+      total_paid:       session.total_amount,
+      voucher_code:     session.voucher_code ?? null,
+      voucher_discount: session.voucher_discount ?? null,
+      created_at:       new Date().toISOString(),
     },
     items.map(l => ({
       product_name: l.name ?? l.id,

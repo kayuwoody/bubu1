@@ -277,13 +277,17 @@ function CheckoutContent() {
     setPassUsesApplied(0);
   };
 
+  // RM value actually deducted by the voucher (percent resolved against subtotal)
+  const voucherDiscountRM = (() => {
+    if (voucherStatus !== 'valid' || !pending) return 0;
+    const base = pending.total;
+    return voucherType === 'percent'
+      ? Math.min(base, base * voucherDiscount / 100)
+      : Math.min(base, voucherDiscount);
+  })();
+
   const discountedTotal = (() => {
-    let base = pending?.total ?? 0;
-    if (voucherStatus === 'valid' && pending) {
-      base = voucherType === 'percent'
-        ? Math.max(0, base * (1 - voucherDiscount / 100))
-        : Math.max(0, base - voucherDiscount);
-    }
+    let base = Math.max(0, (pending?.total ?? 0) - voucherDiscountRM);
     if (passStatus === 'valid') base = Math.max(0, base - passDiscount);
     return base;
   })();
@@ -391,7 +395,7 @@ function CheckoutContent() {
           items: pending.lines,
           total: discountedTotal,
           channel,
-          ...(voucherStatus === 'valid' && voucherCode ? { voucher_code: voucherCode.trim().toUpperCase() } : {}),
+          ...(voucherStatus === 'valid' && voucherCode ? { voucher_code: voucherCode.trim().toUpperCase(), voucher_discount: Number(voucherDiscountRM.toFixed(2)) } : {}),
           ...(passStatus === 'valid' && selectedPass?.code ? { pass_code: selectedPass.code } : {}),
         }),
       });
