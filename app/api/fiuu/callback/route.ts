@@ -60,10 +60,12 @@ export async function POST(req: Request) {
     return new Response('FAILED', { status: 200 });
   }
 
-  // Upsert payment record
+  // Upsert payment record. Do NOT write order_id here — Fiuu re-sends IPNs, and
+  // a duplicate delivery would clobber the order_id backfilled below on the
+  // first pass (the idempotency guard then returns before it can be re-set).
+  // Omitting the key means a conflicting upsert leaves the existing value intact.
   const { error: upsertErr } = await supabase.from('fiuu_payments').upsert({
     payment_ref:  tranID,
-    order_id:     null,
     amount:       parseFloat(amount),
     currency:     currency ?? 'MYR',
     status_code:  status,
