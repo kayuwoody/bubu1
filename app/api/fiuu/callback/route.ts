@@ -5,6 +5,7 @@ import { nextOrderNumber } from '@/lib/online/orderNumber';
 import { generateReceiptHtml } from '@/lib/online/receiptGenerator';
 import { normalisePhone } from '@/lib/normalisePhone';
 import { issueWelcomeVoucher } from '@/lib/online/welcomeVoucher';
+import { awardDailyCheckin } from '@/lib/online/dailyCheckin';
 import type { CartLine, CheckoutSession } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -168,6 +169,20 @@ export async function POST(req: Request) {
     try { await incrementVoucherUsage(session.voucher_code); }
     catch (e: unknown) { console.error('[voucher] uncaught error:', e instanceof Error ? e.message : e); }
   }
+
+  // Award daily check-in stamp — so a first purchase also counts as that day's
+  // visit (deduped with website/QR check-ins). Non-blocking.
+  try {
+    const cPhone = normalisePhone(session.customer_phone);
+    if (cPhone) {
+      const { data: cMember } = await supabase
+        .from('loyalty_members')
+        .upsert({ phone: cPhone, updated_at: now }, { onConflict: 'phone' })
+        .select('id')
+        .single();
+      if (cMember) await awardDailyCheckin(cMember.id, cPhone, 'order');
+    }
+  } catch (e: unknown) { console.error('[checkin] order check-in error:', e instanceof Error ? e.message : e); }
 
   // Generate and upload receipt — non-blocking
   try { await generateAndUploadReceipt(orderId, session, items); }
