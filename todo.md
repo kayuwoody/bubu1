@@ -1,5 +1,15 @@
 # TODO
 
+## Loyalty
+
+- [ ] **Fix "Car Wash Customers" loyalty program trigger_type.**
+  It's currently `trigger_type = 'manual'` but is meant to be a scanpass.
+  Program id `9115686e-aec5-4a18-96f9-08dc14e24f65`. This mis-typing was
+  what collided with the Welcome voucher lookup (both were active `manual`
+  programs). The welcome path now resolves by `program_key='welcome'` so it
+  no longer interferes, but the car wash program's type should still be
+  corrected to match how it's actually used.
+
 ## Fiuu
 
 - [ ] **Confirm & remove the unused `/api/webhooks/fiuu` endpoint.**

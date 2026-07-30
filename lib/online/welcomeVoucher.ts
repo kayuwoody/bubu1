@@ -1,10 +1,8 @@
 import { supabase } from './supabase';
 
-// The welcome program is resolved by trigger_type, mirroring how the scan
-// (check-in) and purchase voucher paths find their programs — no hardcoded
-// UUID to break on a DB migration. CAVEAT: 'manual' is a catch-all bucket, so
-// this assumes there is exactly one active 'manual' program (the welcome one).
-// If a second manual program is ever added, this needs a discriminator.
+// The welcome program is resolved by its stable program_key, so it's immune to
+// UUID regeneration on DB migration AND unambiguous even when other 'manual'
+// programs exist. Requires loyalty_programs.program_key = 'welcome' on the row.
 export async function issueWelcomeVoucher(memberId: string): Promise<void> {
   try {
     const refId = `welcome:${memberId}`;
@@ -16,15 +14,12 @@ export async function issueWelcomeVoucher(memberId: string): Promise<void> {
       .maybeSingle();
     if (existing) return;
 
-    const { data: progs } = await supabase
+    const { data: prog } = await supabase
       .from('loyalty_programs')
       .select('voucher_type, voucher_discount_value, voucher_validity_days, voucher_min_order, is_active')
-      .eq('trigger_type', 'manual')
-      .eq('is_active', true)
-      .order('sort_order');
-    if (!progs?.length) return;
-    if (progs.length > 1) console.warn('[welcome] multiple active manual programs; using lowest sort_order');
-    const prog = progs[0];
+      .eq('program_key', 'welcome')
+      .maybeSingle();
+    if (!prog || !prog.is_active) return;
 
     const now = new Date().toISOString();
     const code = `WEL-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
