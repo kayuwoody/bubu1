@@ -1,14 +1,10 @@
 import { supabase } from './supabase';
 
-// "Welcome" program — first-time members get a voucher per this program's config.
-// NOTE: this UUID is environment-specific (regenerated on DB migration, e.g. the
-// SG move). Override with WELCOME_PROGRAM_ID env var so a future migration is a
-// config change, not a code change.
-const WELCOME_PROGRAM_ID =
-  process.env.WELCOME_PROGRAM_ID ?? '38b9e70b-427e-4bd4-8d1f-b323b4e7d3d1';
-
-// Idempotent: safe to call on every member upsert; reference_id dedup ensures
-// at most one welcome voucher per member.
+// The welcome program is resolved by trigger_type, mirroring how the scan
+// (check-in) and purchase voucher paths find their programs — no hardcoded
+// UUID to break on a DB migration. CAVEAT: 'manual' is a catch-all bucket, so
+// this assumes there is exactly one active 'manual' program (the welcome one).
+// If a second manual program is ever added, this needs a discriminator.
 export async function issueWelcomeVoucher(memberId: string): Promise<void> {
   try {
     const refId = `welcome:${memberId}`;
@@ -20,12 +16,15 @@ export async function issueWelcomeVoucher(memberId: string): Promise<void> {
       .maybeSingle();
     if (existing) return;
 
-    const { data: prog } = await supabase
+    const { data: progs } = await supabase
       .from('loyalty_programs')
       .select('voucher_type, voucher_discount_value, voucher_validity_days, voucher_min_order, is_active')
-      .eq('id', WELCOME_PROGRAM_ID)
-      .single();
-    if (!prog || !prog.is_active) return;
+      .eq('trigger_type', 'manual')
+      .eq('is_active', true)
+      .order('sort_order');
+    if (!progs?.length) return;
+    if (progs.length > 1) console.warn('[welcome] multiple active manual programs; using lowest sort_order');
+    const prog = progs[0];
 
     const now = new Date().toISOString();
     const code = `WEL-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
