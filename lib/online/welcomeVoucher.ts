@@ -1,7 +1,11 @@
 import { supabase } from './supabase';
 
-// "Welcome" program — first-time members get a voucher per this program's config
-const WELCOME_PROGRAM_ID = 'e6285398-021f-4f08-b4f2-50cac41d9cf4';
+// "Welcome" program — first-time members get a voucher per this program's config.
+// NOTE: this UUID is environment-specific (regenerated on DB migration, e.g. the
+// SG move). Override with WELCOME_PROGRAM_ID env var so a future migration is a
+// config change, not a code change.
+const WELCOME_PROGRAM_ID =
+  process.env.WELCOME_PROGRAM_ID ?? '38b9e70b-427e-4bd4-8d1f-b323b4e7d3d1';
 
 // Idempotent: safe to call on every member upsert; reference_id dedup ensures
 // at most one welcome voucher per member.
