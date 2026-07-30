@@ -2,13 +2,17 @@
 
 ## Loyalty
 
-- [ ] **Fix "Car Wash Customers" loyalty program trigger_type.**
-  It's currently `trigger_type = 'manual'` but is meant to be a scanpass.
-  Program id `9115686e-aec5-4a18-96f9-08dc14e24f65`. This mis-typing was
-  what collided with the Welcome voucher lookup (both were active `manual`
-  programs). The welcome path now resolves by `program_key='welcome'` so it
-  no longer interferes, but the car wash program's type should still be
-  corrected to match how it's actually used.
+- [ ] **Deactivate the orphaned "Car Wash Customers" loyalty program.**
+  Program id `9115686e-aec5-4a18-96f9-08dc14e24f65`, `trigger_type='manual'`.
+  The carwash is a voucher-type scanpass — it mints vouchers straight from
+  the `scan_passes` row (`voucher_type`/`voucher_value`) and does NOT use a
+  loyalty_programs row (confirmed: no scan_passes row references this id,
+  carwash scanpass verified working). This row is a stray that collided with
+  the Welcome voucher lookup (both active `manual`). Welcome now resolves by
+  `program_key='welcome'` so it no longer interferes; this row is just
+  cleanup. DB-only, no deploy:
+      UPDATE loyalty_programs SET is_active = false
+      WHERE id = '9115686e-aec5-4a18-96f9-08dc14e24f65';
 
 ## Fiuu
 
