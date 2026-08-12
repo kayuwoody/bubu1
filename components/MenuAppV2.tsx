@@ -332,6 +332,98 @@ function GreetingBand({ viewport, isReturning, hasReorder, onReorder, lastSummar
   );
 }
 
+// ── Add-to-home-screen card (opt-in PWA install) ───────────────────────────
+function InstallCard({ viewport }: { viewport: Viewport }) {
+  const compact = viewport === 'mobile';
+  const [canPrompt, setCanPrompt] = useState(false); // Android/desktop deferred prompt ready
+  const [isIOS,     setIsIOS]     = useState(false);  // iOS: no prompt API, show manual steps
+  const [hidden,    setHidden]    = useState(true);   // start hidden until we know it's relevant
+  const [showIOS,   setShowIOS]   = useState(false);
+
+  useEffect(() => {
+    // Already installed (running standalone)? never show.
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || (navigator as unknown as { standalone?: boolean }).standalone === true;
+    if (standalone) return;
+    if (localStorage.getItem('co_install_dismissed') === '1') return;
+
+    const ua = navigator.userAgent || '';
+    const ios = /iphone|ipad|ipod/i.test(ua) && !/crios|fxios/i.test(ua); // iOS Safari only
+    setIsIOS(ios);
+
+    const w = window as unknown as { __coInstallPrompt?: unknown };
+    if (w.__coInstallPrompt) setCanPrompt(true);
+    if (ios || w.__coInstallPrompt) setHidden(false);
+
+    const onInstallable = () => { setCanPrompt(true); setHidden(false); };
+    const onInstalled   = () => setHidden(true);
+    window.addEventListener('co-installable', onInstallable);
+    window.addEventListener('co-installed', onInstalled);
+    return () => {
+      window.removeEventListener('co-installable', onInstallable);
+      window.removeEventListener('co-installed', onInstalled);
+    };
+  }, []);
+
+  if (hidden) return null;
+
+  const dismiss = () => {
+    try { localStorage.setItem('co_install_dismissed', '1'); } catch { /* ignore */ }
+    setHidden(true);
+  };
+
+  const handleAdd = async () => {
+    if (isIOS && !canPrompt) { setShowIOS(true); return; }
+    const w = window as unknown as { __coInstallPrompt?: { prompt: () => void; userChoice: Promise<unknown> } | null };
+    const p = w.__coInstallPrompt;
+    if (!p) return;
+    p.prompt();
+    try { await p.userChoice; } catch { /* ignore */ }
+    w.__coInstallPrompt = null;
+    setHidden(true);
+  };
+
+  return (
+    <>
+      <section style={{ margin:compact?'8px 14px 6px':'12px 24px 10px', background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius, padding:compact?'12px 14px':'14px 18px', display:'flex', alignItems:'center', gap:12 }}>
+        <div style={{ fontSize:compact?24:28, flexShrink:0 }}>📲</div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?15:17, color:T.inkColor, lineHeight:1.2 }}>
+            Add our icon to your home screen
+          </div>
+          <div style={{ fontFamily:"'Nunito',system-ui", fontSize:compact?12.5:13.5, color:hex(T.inkColor,.6), marginTop:3, lineHeight:1.4 }}>
+            One-tap access to order — it just adds a shortcut icon, like a bookmark. Not an app from the store, nothing to download, and you can remove it anytime by deleting the icon.
+          </div>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:6, flexShrink:0 }}>
+          <button onClick={handleAdd} style={{ background:T.primaryColor, color:'#fff', border:'none', borderRadius:999, padding:compact?'8px 14px':'10px 16px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?13:14, cursor:'pointer', whiteSpace:'nowrap' }}>
+            {isIOS && !canPrompt ? 'Show me how' : 'Add icon'}
+          </button>
+          <button onClick={dismiss} style={{ background:'transparent', border:'none', color:hex(T.inkColor,.45), fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:12, cursor:'pointer' }}>
+            No thanks
+          </button>
+        </div>
+      </section>
+
+      {showIOS && (
+        <div onClick={() => setShowIOS(false)} style={{ position:'fixed', inset:0, zIndex:90, background:'rgba(0,0,0,.6)', display:'flex', alignItems:'flex-end', justifyContent:'center', padding:16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width:'min(460px,100%)', background:T.bgColor, borderRadius:20, padding:'22px 22px 26px', boxShadow:'0 -10px 40px rgba(58,36,20,.25)' }}>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:19, color:T.inkColor, marginBottom:12 }}>Add to Home Screen</div>
+            <ol style={{ margin:0, paddingLeft:20, fontFamily:"'Nunito',system-ui", fontSize:14.5, color:T.inkColor, lineHeight:1.7 }}>
+              <li>Tap the <strong>Share</strong> button (the square with an ↑ arrow) at the bottom of Safari.</li>
+              <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
+              <li>Tap <strong>Add</strong> — an icon appears on your home screen.</li>
+            </ol>
+            <button onClick={() => setShowIOS(false)} style={{ marginTop:18, width:'100%', background:T.primaryColor, color:'#fff', border:'none', borderRadius:T.cornerRadius-6, padding:'12px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:15, cursor:'pointer' }}>
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Category Chips ─────────────────────────────────────────────────────────
 function CatBar({ cats, active, setActive, viewport }: { cats: Category[]; active: string; setActive: (id: string) => void; viewport: Viewport }) {
   const compact = viewport === 'mobile';
@@ -1851,6 +1943,8 @@ export default function MenuAppV2() {
         hasReorder={!!lastOrder} onReorder={handleReorder}
         lastSummary={lastOrder?.items.map(l => `${l.qty}× ${l.name}`).join(', ') ?? ''}
       />
+
+      <InstallCard viewport={viewport} />
 
       {compact && <PickupBar pickup={pickup} onToggle={() => setPickup(pickup === 'curbside' ? 'counter' : 'curbside')} hasPromos={promos.length > 0} onPromoClick={() => setPromoOpen(true)}/>}
 
