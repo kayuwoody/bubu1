@@ -602,12 +602,28 @@ function pillStyle(on: boolean): React.CSSProperties {
   return { padding:'8px 14px', borderRadius:999, border:on?`2px solid ${T.inkColor}`:`1.5px solid ${hex(T.inkColor,.12)}`, background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5 };
 }
 
-function ComboSection({ cfg, hasOverride, selections, selectedOptionals, onSelect, onToggleOptional }: {
+// Small tappable thumbnail shown inside an option pill; tapping it opens the
+// zoom lightbox without triggering the pill's select (stopPropagation).
+function OptionThumb({ url, name, onZoom }: { url: string | null; name: string; onZoom: (url: string, name: string) => void }) {
+  if (!url) return null;
+  return (
+    <img
+      src={url}
+      alt=""
+      onClick={e => { e.stopPropagation(); onZoom(url, name); }}
+      style={{ width:26, height:26, borderRadius:6, objectFit:'cover', marginRight:2, cursor:'zoom-in', border:`1px solid ${hex(T.inkColor,.12)}`, flexShrink:0 }}
+    />
+  );
+}
+
+function ComboSection({ cfg, hasOverride, selections, selectedOptionals, onSelect, onToggleOptional, products, onZoom }: {
   cfg: SelectionConfig; hasOverride: boolean; selections: Record<string,string>; selectedOptionals: Set<string>;
   onSelect: (key: string, id: string) => void; onToggleOptional: (id: string) => void;
+  products: Product[]; onZoom: (url: string, name: string) => void;
 }) {
   const topLevel = cfg.xorGroups.filter((g: XorGroup) => !g.parentProductId);
   const nested   = cfg.xorGroups.filter((g: XorGroup) => !!g.parentProductId);
+  const imgOf = (id: string) => products.find(p => p.id === id)?.image_url ?? null;
   // Price shown on an add-on pill must match what's charged: priceAdjustment
   // for override-priced combos, pwpPrice ?? basePrice otherwise
   const optCharge = (o: { priceAdjustment: number; pwpPrice?: number | null; basePrice: number }) =>
@@ -628,6 +644,7 @@ function ComboSection({ cfg, hasOverride, selections, selectedOptionals, onSelec
                 const priceLabel = item.priceAdjustment > 0 ? `+RM${item.priceAdjustment.toFixed(2)}` : '';
                 return (
                   <button key={item.id} onClick={() => onSelect(group.uniqueKey, item.id)} style={pillStyle(on)}>
+                    <OptionThumb url={imgOf(item.id)} name={item.name} onZoom={onZoom} />
                     {item.name}{!on && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>{priceLabel}</span>}
                   </button>
                 );
@@ -639,7 +656,7 @@ function ComboSection({ cfg, hasOverride, selections, selectedOptionals, onSelec
                 <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                   {ng.items.map(ni => {
                     const non = selections[ng.uniqueKey] === ni.id;
-                    return <button key={ni.id} onClick={() => onSelect(ng.uniqueKey, ni.id)} style={pillStyle(non)}>{ni.name}{ni.priceAdjustment > 0 && !non && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>+RM{ni.priceAdjustment.toFixed(2)}</span>}</button>;
+                    return <button key={ni.id} onClick={() => onSelect(ng.uniqueKey, ni.id)} style={pillStyle(non)}><OptionThumb url={imgOf(ni.id)} name={ni.name} onZoom={onZoom} />{ni.name}{ni.priceAdjustment > 0 && !non && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>+RM{ni.priceAdjustment.toFixed(2)}</span>}</button>;
                   })}
                 </div>
               </div>
@@ -654,7 +671,7 @@ function ComboSection({ cfg, hasOverride, selections, selectedOptionals, onSelec
             {cfg.optionalItems.map(opt => {
               const checked = selectedOptionals.has(opt.id);
               const charge  = optCharge(opt);
-              return <button key={opt.id} onClick={() => onToggleOptional(opt.id)} style={{ ...pillStyle(checked), outline:checked?`2px solid ${T.primaryColor}`:'none' }}>{opt.name}{!checked && charge > 0 && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>+RM{charge.toFixed(2)}</span>}</button>;
+              return <button key={opt.id} onClick={() => onToggleOptional(opt.id)} style={{ ...pillStyle(checked), outline:checked?`2px solid ${T.primaryColor}`:'none' }}><OptionThumb url={imgOf(opt.id)} name={opt.name} onZoom={onZoom} />{opt.name}{!checked && charge > 0 && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>+RM{charge.toFixed(2)}</span>}</button>;
             })}
           </div>
         </div>
@@ -663,9 +680,10 @@ function ComboSection({ cfg, hasOverride, selections, selectedOptionals, onSelec
   );
 }
 
-function CustomizeSheet({ product, open, onClose, onConfirm }: {
+function CustomizeSheet({ product, open, onClose, onConfirm, products }: {
   product: Product | null; open: boolean; onClose: () => void;
   onConfirm: (mods: Record<string,unknown>, qty: number, unitPrice: number) => void;
+  products: Product[];
 }) {
   const drinkDefaults: DrinkSel = useMemo(() => ({ sugar: 'zero', milk: 'full', notes: '' }), []);
 
@@ -690,6 +708,17 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   const [selectedOptionals, setSelOpts]   = useState<Set<string>>(new Set());
   const [notes, setNotes]                 = useState('');
   const [qty, setQty]                     = useState(1);
+  const [zoom, setZoom]                   = useState<{ url: string; name: string } | null>(null);
+
+  // Close the image zoom with the Android/browser back button instead of
+  // exiting the app (installed PWA has no browser chrome)
+  useEffect(() => {
+    if (!zoom) return;
+    const onPop = () => setZoom(null);
+    history.pushState({ zoom: true }, '');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [zoom]);
 
   const cfg   = product?.selection_config ?? null;
   const drink = !!product && isDrink(product.category) && !cfg;
@@ -905,7 +934,7 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
             );
             if (cfg) return (
               <>
-                <ComboSection cfg={{ ...cfg, optionalItems: cfg.optionalItems.filter(optionalActive) }} hasOverride={product.combo_price_override != null} selections={selections} selectedOptionals={selectedOptionals} onSelect={handleSelect} onToggleOptional={toggleOpt}/>
+                <ComboSection cfg={{ ...cfg, optionalItems: cfg.optionalItems.filter(optionalActive) }} hasOverride={product.combo_price_override != null} selections={selections} selectedOptionals={selectedOptionals} onSelect={handleSelect} onToggleOptional={toggleOpt} products={products} onZoom={(url, name) => setZoom({ url, name })}/>
                 <SugarRow />
                 {showMilk && <MilkRow />}
                 <div style={{ marginTop:14 }}>
@@ -928,6 +957,19 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
           </button>
         </div>
       </div>
+
+      {/* Option image zoom */}
+      {zoom && (
+        <div
+          onClick={() => history.back()}
+          style={{ position:'fixed', inset:0, zIndex:90, background:'rgba(0,0,0,.82)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, cursor:'zoom-out' }}
+        >
+          <img src={zoom.url} alt={zoom.name} style={{ maxWidth:'90%', maxHeight:'70%', objectFit:'contain', borderRadius:16, boxShadow:'0 12px 40px rgba(0,0,0,.5)' }} />
+          <div style={{ color:'#fff', marginTop:16, fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:18, textAlign:'center' }}>{zoom.name}</div>
+          <div style={{ color:'rgba(255,255,255,.6)', marginTop:6, fontFamily:"'Nunito',system-ui", fontSize:13 }}>Tap anywhere to close</div>
+        </div>
+      )}
+
       <style>{`@keyframes coSheetIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
     </div>
   );
@@ -1840,6 +1882,7 @@ export default function MenuAppV2() {
 
       <CustomizeSheet
         product={sheetProduct} open={!!sheetProduct}
+        products={products}
         onClose={() => setSheetProduct(null)}
         onConfirm={(mods, qty, unitPrice) => {
           addLine(sheetProduct!.id, sheetProduct!.name, qty, mods, unitPrice);
