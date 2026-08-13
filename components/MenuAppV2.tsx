@@ -366,6 +366,8 @@ function InstallCard({ viewport }: { viewport: Viewport }) {
     };
   }, []);
 
+  const [open, setOpen] = useState(false);
+
   if (hidden) return null;
 
   const dismiss = () => {
@@ -386,29 +388,37 @@ function InstallCard({ viewport }: { viewport: Viewport }) {
 
   return (
     <>
-      <section style={{ margin:compact?'8px 14px 6px':'12px 24px 10px', background:'#fff', border:`1.5px solid ${hex(T.inkColor,.1)}`, borderRadius:T.cornerRadius, padding:compact?'12px 14px':'14px 18px', display:'flex', alignItems:'center', gap:12 }}>
-        <div style={{ fontSize:compact?24:28, flexShrink:0 }}>📲</div>
-        <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?15:17, color:T.inkColor, lineHeight:1.2 }}>
-            Add our icon to your home screen
-          </div>
-          <div style={{ fontFamily:"'Nunito',system-ui", fontSize:compact?12.5:13.5, color:hex(T.inkColor,.6), marginTop:3, lineHeight:1.4 }}>
-            One-tap access to order, straight from our website. Your phone may say “Install” — that just places our icon on your home screen; there’s no app store and nothing large to download. Remove it anytime by deleting the icon.{' '}
-            <a href="/home-screen" style={{ color:T.primaryColor, fontWeight:700, textDecoration:'none', whiteSpace:'nowrap' }}>What’s this? →</a>
+      {/* Small unobtrusive trigger */}
+      <button onClick={() => setOpen(true)} style={{ margin:compact?'6px 14px 0':'8px 24px 0', background:'transparent', border:`1.5px solid ${hex(T.inkColor,.15)}`, borderRadius:999, padding:'6px 12px', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12.5, color:hex(T.inkColor,.7), cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}>
+        📲 Add to home screen
+      </button>
+
+      {/* Details + actions popup */}
+      {open && (
+        <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:0, zIndex:90, background:'rgba(0,0,0,.6)', display:'flex', alignItems:'flex-end', justifyContent:'center', padding:16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width:'min(460px,100%)', background:T.bgColor, borderRadius:20, padding:'22px 22px 26px', boxShadow:'0 -10px 40px rgba(58,36,20,.25)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+              <div style={{ fontSize:26 }}>📲</div>
+              <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:19, color:T.inkColor }}>Add Coffee Oasis to your home screen</div>
+            </div>
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:14, color:hex(T.inkColor,.7), lineHeight:1.5 }}>
+              One-tap access to order, straight from our website. Your phone may say “Install” — that just places our icon on your home screen; no app store, nothing large to download, removable anytime.{' '}
+              <a href="/home-screen" style={{ color:T.primaryColor, fontWeight:700, textDecoration:'none', whiteSpace:'nowrap' }}>What’s this? →</a>
+            </div>
+            <div style={{ display:'flex', gap:10, marginTop:18 }}>
+              <button onClick={dismiss} style={{ flex:'0 0 auto', background:'transparent', border:`1.5px solid ${hex(T.inkColor,.15)}`, borderRadius:T.cornerRadius-6, padding:'12px 16px', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:hex(T.inkColor,.6), cursor:'pointer' }}>
+                No thanks
+              </button>
+              <button onClick={handleAdd} style={{ flex:1, background:T.primaryColor, color:'#fff', border:'none', borderRadius:T.cornerRadius-6, padding:'12px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:15, cursor:'pointer' }}>
+                {isIOS && !canPrompt ? 'Show me how' : 'Add icon'}
+              </button>
+            </div>
           </div>
         </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:6, flexShrink:0 }}>
-          <button onClick={handleAdd} style={{ background:T.primaryColor, color:'#fff', border:'none', borderRadius:999, padding:compact?'8px 14px':'10px 16px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:compact?13:14, cursor:'pointer', whiteSpace:'nowrap' }}>
-            {isIOS && !canPrompt ? 'Show me how' : 'Add icon'}
-          </button>
-          <button onClick={dismiss} style={{ background:'transparent', border:'none', color:hex(T.inkColor,.45), fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:12, cursor:'pointer' }}>
-            No thanks
-          </button>
-        </div>
-      </section>
+      )}
 
       {showIOS && (
-        <div onClick={() => setShowIOS(false)} style={{ position:'fixed', inset:0, zIndex:90, background:'rgba(0,0,0,.6)', display:'flex', alignItems:'flex-end', justifyContent:'center', padding:16 }}>
+        <div onClick={() => setShowIOS(false)} style={{ position:'fixed', inset:0, zIndex:91, background:'rgba(0,0,0,.6)', display:'flex', alignItems:'flex-end', justifyContent:'center', padding:16 }}>
           <div onClick={e => e.stopPropagation()} style={{ width:'min(460px,100%)', background:T.bgColor, borderRadius:20, padding:'22px 22px 26px', boxShadow:'0 -10px 40px rgba(58,36,20,.25)' }}>
             <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:19, color:T.inkColor, marginBottom:12 }}>Add to Home Screen</div>
             <ol style={{ margin:0, paddingLeft:20, fontFamily:"'Nunito',system-ui", fontSize:14.5, color:T.inkColor, lineHeight:1.7 }}>
@@ -416,7 +426,7 @@ function InstallCard({ viewport }: { viewport: Viewport }) {
               <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
               <li>Tap <strong>Add</strong> — an icon appears on your home screen.</li>
             </ol>
-            <button onClick={() => setShowIOS(false)} style={{ marginTop:18, width:'100%', background:T.primaryColor, color:'#fff', border:'none', borderRadius:T.cornerRadius-6, padding:'12px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:15, cursor:'pointer' }}>
+            <button onClick={() => { setShowIOS(false); setOpen(false); }} style={{ marginTop:18, width:'100%', background:T.primaryColor, color:'#fff', border:'none', borderRadius:T.cornerRadius-6, padding:'12px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:15, cursor:'pointer' }}>
               Got it
             </button>
           </div>
