@@ -338,15 +338,16 @@ function InstallCard({ viewport }: { viewport: Viewport }) {
   const compact = viewport === 'mobile';
   const [canPrompt, setCanPrompt] = useState(false); // Android/desktop deferred prompt ready
   const [isIOS,     setIsIOS]     = useState(false);  // iOS: no prompt API, show manual steps
-  const [hidden,    setHidden]    = useState(true);   // start hidden until we know it's relevant
+  const [installed, setInstalled] = useState(false);  // running standalone → nothing to offer
+  const [dismissed, setDismissed] = useState(false);  // pill hidden, but still openable from menu
+  const [open,      setOpen]      = useState(false);
   const [showIOS,   setShowIOS]   = useState(false);
 
   useEffect(() => {
-    // Already installed (running standalone)? never show.
     const standalone = window.matchMedia('(display-mode: standalone)').matches
       || (navigator as unknown as { standalone?: boolean }).standalone === true;
-    if (standalone) return;
-    if (localStorage.getItem('co_install_dismissed') === '1') return;
+    if (standalone) { setInstalled(true); return; }
+    setDismissed(localStorage.getItem('co_install_dismissed') === '1');
 
     const ua = navigator.userAgent || '';
     const ios = /iphone|ipad|ipod/i.test(ua) && !/crios|fxios/i.test(ua); // iOS Safari only
@@ -354,44 +355,51 @@ function InstallCard({ viewport }: { viewport: Viewport }) {
 
     const w = window as unknown as { __coInstallPrompt?: unknown };
     if (w.__coInstallPrompt) setCanPrompt(true);
-    if (ios || w.__coInstallPrompt) setHidden(false);
 
-    const onInstallable = () => { setCanPrompt(true); setHidden(false); };
-    const onInstalled   = () => setHidden(true);
+    const onInstallable = () => setCanPrompt(true);
+    const onInstalled   = () => setInstalled(true);
+    const onOpen        = () => setOpen(true);   // fired by the persistent menu entry
     window.addEventListener('co-installable', onInstallable);
     window.addEventListener('co-installed', onInstalled);
+    window.addEventListener('co-open-install', onOpen);
     return () => {
       window.removeEventListener('co-installable', onInstallable);
       window.removeEventListener('co-installed', onInstalled);
+      window.removeEventListener('co-open-install', onOpen);
     };
   }, []);
 
-  const [open, setOpen] = useState(false);
+  if (installed) return null;
 
-  if (hidden) return null;
+  // Pill shows only when relevant and not dismissed; the popup can still be
+  // opened from the menu entry (co-open-install) even after dismissal.
+  const showPill = !dismissed && (isIOS || canPrompt);
 
   const dismiss = () => {
     try { localStorage.setItem('co_install_dismissed', '1'); } catch { /* ignore */ }
-    setHidden(true);
+    setDismissed(true);
+    setOpen(false);
   };
 
   const handleAdd = async () => {
-    if (isIOS && !canPrompt) { setShowIOS(true); return; }
-    const w = window as unknown as { __coInstallPrompt?: { prompt: () => void; userChoice: Promise<unknown> } | null };
-    const p = w.__coInstallPrompt;
-    if (!p) return;
-    p.prompt();
-    try { await p.userChoice; } catch { /* ignore */ }
-    w.__coInstallPrompt = null;
-    setHidden(true);
+    if (canPrompt) {
+      const w = window as unknown as { __coInstallPrompt?: { prompt: () => void; userChoice: Promise<unknown> } | null };
+      const p = w.__coInstallPrompt;
+      if (p) { p.prompt(); try { await p.userChoice; } catch { /* ignore */ } w.__coInstallPrompt = null; }
+      setInstalled(true);
+      return;
+    }
+    setShowIOS(true); // no prompt API — show manual steps
   };
 
   return (
     <>
       {/* Small unobtrusive trigger */}
-      <button onClick={() => setOpen(true)} style={{ margin:compact?'6px 14px 0':'8px 24px 0', background:'transparent', border:`1.5px solid ${hex(T.inkColor,.15)}`, borderRadius:999, padding:'6px 12px', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12.5, color:hex(T.inkColor,.7), cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}>
-        📲 Add to home screen
-      </button>
+      {showPill && (
+        <button onClick={() => setOpen(true)} style={{ margin:compact?'6px 14px 0':'8px 24px 0', background:'transparent', border:`1.5px solid ${hex(T.inkColor,.15)}`, borderRadius:999, padding:'6px 12px', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12.5, color:hex(T.inkColor,.7), cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}>
+          📲 Add to home screen
+        </button>
+      )}
 
       {/* Details + actions popup */}
       {open && (
@@ -422,9 +430,19 @@ function InstallCard({ viewport }: { viewport: Viewport }) {
           <div onClick={e => e.stopPropagation()} style={{ width:'min(460px,100%)', background:T.bgColor, borderRadius:20, padding:'22px 22px 26px', boxShadow:'0 -10px 40px rgba(58,36,20,.25)' }}>
             <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:19, color:T.inkColor, marginBottom:12 }}>Add to Home Screen</div>
             <ol style={{ margin:0, paddingLeft:20, fontFamily:"'Nunito',system-ui", fontSize:14.5, color:T.inkColor, lineHeight:1.7 }}>
-              <li>Tap the <strong>Share</strong> button (the square with an ↑ arrow) at the bottom of Safari.</li>
-              <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
-              <li>Tap <strong>Add</strong> — an icon appears on your home screen.</li>
+              {isIOS ? (
+                <>
+                  <li>Tap the <strong>Share</strong> button (the square with an ↑ arrow) at the bottom of Safari.</li>
+                  <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
+                  <li>Tap <strong>Add</strong> — an icon appears on your home screen.</li>
+                </>
+              ) : (
+                <>
+                  <li>Open your browser’s menu (the <strong>⋮</strong> or <strong>⋯</strong> button).</li>
+                  <li>Choose <strong>Install app</strong> or <strong>Add to Home Screen</strong>.</li>
+                  <li>Confirm — an icon appears on your home screen.</li>
+                </>
+              )}
             </ol>
             <button onClick={() => { setShowIOS(false); setOpen(false); }} style={{ marginTop:18, width:'100%', background:T.primaryColor, color:'#fff', border:'none', borderRadius:T.cornerRadius-6, padding:'12px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:15, cursor:'pointer' }}>
               Got it
@@ -433,6 +451,25 @@ function InstallCard({ viewport }: { viewport: Viewport }) {
         </div>
       )}
     </>
+  );
+}
+
+// Persistent "Add to home screen" entry for the menu — opens the InstallCard
+// popup via event, so it works even after the inline pill was dismissed.
+function AddToHomeMenuItem({ onNavigate }: { onNavigate: () => void }) {
+  const [installed, setInstalled] = useState(true); // hidden until checked (avoids flash)
+  useEffect(() => {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || (navigator as unknown as { standalone?: boolean }).standalone === true;
+    setInstalled(standalone);
+  }, []);
+  if (installed) return null;
+  return (
+    <button
+      onClick={() => { onNavigate(); window.dispatchEvent(new Event('co-open-install')); }}
+      style={{ width:'100%', marginTop:10, padding:'11px 14px', borderRadius:T.cornerRadius-6, border:`1px solid ${hex(T.inkColor,.1)}`, background:'#fff', color:hex(T.inkColor,.7), fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13.5, cursor:'pointer', display:'flex', alignItems:'center', gap:8 }}>
+      📲 Add Coffee Oasis to your home screen
+    </button>
   );
 }
 
@@ -1785,6 +1822,8 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
             </div>
           </div>
         )}
+
+        <AddToHomeMenuItem onNavigate={onClose} />
       </div>
       <style>{`@keyframes coSheetIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
     </div>
