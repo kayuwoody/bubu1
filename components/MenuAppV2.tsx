@@ -393,7 +393,7 @@ function InstallCard({ viewport }: { viewport: Viewport }) {
             Add our icon to your home screen
           </div>
           <div style={{ fontFamily:"'Nunito',system-ui", fontSize:compact?12.5:13.5, color:hex(T.inkColor,.6), marginTop:3, lineHeight:1.4 }}>
-            One-tap access to order — it just adds a shortcut icon, like a bookmark. Not an app from the store, nothing to download, and you can remove it anytime by deleting the icon.
+            One-tap access to order, straight from our website. Your phone may say “Install” — that just places our icon on your home screen; there’s no app store and nothing large to download. Remove it anytime by deleting the icon.
           </div>
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:6, flexShrink:0 }}>
