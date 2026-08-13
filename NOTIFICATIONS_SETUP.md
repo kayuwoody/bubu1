@@ -112,6 +112,28 @@ install first instead of the button.
 2. In Supabase, set that order's `status` to `ready`.
 3. The push should arrive within a second or two; tapping it opens the order.
 
+## Staff alerts — new online order (merchant-facing)
+
+Separate from the customer "ready" push. When an online order is created (in the
+Fiuu callback), bubu1 pushes to every device registered as **staff**. No trigger
+or webhook — it fires directly from the order-creation code.
+
+Setup:
+1. Add `role` to the subscriptions table (once):
+   ```sql
+   ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'customer';
+   NOTIFY pgrst, 'reload schema';
+   ```
+2. Set a `STAFF_PASSCODE` env var in Vercel (any value you'll type on your phone).
+3. On the phone(s) you want alerts on, go to **`/staff`**, enter the passcode, and
+   tap **Enable order alerts** (grant permission). Enable on as many phones as you like.
+   - iOS: install the site to the home screen first (web push needs it), then open
+     the installed app and enable from `/staff`.
+4. Test with the "Send a test notification" button on `/staff`, or place a real
+   online order — you'll get "🛎️ New online order · …".
+
+Uses the same VAPID keys as the customer push, so no extra keys needed.
+
 ## Security notes
 
 Consistent with the app's existing model (phone-based, no login, service-role,

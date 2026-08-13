@@ -6,6 +6,7 @@ import { generateReceiptHtml } from '@/lib/online/receiptGenerator';
 import { normalisePhone } from '@/lib/normalisePhone';
 import { issueWelcomeVoucher } from '@/lib/online/welcomeVoucher';
 import { awardDailyCheckin } from '@/lib/online/dailyCheckin';
+import { sendToStaff } from '@/lib/online/push';
 import type { CartLine, CheckoutSession } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -149,6 +150,17 @@ export async function POST(req: Request) {
     }))
   );
   if (itemsErr) console.error('[fiuu/callback] order items error:', itemsErr.message);
+
+  // Alert staff that a new online order has come in — non-blocking
+  try {
+    const itemCount = items.reduce((n, l) => n + (l.qty ?? 1), 0);
+    await sendToStaff({
+      title: '🛎️ New online order',
+      body:  `Order ${orderId} · ${itemCount} item${itemCount === 1 ? '' : 's'} · RM ${Number(session.total_amount).toFixed(2)}`,
+      url:   `/order/${orderId}`,
+      tag:   `neworder-${orderId}`,
+    });
+  } catch (e: unknown) { console.error('[staff push] error:', e instanceof Error ? e.message : e); }
 
   // Update payment + session records
   const [{ error: payErr }, { data: sessData, error: sessErr }] = await Promise.all([

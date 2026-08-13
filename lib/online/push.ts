@@ -1,4 +1,5 @@
 import webpush from 'web-push';
+import { supabase } from './supabase';
 
 let configured = false;
 
@@ -38,4 +39,25 @@ export async function sendPush(sub: PushSub, payload: Record<string, unknown>): 
     console.error('[push] send error:', e instanceof Error ? e.message : e);
     return 'error';
   }
+}
+
+// Sends a push to every registered staff device (role = 'staff'), pruning dead
+// subscriptions. Used to alert the merchant when a new online order comes in.
+export async function sendToStaff(payload: Record<string, unknown>): Promise<{ sent: number; pruned: number }> {
+  if (!ensureVapid()) return { sent: 0, pruned: 0 };
+  const { data: subs } = await supabase
+    .from('push_subscriptions')
+    .select('endpoint, p256dh, auth')
+    .eq('role', 'staff');
+  if (!subs?.length) return { sent: 0, pruned: 0 };
+
+  let sent = 0;
+  const dead: string[] = [];
+  for (const s of subs) {
+    const r = await sendPush(s, payload);
+    if (r === 'ok') sent++;
+    else if (r === 'gone') dead.push(s.endpoint);
+  }
+  if (dead.length) await supabase.from('push_subscriptions').delete().in('endpoint', dead);
+  return { sent, pruned: dead.length };
 }

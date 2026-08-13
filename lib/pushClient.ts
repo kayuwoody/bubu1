@@ -66,6 +66,37 @@ export async function subscribeToPush(phone: string): Promise<'ok' | 'denied' | 
   }
 }
 
+// Registers THIS device as a staff subscriber (new-order alerts), gated by a
+// passcode checked server-side. Returns 'ok', 'denied' (permission),
+// 'passcode' (wrong passcode), or 'error'.
+export async function subscribeStaff(passcode: string): Promise<'ok' | 'denied' | 'passcode' | 'error'> {
+  if (!pushSupported()) return 'error';
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return 'denied';
+
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC) as BufferSource,
+      });
+    }
+
+    const res = await fetch('/api/push/subscribe-staff', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passcode, subscription: sub.toJSON() }),
+    });
+    if (res.status === 401) return 'passcode';
+    return res.ok ? 'ok' : 'error';
+  } catch (e) {
+    console.error('[push] staff subscribe failed:', e);
+    return 'error';
+  }
+}
+
 // TEMPORARY — sends a test push to this device only. Remove with the test UI.
 export async function sendTestPush(): Promise<'ok' | 'error'> {
   if (!pushSupported()) return 'error';
