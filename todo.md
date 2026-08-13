@@ -1,5 +1,19 @@
 # TODO
 
+## Push notifications
+
+- [ ] **Remove the temporary test-notification button before launch.**
+  There's a "Send a test notification" button on the order page (shown when
+  notifications are on) plus its endpoint `app/api/push/test/route.ts` and
+  `sendTestPush()` in `lib/pushClient.ts`. All marked `TEMP` in comments.
+  Delete once push is verified in the wild.
+
+- [ ] **Drop order-page polling in favour of push (only once push is proven).**
+  `app/order/[id]/page.tsx` polls `/api/orders/[id]` every 5s. Once order-ready
+  push is confirmed reliable across several real orders, this polling can be
+  removed or slowed way down. Keep BOTH running until then — don't remove
+  polling before push is trusted, or customers could miss "ready".
+
 ## Loyalty
 
 - [ ] **Deactivate the orphaned "Car Wash Customers" loyalty program.**

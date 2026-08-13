@@ -66,6 +66,22 @@ export async function subscribeToPush(phone: string): Promise<'ok' | 'denied' | 
   }
 }
 
+// TEMPORARY — sends a test push to this device only. Remove with the test UI.
+export async function sendTestPush(): Promise<'ok' | 'error'> {
+  if (!pushSupported()) return 'error';
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return 'error';
+    const res = await fetch('/api/push/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: sub.toJSON() }),
+    });
+    return res.ok ? 'ok' : 'error';
+  } catch { return 'error'; }
+}
+
 export async function unsubscribeFromPush(): Promise<boolean> {
   if (!pushSupported()) return false;
   try {

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { normalisePhone } from '@/lib/normalisePhone';
-import { pushSupported, isIOSNotStandalone, isSubscribed, subscribeToPush, unsubscribeFromPush } from '@/lib/pushClient';
+import { pushSupported, isIOSNotStandalone, isSubscribed, subscribeToPush, unsubscribeFromPush, sendTestPush } from '@/lib/pushClient';
 import type { Branch } from '@/lib/types';
 
 const INK = '#3A2414';
@@ -163,6 +163,13 @@ export default function OrderPage() {
     setNotify('loading');
     await unsubscribeFromPush();
     setNotify('idle');
+  };
+  const [testMsg, setTestMsg] = useState('');
+  const handleTest = async () => {
+    setTestMsg('Sending…');
+    const r = await sendTestPush();
+    setTestMsg(r === 'ok' ? 'Sent — check your notifications' : 'Failed to send');
+    setTimeout(() => setTestMsg(''), 4000);
   };
 
   // Tick every 30s so the elapsed-time label stays current
@@ -339,9 +346,15 @@ export default function OrderPage() {
                 </div>
               ) : pushSupported() ? (
                 notify === 'on' ? (
-                  <button onClick={handleNotifyOff} style={{ width: '100%', padding: '11px', borderRadius: R - 6, background: 'transparent', color: hex(INK, .6), border: `1.5px solid ${hex(INK, .15)}`, fontFamily: "'Baloo 2', system-ui", fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>
-                    🔔 Notifications on — tap to turn off
-                  </button>
+                  <>
+                    <button onClick={handleNotifyOff} style={{ width: '100%', padding: '11px', borderRadius: R - 6, background: 'transparent', color: hex(INK, .6), border: `1.5px solid ${hex(INK, .15)}`, fontFamily: "'Baloo 2', system-ui", fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>
+                      🔔 Notifications on — tap to turn off
+                    </button>
+                    {/* TEMP test button — remove before launch */}
+                    <button onClick={handleTest} style={{ width: '100%', marginTop: 6, padding: '9px', borderRadius: R - 6, background: 'transparent', color: hex(INK, .45), border: `1px dashed ${hex(INK, .2)}`, fontFamily: "'Nunito', system-ui", fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>
+                      {testMsg || 'Send a test notification'}
+                    </button>
+                  </>
                 ) : notify === 'denied' ? (
                   <div style={{ fontSize: 12.5, color: hex(INK, .5), textAlign: 'center', lineHeight: 1.4 }}>
                     Notifications are blocked in your browser settings. Enable them there to get a ready alert.
