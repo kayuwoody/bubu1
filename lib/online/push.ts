@@ -8,8 +8,10 @@ export function ensureVapid(): boolean {
   if (configured) return true;
   const publicKey  = process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject    = process.env.VAPID_SUBJECT || 'mailto:hello@coffee-oasis.com';
+  let subject      = process.env.VAPID_SUBJECT || 'mailto:hello@coffee-oasis.com';
   if (!publicKey || !privateKey) return false;
+  // web-push requires a mailto: or https: URL — tolerate a bare email in env
+  if (!/^(mailto:|https?:)/i.test(subject)) subject = `mailto:${subject}`;
   webpush.setVapidDetails(subject, publicKey, privateKey);
   configured = true;
   return true;
