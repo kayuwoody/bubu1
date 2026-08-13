@@ -2,10 +2,11 @@
 
 ## Push notifications
 
-- [ ] **Remove the temporary test-notification button before launch.**
-  There's a "Send a test notification" button on the order page (shown when
-  notifications are on) plus its endpoint `app/api/push/test/route.ts` and
-  `sendTestPush()` in `lib/pushClient.ts`. All marked `TEMP` in comments.
+- [ ] **Remove the temporary test-notification UI before launch.** All marked `TEMP`:
+  - `NotifyTestButton` in `components/MenuAppV2.tsx` (shown only with `?ntest=1`)
+    and its render line.
+  - "Send a test notification" button on the order page (`app/order/[id]/page.tsx`).
+  - Endpoint `app/api/push/test/route.ts` and `sendTestPush()` in `lib/pushClient.ts`.
   Delete once push is verified in the wild.
 
 - [ ] **Drop order-page polling in favour of push (only once push is proven).**

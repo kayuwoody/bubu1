@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import { normalisePhone, isValidMalaysianPhone } from '@/lib/normalisePhone';
+import { pushSupported, isIOSNotStandalone, isSubscribed, subscribeToPush, sendTestPush } from '@/lib/pushClient';
 import type { Branch, CartLine, LoyaltyConfig, LoyaltyMember, LoyaltyTransaction, Voucher, Product, SelectionConfig, Viewport, XorGroup, OptionalItem } from '@/lib/types';
 
 interface Category { id: string; label: string }
@@ -421,6 +422,38 @@ function InstallCard({ viewport }: { viewport: Viewport }) {
         </div>
       )}
     </>
+  );
+}
+
+// ── TEMP push test (only shown with ?ntest=1) — remove before launch ────────
+function NotifyTestButton({ phone, viewport }: { phone: string | null; viewport: Viewport }) {
+  const compact = viewport === 'mobile';
+  const [msg, setMsg]   = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const run = async () => {
+    setBusy(true); setMsg('');
+    if (isIOSNotStandalone()) { setMsg('On iPhone: add to home screen first, then open the installed app'); setBusy(false); return; }
+    if (!pushSupported()) { setMsg('Push not supported on this browser'); setBusy(false); return; }
+    if (!(await isSubscribed())) {
+      const r = await subscribeToPush(phone ?? '');
+      if (r === 'denied') { setMsg('Permission blocked — allow notifications in browser settings'); setBusy(false); return; }
+      if (r !== 'ok') { setMsg('Could not enable (check VAPID keys are set)'); setBusy(false); return; }
+    }
+    const t = await sendTestPush();
+    setMsg(t === 'ok' ? '✓ Sent — check your notifications' : 'Send failed (check server logs / VAPID keys)');
+    setBusy(false);
+    setTimeout(() => setMsg(''), 6000);
+  };
+
+  return (
+    <section style={{ margin:compact?'8px 14px 6px':'12px 24px 10px', background:'#FFF5E6', border:`1.5px dashed ${T.primaryColor}`, borderRadius:T.cornerRadius, padding:compact?'10px 12px':'12px 16px' }}>
+      <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:13, color:T.inkColor, marginBottom:6 }}>🔔 Notification test (internal)</div>
+      <button onClick={run} disabled={busy} style={{ background:T.primaryColor, color:'#fff', border:'none', borderRadius:999, padding:'9px 16px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:13, cursor:'pointer' }}>
+        {busy ? 'Working…' : 'Enable + send test push'}
+      </button>
+      {msg && <div style={{ marginTop:8, fontFamily:"'Nunito',system-ui", fontSize:12.5, color:hex(T.inkColor,.65) }}>{msg}</div>}
+    </section>
   );
 }
 
@@ -1945,6 +1978,8 @@ export default function MenuAppV2() {
       />
 
       <InstallCard viewport={viewport} />
+
+      {searchParams.get('ntest') === '1' && <NotifyTestButton phone={savedPhone} viewport={viewport} />}
 
       {compact && <PickupBar pickup={pickup} onToggle={() => setPickup(pickup === 'curbside' ? 'counter' : 'curbside')} hasPromos={promos.length > 0} onPromoClick={() => setPromoOpen(true)}/>}
 
