@@ -22,7 +22,9 @@ self.addEventListener('push', event => {
 // Focus an existing tab (or open one) when the notification is tapped.
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || '/';
+  // Same-origin paths only — never navigate off-site from a notification.
+  let url = (event.notification.data && event.notification.data.url) || '/';
+  if (typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//')) url = '/';
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
       for (const c of clients) {

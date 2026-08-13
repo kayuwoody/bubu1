@@ -48,21 +48,54 @@ ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS ready_notified_at timestamptz
 NOTIFY pgrst, 'reload schema';
 ```
 
-## 4. Supabase Database Webhook
+## 4. Fire the webhook — SQL trigger (recommended)
 
-Dashboard → **Database → Webhooks → Create a new hook**:
+Supabase "Database Webhooks" are just triggers under the hood and the dashboard
+location moves between versions (look under **Database → Webhooks** or
+**Integrations → Webhooks** if you prefer clicking). The SQL below is the same
+mechanism, version-proof, and pre-filters to the ready transition so the endpoint
+is only ever called for real ready events. Run it in the SQL editor — replace the
+secret and URL:
 
-- **Table:** `online_orders`
-- **Events:** `UPDATE` only
-- **Type:** HTTP Request → `POST`
-- **URL:** `https://coffee-oasis.com/api/push/notify-ready`
-- **HTTP Headers:** add `x-webhook-secret` = the same value as `PUSH_WEBHOOK_SECRET`
+```sql
+create extension if not exists pg_net;
 
-Supabase sends `{ type, record, old_record, ... }`. The handler:
-- **ignores** everything except the `status` transition **into** `ready`
-  (accept/reject/collect and any later touch are skipped),
-- **atomically** claims `ready_notified_at` so a customer never gets two pushes,
-- looks up subscriptions by `customer_phone` and sends, pruning dead ones.
+create or replace function notify_order_ready()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''          -- hardening: no search_path hijack
+as $$
+begin
+  if new.status = 'ready' and (old.status is distinct from 'ready') then
+    perform net.http_post(
+      url := 'https://coffee-oasis.com/api/push/notify-ready',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'x-webhook-secret', 'YOUR_PUSH_WEBHOOK_SECRET'   -- match Vercel env exactly
+      ),
+      body := jsonb_build_object(
+        'type', 'UPDATE',
+        'record', row_to_json(new),
+        'old_record', row_to_json(old)
+      )
+    );
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_notify_order_ready on online_orders;
+create trigger trg_notify_order_ready
+  after update on online_orders
+  for each row
+  execute function notify_order_ready();
+```
+
+`pg_net` posts asynchronously, so it never slows the POS's status update. The
+`/api/push/notify-ready` handler then independently: verifies the secret, re-checks
+the ready transition, **atomically** claims `ready_notified_at` (no double push),
+looks up subscriptions by `customer_phone`, sends, and prunes dead ones.
 
 ## 5. Customer opt-in
 
@@ -78,3 +111,28 @@ install first instead of the button.
 1. Opt in on an order page (grant permission).
 2. In Supabase, set that order's `status` to `ready`.
 3. The push should arrive within a second or two; tapping it opens the order.
+
+## Security notes
+
+Consistent with the app's existing model (phone-based, no login, service-role,
+RLS-deny). Specifics for push:
+
+- **`/api/push/notify-ready`** is protected by the `x-webhook-secret` shared
+  secret. Keep it strong and secret (Vercel env + the trigger body). A leak would
+  let someone POST fake "ready" events → spurious pushes to opted-in customers.
+  Idempotency (`ready_notified_at`) limits repeats. Rotate the secret if exposed.
+- **`/api/push/subscribe` trusts the phone** (no OTP), like the rest of the app.
+  Worst case: someone associates *their own* device with *another* phone and
+  receives that person's "order ready" push (leaks an order id). Low impact; an
+  OTP step would close it if ever needed — same gap as order lookup generally.
+- **`push_subscriptions` has RLS enabled with no policies** (service-role only),
+  matching the other tables. The stored keys only matter combined with the secret
+  VAPID private key, which is server-only.
+- **Only our server can send pushes** — the VAPID *private* key never leaves the
+  server. Payloads (title/body/url) are server-authored, and the service worker
+  refuses to navigate anywhere except same-origin paths.
+- **`/api/push/test`** is an open TEMP endpoint but can only push to a
+  subscription the caller already possesses (their own device). Remove before
+  launch (tracked in `todo.md`).
+- **Dependency:** `web-push` adds no flagged vulnerabilities; the `npm audit`
+  `ws` findings pre-date this and come from `@supabase/*`, not push.
