@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { normalisePhone } from '@/lib/normalisePhone';
+import { pushSupported, isIOSNotStandalone, isSubscribed, subscribeToPush, unsubscribeFromPush } from '@/lib/pushClient';
 import type { Branch } from '@/lib/types';
 
 const INK = '#3A2414';
@@ -145,6 +146,24 @@ export default function OrderPage() {
   const [arriving, setArriving] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [nowTick,  setNowTick]  = useState(Date.now());
+  const [notify, setNotify] = useState<'idle' | 'on' | 'loading' | 'denied'>('idle');
+
+  // Reflect existing push subscription state on load
+  useEffect(() => {
+    if (!pushSupported()) return;
+    isSubscribed().then(sub => { if (sub) setNotify('on'); });
+  }, []);
+
+  const handleNotifyOn = async () => {
+    setNotify('loading');
+    const r = await subscribeToPush(phone);
+    setNotify(r === 'ok' ? 'on' : r === 'denied' ? 'denied' : 'idle');
+  };
+  const handleNotifyOff = async () => {
+    setNotify('loading');
+    await unsubscribeFromPush();
+    setNotify('idle');
+  };
 
   // Tick every 30s so the elapsed-time label stays current
   useEffect(() => {
@@ -309,6 +328,31 @@ export default function OrderPage() {
                 <>📍 I've arrived — bring it out</>
               )}
             </button>
+          )}
+
+          {/* Notify-when-ready opt-in */}
+          {isActive && order.status !== 'ready' && (
+            <div style={{ marginTop: isCurbside ? 10 : 0 }}>
+              {isIOSNotStandalone() ? (
+                <div style={{ fontSize: 12.5, color: hex(INK, .5), textAlign: 'center', lineHeight: 1.4 }}>
+                  💡 Add this page to your home screen to get a notification when your order is ready.
+                </div>
+              ) : pushSupported() ? (
+                notify === 'on' ? (
+                  <button onClick={handleNotifyOff} style={{ width: '100%', padding: '11px', borderRadius: R - 6, background: 'transparent', color: hex(INK, .6), border: `1.5px solid ${hex(INK, .15)}`, fontFamily: "'Baloo 2', system-ui", fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>
+                    🔔 Notifications on — tap to turn off
+                  </button>
+                ) : notify === 'denied' ? (
+                  <div style={{ fontSize: 12.5, color: hex(INK, .5), textAlign: 'center', lineHeight: 1.4 }}>
+                    Notifications are blocked in your browser settings. Enable them there to get a ready alert.
+                  </div>
+                ) : (
+                  <button onClick={handleNotifyOn} disabled={notify === 'loading'} style={{ width: '100%', padding: '11px', borderRadius: R - 6, background: '#fff', color: PRI, border: `1.5px solid ${PRI}`, fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 13.5, cursor: 'pointer' }}>
+                    {notify === 'loading' ? 'Enabling…' : "🔔 Notify me when it's ready"}
+                  </button>
+                )
+              ) : null}
+            </div>
           )}
         </div>
 
