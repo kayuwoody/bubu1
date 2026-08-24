@@ -106,6 +106,7 @@ export interface OptionalItem {
   id: string;
   name: string;
   basePrice: number;
+  pwpPrice?: number | null;
   priceAdjustment: number;
   isCoffee: boolean;
   parentProductId?: string;
@@ -161,6 +162,9 @@ export interface CheckoutSession {
   outlet_id: string;
   order_id: string | null;
   voucher_code: string | null;
+  voucher_discount: number | null;
+  code: string | null;
+  pass_discount: number | null;
   status: 'pending' | 'paid' | 'failed';
   created_at: string;
 }

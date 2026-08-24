@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/online/supabase';
 import { normalisePhone, isValidMalaysianPhone } from '@/lib/normalisePhone';
+import { issueWelcomeVoucher } from '@/lib/online/welcomeVoucher';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,6 +80,8 @@ export async function POST(req: Request) {
       console.error('[scanpass/stamp] member upsert error:', memberErr?.message);
       return NextResponse.json({ error: 'Could not find account. Please try again.' }, { status: 500 });
     }
+
+    await issueWelcomeVoucher(member.id);
 
     // Upsert enrollment
     const { data: mp, error: mpErr } = await supabase

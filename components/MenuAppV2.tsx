@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import { normalisePhone, isValidMalaysianPhone } from '@/lib/normalisePhone';
-import type { Branch, CartLine, LoyaltyConfig, LoyaltyMember, LoyaltyTransaction, Voucher, Product, SelectionConfig, Viewport, XorGroup } from '@/lib/types';
+import { pushSupported, isIOSNotStandalone, isSubscribed, subscribeToPush, sendTestPush } from '@/lib/pushClient';
+import type { Branch, CartLine, LoyaltyConfig, LoyaltyMember, LoyaltyTransaction, Voucher, Product, SelectionConfig, Viewport, XorGroup, OptionalItem } from '@/lib/types';
 
 interface Category { id: string; label: string }
 
@@ -332,6 +333,178 @@ function GreetingBand({ viewport, isReturning, hasReorder, onReorder, lastSummar
   );
 }
 
+// ── Add-to-home-screen card (opt-in PWA install) ───────────────────────────
+function InstallCard({ viewport }: { viewport: Viewport }) {
+  const compact = viewport === 'mobile';
+  const [canPrompt, setCanPrompt] = useState(false); // Android/desktop deferred prompt ready
+  const [isIOS,     setIsIOS]     = useState(false);  // iOS: no prompt API, show manual steps
+  const [installed, setInstalled] = useState(false);  // running standalone → nothing to offer
+  const [dismissed, setDismissed] = useState(false);  // pill hidden, but still openable from menu
+  const [open,      setOpen]      = useState(false);
+  const [showIOS,   setShowIOS]   = useState(false);
+
+  useEffect(() => {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || (navigator as unknown as { standalone?: boolean }).standalone === true;
+    if (standalone) { setInstalled(true); return; }
+    setDismissed(localStorage.getItem('co_install_dismissed') === '1');
+
+    const ua = navigator.userAgent || '';
+    const ios = /iphone|ipad|ipod/i.test(ua) && !/crios|fxios/i.test(ua); // iOS Safari only
+    setIsIOS(ios);
+
+    const w = window as unknown as { __coInstallPrompt?: unknown };
+    if (w.__coInstallPrompt) setCanPrompt(true);
+
+    const onInstallable = () => setCanPrompt(true);
+    const onInstalled   = () => setInstalled(true);
+    const onOpen        = () => setOpen(true);   // fired by the persistent menu entry
+    window.addEventListener('co-installable', onInstallable);
+    window.addEventListener('co-installed', onInstalled);
+    window.addEventListener('co-open-install', onOpen);
+    return () => {
+      window.removeEventListener('co-installable', onInstallable);
+      window.removeEventListener('co-installed', onInstalled);
+      window.removeEventListener('co-open-install', onOpen);
+    };
+  }, []);
+
+  if (installed) return null;
+
+  // Pill shows only when relevant and not dismissed; the popup can still be
+  // opened from the menu entry (co-open-install) even after dismissal.
+  const showPill = !dismissed && (isIOS || canPrompt);
+
+  const dismiss = () => {
+    try { localStorage.setItem('co_install_dismissed', '1'); } catch { /* ignore */ }
+    setDismissed(true);
+    setOpen(false);
+  };
+
+  const handleAdd = async () => {
+    if (canPrompt) {
+      const w = window as unknown as { __coInstallPrompt?: { prompt: () => void; userChoice: Promise<unknown> } | null };
+      const p = w.__coInstallPrompt;
+      if (p) { p.prompt(); try { await p.userChoice; } catch { /* ignore */ } w.__coInstallPrompt = null; }
+      setInstalled(true);
+      return;
+    }
+    setShowIOS(true); // no prompt API — show manual steps
+  };
+
+  return (
+    <>
+      {/* Small unobtrusive trigger */}
+      {showPill && (
+        <button onClick={() => setOpen(true)} style={{ margin:compact?'6px 14px 0':'8px 24px 0', background:'transparent', border:`1.5px solid ${hex(T.inkColor,.15)}`, borderRadius:999, padding:'6px 12px', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:12.5, color:hex(T.inkColor,.7), cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}>
+          📲 Add to home screen
+        </button>
+      )}
+
+      {/* Details + actions popup */}
+      {open && (
+        <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:0, zIndex:90, background:'rgba(0,0,0,.6)', display:'flex', alignItems:'flex-end', justifyContent:'center', padding:16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width:'min(460px,100%)', background:T.bgColor, borderRadius:20, padding:'22px 22px 26px', boxShadow:'0 -10px 40px rgba(58,36,20,.25)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+              <div style={{ fontSize:26 }}>📲</div>
+              <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:19, color:T.inkColor }}>Add Coffee Oasis to your home screen</div>
+            </div>
+            <div style={{ fontFamily:"'Nunito',system-ui", fontSize:14, color:hex(T.inkColor,.7), lineHeight:1.5 }}>
+              One-tap access to order, straight from our website. Your phone may say “Install” — that just places our icon on your home screen; no app store, nothing large to download, removable anytime.{' '}
+              <a href="/home-screen" style={{ color:T.primaryColor, fontWeight:700, textDecoration:'none', whiteSpace:'nowrap' }}>What’s this? →</a>
+            </div>
+            <div style={{ display:'flex', gap:10, marginTop:18 }}>
+              <button onClick={dismiss} style={{ flex:'0 0 auto', background:'transparent', border:`1.5px solid ${hex(T.inkColor,.15)}`, borderRadius:T.cornerRadius-6, padding:'12px 16px', fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:14, color:hex(T.inkColor,.6), cursor:'pointer' }}>
+                No thanks
+              </button>
+              <button onClick={handleAdd} style={{ flex:1, background:T.primaryColor, color:'#fff', border:'none', borderRadius:T.cornerRadius-6, padding:'12px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:15, cursor:'pointer' }}>
+                {isIOS && !canPrompt ? 'Show me how' : 'Add icon'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showIOS && (
+        <div onClick={() => setShowIOS(false)} style={{ position:'fixed', inset:0, zIndex:91, background:'rgba(0,0,0,.6)', display:'flex', alignItems:'flex-end', justifyContent:'center', padding:16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width:'min(460px,100%)', background:T.bgColor, borderRadius:20, padding:'22px 22px 26px', boxShadow:'0 -10px 40px rgba(58,36,20,.25)' }}>
+            <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:19, color:T.inkColor, marginBottom:12 }}>Add to Home Screen</div>
+            <ol style={{ margin:0, paddingLeft:20, fontFamily:"'Nunito',system-ui", fontSize:14.5, color:T.inkColor, lineHeight:1.7 }}>
+              {isIOS ? (
+                <>
+                  <li>Tap the <strong>Share</strong> button (the square with an ↑ arrow) at the bottom of Safari.</li>
+                  <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
+                  <li>Tap <strong>Add</strong> — an icon appears on your home screen.</li>
+                </>
+              ) : (
+                <>
+                  <li>Open your browser’s menu (the <strong>⋮</strong> or <strong>⋯</strong> button).</li>
+                  <li>Choose <strong>Install app</strong> or <strong>Add to Home Screen</strong>.</li>
+                  <li>Confirm — an icon appears on your home screen.</li>
+                </>
+              )}
+            </ol>
+            <button onClick={() => { setShowIOS(false); setOpen(false); }} style={{ marginTop:18, width:'100%', background:T.primaryColor, color:'#fff', border:'none', borderRadius:T.cornerRadius-6, padding:'12px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:15, cursor:'pointer' }}>
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// Persistent "Add to home screen" entry for the menu — opens the InstallCard
+// popup via event, so it works even after the inline pill was dismissed.
+function AddToHomeMenuItem({ onNavigate }: { onNavigate: () => void }) {
+  const [installed, setInstalled] = useState(true); // hidden until checked (avoids flash)
+  useEffect(() => {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || (navigator as unknown as { standalone?: boolean }).standalone === true;
+    setInstalled(standalone);
+  }, []);
+  if (installed) return null;
+  return (
+    <button
+      onClick={() => { onNavigate(); window.dispatchEvent(new Event('co-open-install')); }}
+      style={{ width:'100%', marginTop:10, padding:'11px 14px', borderRadius:T.cornerRadius-6, border:`1px solid ${hex(T.inkColor,.1)}`, background:'#fff', color:hex(T.inkColor,.7), fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13.5, cursor:'pointer', display:'flex', alignItems:'center', gap:8 }}>
+      📲 Add Coffee Oasis to your home screen
+    </button>
+  );
+}
+
+// ── TEMP push test (only shown with ?ntest=1) — remove before launch ────────
+function NotifyTestButton({ phone, viewport }: { phone: string | null; viewport: Viewport }) {
+  const compact = viewport === 'mobile';
+  const [msg, setMsg]   = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const run = async () => {
+    setBusy(true); setMsg('');
+    if (isIOSNotStandalone()) { setMsg('On iPhone: add to home screen first, then open the installed app'); setBusy(false); return; }
+    if (!pushSupported()) { setMsg('Push not supported on this browser'); setBusy(false); return; }
+    if (!(await isSubscribed())) {
+      const r = await subscribeToPush(phone ?? '');
+      if (r === 'denied') { setMsg('Permission blocked — allow notifications in browser settings'); setBusy(false); return; }
+      if (r !== 'ok') { setMsg('Could not enable (check VAPID keys are set)'); setBusy(false); return; }
+    }
+    const t = await sendTestPush();
+    setMsg(t === 'ok' ? '✓ Sent — check your notifications' : 'Send failed (check server logs / VAPID keys)');
+    setBusy(false);
+    setTimeout(() => setMsg(''), 6000);
+  };
+
+  return (
+    <section style={{ margin:compact?'8px 14px 6px':'12px 24px 10px', background:'#FFF5E6', border:`1.5px dashed ${T.primaryColor}`, borderRadius:T.cornerRadius, padding:compact?'10px 12px':'12px 16px' }}>
+      <div style={{ fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:13, color:T.inkColor, marginBottom:6 }}>🔔 Notification test (internal)</div>
+      <button onClick={run} disabled={busy} style={{ background:T.primaryColor, color:'#fff', border:'none', borderRadius:999, padding:'9px 16px', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:13, cursor:'pointer' }}>
+        {busy ? 'Working…' : 'Enable + send test push'}
+      </button>
+      {msg && <div style={{ marginTop:8, fontFamily:"'Nunito',system-ui", fontSize:12.5, color:hex(T.inkColor,.65) }}>{msg}</div>}
+    </section>
+  );
+}
+
 // ── Category Chips ─────────────────────────────────────────────────────────
 function CatBar({ cats, active, setActive, viewport }: { cats: Category[]; active: string; setActive: (id: string) => void; viewport: Viewport }) {
   const compact = viewport === 'mobile';
@@ -602,12 +775,32 @@ function pillStyle(on: boolean): React.CSSProperties {
   return { padding:'8px 14px', borderRadius:999, border:on?`2px solid ${T.inkColor}`:`1.5px solid ${hex(T.inkColor,.12)}`, background:on?T.inkColor:'#fff', color:on?'#fff':T.inkColor, fontFamily:"'Baloo 2',system-ui", fontWeight:700, fontSize:13, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5 };
 }
 
-function ComboSection({ cfg, selections, selectedOptionals, onSelect, onToggleOptional }: {
-  cfg: SelectionConfig; selections: Record<string,string>; selectedOptionals: Set<string>;
+// Small tappable thumbnail shown inside an option pill; tapping it opens the
+// zoom lightbox without triggering the pill's select (stopPropagation).
+function OptionThumb({ url, name, onZoom }: { url: string | null; name: string; onZoom: (url: string, name: string) => void }) {
+  if (!url) return null;
+  return (
+    <img
+      src={url}
+      alt=""
+      onClick={e => { e.stopPropagation(); onZoom(url, name); }}
+      style={{ width:26, height:26, borderRadius:6, objectFit:'cover', marginRight:2, cursor:'zoom-in', border:`1px solid ${hex(T.inkColor,.12)}`, flexShrink:0 }}
+    />
+  );
+}
+
+function ComboSection({ cfg, hasOverride, selections, selectedOptionals, onSelect, onToggleOptional, products, onZoom }: {
+  cfg: SelectionConfig; hasOverride: boolean; selections: Record<string,string>; selectedOptionals: Set<string>;
   onSelect: (key: string, id: string) => void; onToggleOptional: (id: string) => void;
+  products: Product[]; onZoom: (url: string, name: string) => void;
 }) {
   const topLevel = cfg.xorGroups.filter((g: XorGroup) => !g.parentProductId);
   const nested   = cfg.xorGroups.filter((g: XorGroup) => !!g.parentProductId);
+  const imgOf = (id: string) => products.find(p => p.id === id)?.image_url ?? null;
+  // Price shown on an add-on pill must match what's charged: priceAdjustment
+  // for override-priced combos, pwpPrice ?? basePrice otherwise
+  const optCharge = (o: { priceAdjustment: number; pwpPrice?: number | null; basePrice: number }) =>
+    hasOverride ? o.priceAdjustment : (o.pwpPrice ?? o.basePrice);
   return (
     <>
       {topLevel.map(group => {
@@ -624,6 +817,7 @@ function ComboSection({ cfg, selections, selectedOptionals, onSelect, onToggleOp
                 const priceLabel = item.priceAdjustment > 0 ? `+RM${item.priceAdjustment.toFixed(2)}` : '';
                 return (
                   <button key={item.id} onClick={() => onSelect(group.uniqueKey, item.id)} style={pillStyle(on)}>
+                    <OptionThumb url={imgOf(item.id)} name={item.name} onZoom={onZoom} />
                     {item.name}{!on && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>{priceLabel}</span>}
                   </button>
                 );
@@ -635,7 +829,7 @@ function ComboSection({ cfg, selections, selectedOptionals, onSelect, onToggleOp
                 <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                   {ng.items.map(ni => {
                     const non = selections[ng.uniqueKey] === ni.id;
-                    return <button key={ni.id} onClick={() => onSelect(ng.uniqueKey, ni.id)} style={pillStyle(non)}>{ni.name}{ni.priceAdjustment > 0 && !non && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>+RM{ni.priceAdjustment.toFixed(2)}</span>}</button>;
+                    return <button key={ni.id} onClick={() => onSelect(ng.uniqueKey, ni.id)} style={pillStyle(non)}><OptionThumb url={imgOf(ni.id)} name={ni.name} onZoom={onZoom} />{ni.name}{ni.priceAdjustment > 0 && !non && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>+RM{ni.priceAdjustment.toFixed(2)}</span>}</button>;
                   })}
                 </div>
               </div>
@@ -649,7 +843,8 @@ function ComboSection({ cfg, selections, selectedOptionals, onSelect, onToggleOp
           <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
             {cfg.optionalItems.map(opt => {
               const checked = selectedOptionals.has(opt.id);
-              return <button key={opt.id} onClick={() => onToggleOptional(opt.id)} style={{ ...pillStyle(checked), outline:checked?`2px solid ${T.primaryColor}`:'none' }}>{opt.name}{!checked && opt.priceAdjustment > 0 && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>+RM{opt.priceAdjustment.toFixed(2)}</span>}</button>;
+              const charge  = optCharge(opt);
+              return <button key={opt.id} onClick={() => onToggleOptional(opt.id)} style={{ ...pillStyle(checked), outline:checked?`2px solid ${T.primaryColor}`:'none' }}><OptionThumb url={imgOf(opt.id)} name={opt.name} onZoom={onZoom} />{opt.name}{!checked && charge > 0 && <span style={{ opacity:.6, fontWeight:600, fontSize:11 }}>+RM{charge.toFixed(2)}</span>}</button>;
             })}
           </div>
         </div>
@@ -658,9 +853,10 @@ function ComboSection({ cfg, selections, selectedOptionals, onSelect, onToggleOp
   );
 }
 
-function CustomizeSheet({ product, open, onClose, onConfirm }: {
+function CustomizeSheet({ product, open, onClose, onConfirm, products }: {
   product: Product | null; open: boolean; onClose: () => void;
   onConfirm: (mods: Record<string,unknown>, qty: number, unitPrice: number) => void;
+  products: Product[];
 }) {
   const drinkDefaults: DrinkSel = useMemo(() => ({ sugar: 'zero', milk: 'full', notes: '' }), []);
 
@@ -685,10 +881,46 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   const [selectedOptionals, setSelOpts]   = useState<Set<string>>(new Set());
   const [notes, setNotes]                 = useState('');
   const [qty, setQty]                     = useState(1);
+  const [zoom, setZoom]                   = useState<{ url: string; name: string } | null>(null);
+
+  // Close the image zoom with the Android/browser back button instead of
+  // exiting the app (installed PWA has no browser chrome)
+  useEffect(() => {
+    if (!zoom) return;
+    const onPop = () => setZoom(null);
+    history.pushState({ zoom: true }, '');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [zoom]);
 
   const cfg   = product?.selection_config ?? null;
   const drink = !!product && isDrink(product.category) && !cfg;
   const nestedGroups = useMemo(() => cfg?.xorGroups.filter(g => !!g.parentProductId) ?? [], [cfg]);
+
+  // Branch scoping: XOR options that are NOT the current selection are
+  // inactive, and everything parented to an inactive product (nested groups,
+  // add-ons) is inactive too. Prevents a combo with N drink options from
+  // showing/counting N copies of each per-drink add-on.
+  const inactiveIds = useMemo(() => {
+    const inactive = new Set<string>();
+    if (!cfg) return inactive;
+    for (const g of cfg.xorGroups) {
+      const selId = selections[g.uniqueKey];
+      for (const it of g.items) if (it.id !== selId) inactive.add(it.id);
+    }
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const g of cfg.xorGroups) {
+        if (g.parentProductId && inactive.has(g.parentProductId)) {
+          for (const it of g.items) if (!inactive.has(it.id)) { inactive.add(it.id); changed = true; }
+        }
+      }
+    }
+    return inactive;
+  }, [cfg, selections]);
+  const groupActive    = (g: XorGroup)     => !g.parentProductId || !inactiveIds.has(g.parentProductId);
+  const optionalActive = (o: OptionalItem) => !o.parentProductId || !inactiveIds.has(o.parentProductId);
 
   const comboHasCoffee = useMemo(() => {
     if (!cfg) return false;
@@ -773,10 +1005,18 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
   const unitPrice = (() => {
     if (drink) return product.base_price;
     if (!cfg) return product.base_price;
+    const activeGroups = cfg.xorGroups.filter(groupActive);
+    const activeOpts   = cfg.optionalItems.filter(o => optionalActive(o) && selectedOptionals.has(o.id));
+    if (product.combo_price_override != null) {
+      let adj = 0;
+      for (const g of activeGroups) { const item = g.items.find(i => i.id === selections[g.uniqueKey]); if (item) adj += item.priceAdjustment; }
+      for (const opt of activeOpts) adj += opt.priceAdjustment;
+      return product.combo_price_override + adj;
+    }
     let adj = 0;
-    for (const g of cfg.xorGroups) { const item = g.items.find(i => i.id === selections[g.uniqueKey]); if (item) adj += item.priceAdjustment; }
-    for (const opt of cfg.optionalItems) { if (selectedOptionals.has(opt.id)) adj += opt.priceAdjustment; }
-    return (product.combo_price_override ?? product.base_price) + adj;
+    for (const g of activeGroups) { const item = g.items.find(i => i.id === selections[g.uniqueKey]); if (item) adj += item.basePrice; }
+    for (const opt of activeOpts) adj += opt.pwpPrice ?? opt.basePrice;
+    return product.base_price + adj;
   })();
 
   const handleConfirm = () => {
@@ -784,17 +1024,19 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
     if (drink) {
       mods = {
         ...(product.category.toLowerCase() === 'coffee' ? { sugar: DRINK_MODS.sugar.options.find(o => o.id === drinkSel.sugar)?.label } : {}),
-        ...(drinkSel.milk ? { milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label } : {}),
+        // TEMP: milk disabled pending add-ons
+        // ...(drinkSel.milk ? { milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label } : {}),
         ...(drinkSel.notes ? { notes: drinkSel.notes } : {}),
       };
     } else if (cfg) {
       const cs: Record<string,{ id: string; name: string }> = {};
-      for (const g of cfg.xorGroups) { const sid = selections[g.uniqueKey]; if (sid) { const item = g.items.find(i => i.id === sid); if (item) cs[g.uniqueKey] = { id: sid, name: item.name }; } }
-      const so = cfg.optionalItems.filter(o => selectedOptionals.has(o.id)).map(o => ({ id: o.id, name: o.name }));
+      for (const g of cfg.xorGroups.filter(groupActive)) { const sid = selections[g.uniqueKey]; if (sid) { const item = g.items.find(i => i.id === sid); if (item) cs[g.uniqueKey] = { id: sid, name: item.name }; } }
+      const so = cfg.optionalItems.filter(o => optionalActive(o) && selectedOptionals.has(o.id)).map(o => ({ id: o.id, name: o.name }));
       mods = {
         combo_selections: cs,
         ...(drinkSel.sugar ? { sugar: DRINK_MODS.sugar.options.find(o => o.id === drinkSel.sugar)?.label } : {}),
-        ...(drinkSel.milk ? { milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label } : {}),
+        // TEMP: milk disabled pending add-ons
+        // ...(drinkSel.milk ? { milk: DRINK_MODS.milk.options.find(o => o.id === drinkSel.milk)?.label } : {}),
         ...(so.length > 0 ? { selected_optionals: so } : {}),
         ...(notes ? { notes } : {}),
       };
@@ -831,7 +1073,10 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
             const isCoffee = isDrink(product.category)
               ? product.category.toLowerCase() === 'coffee'
               : comboHasCoffee;
-            const showMilk = isCoffee && !NO_MILK_IDS.has(effectiveDrinkId ?? '');
+            // TEMP: milk options disabled — being replaced by add-ons (backend in progress)
+            // const showMilk = isCoffee && !NO_MILK_IDS.has(effectiveDrinkId ?? '');
+            const showMilk = false;
+            void isCoffee; void effectiveDrinkId;
 
             const SugarRow = () => (
               <div style={{ marginTop:14 }}>
@@ -862,7 +1107,7 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
             );
             if (cfg) return (
               <>
-                <ComboSection cfg={cfg} selections={selections} selectedOptionals={selectedOptionals} onSelect={handleSelect} onToggleOptional={toggleOpt}/>
+                <ComboSection cfg={{ ...cfg, optionalItems: cfg.optionalItems.filter(optionalActive) }} hasOverride={product.combo_price_override != null} selections={selections} selectedOptionals={selectedOptionals} onSelect={handleSelect} onToggleOptional={toggleOpt} products={products} onZoom={(url, name) => setZoom({ url, name })}/>
                 <SugarRow />
                 {showMilk && <MilkRow />}
                 <div style={{ marginTop:14 }}>
@@ -885,6 +1130,19 @@ function CustomizeSheet({ product, open, onClose, onConfirm }: {
           </button>
         </div>
       </div>
+
+      {/* Option image zoom */}
+      {zoom && (
+        <div
+          onClick={() => history.back()}
+          style={{ position:'fixed', inset:0, zIndex:90, background:'rgba(0,0,0,.82)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, cursor:'zoom-out' }}
+        >
+          <img src={zoom.url} alt={zoom.name} style={{ maxWidth:'90%', maxHeight:'70%', objectFit:'contain', borderRadius:16, boxShadow:'0 12px 40px rgba(0,0,0,.5)' }} />
+          <div style={{ color:'#fff', marginTop:16, fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:18, textAlign:'center' }}>{zoom.name}</div>
+          <div style={{ color:'rgba(255,255,255,.6)', marginTop:6, fontFamily:"'Nunito',system-ui", fontSize:13 }}>Tap anywhere to close</div>
+        </div>
+      )}
+
       <style>{`@keyframes coSheetIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
     </div>
   );
@@ -1564,6 +1822,8 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
             </div>
           </div>
         )}
+
+        <AddToHomeMenuItem onNavigate={onClose} />
       </div>
       <style>{`@keyframes coSheetIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
     </div>
@@ -1662,6 +1922,34 @@ export default function MenuAppV2() {
     return () => window.removeEventListener('pageshow', readStorage);
   }, []);
 
+  // Auto daily check-in — fires once per day when a known phone is loaded.
+  // Afterwards, prefetch loyalty data into the sheet's localStorage cache so
+  // opening the loyalty sheet feels instant.
+  useEffect(() => {
+    if (!savedPhone) return;
+    const digits = normalisePhone(savedPhone);
+    const prefetchLoyalty = () => {
+      fetch(`/api/loyalty/member?phone=${digits}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d?.member) {
+            try { localStorage.setItem(`loyalty_cache_${digits}`, JSON.stringify(d)); } catch { /* quota */ }
+          }
+        })
+        .catch(() => { /* silent — non-critical */ });
+    };
+    const todayMYT = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
+    if (localStorage.getItem('co_checkin') === todayMYT) { prefetchLoyalty(); return; }
+    fetch('/api/loyalty/checkin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: savedPhone }),
+    }).then(() => {
+      try { localStorage.setItem('co_checkin', todayMYT); } catch { /* ignore */ }
+    }).catch(() => { /* silent — non-critical */ })
+      .finally(prefetchLoyalty);
+  }, [savedPhone]);
+
   const handlePay = () => {
     try { localStorage.setItem('co_pending', JSON.stringify({ lines, pickup, total })); } catch { /* ignore */ }
     router.push('/checkout');
@@ -1713,7 +2001,7 @@ export default function MenuAppV2() {
   );
 
   return (
-    <div style={{ background:T.bgColor, minHeight:'100vh', color:T.inkColor, fontFamily:"'Nunito',system-ui", width:'100%', maxWidth:'100vw', overflowX:'hidden' }}>
+    <div style={{ background:T.bgColor, minHeight:'100vh', color:T.inkColor, fontFamily:"'Nunito',system-ui", width:'100%', maxWidth:'100vw', overflowX:'clip' }}>
       {intakePaused && (
         <div style={{ background:T.inkColor, color:'#fff', textAlign:'center', padding:'10px 16px', fontSize:14, fontWeight:600 }}>
           Online ordering is temporarily paused — please try again shortly.
@@ -1738,6 +2026,10 @@ export default function MenuAppV2() {
         hasReorder={!!lastOrder} onReorder={handleReorder}
         lastSummary={lastOrder?.items.map(l => `${l.qty}× ${l.name}`).join(', ') ?? ''}
       />
+
+      <InstallCard viewport={viewport} />
+
+      {searchParams.get('ntest') === '1' && <NotifyTestButton phone={savedPhone} viewport={viewport} />}
 
       {compact && <PickupBar pickup={pickup} onToggle={() => setPickup(pickup === 'curbside' ? 'counter' : 'curbside')} hasPromos={promos.length > 0} onPromoClick={() => setPromoOpen(true)}/>}
 
@@ -1769,6 +2061,7 @@ export default function MenuAppV2() {
 
       <CustomizeSheet
         product={sheetProduct} open={!!sheetProduct}
+        products={products}
         onClose={() => setSheetProduct(null)}
         onConfirm={(mods, qty, unitPrice) => {
           addLine(sheetProduct!.id, sheetProduct!.name, qty, mods, unitPrice);

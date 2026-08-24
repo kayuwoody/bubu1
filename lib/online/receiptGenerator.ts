@@ -9,11 +9,15 @@ interface ReceiptItem {
 }
 
 interface ReceiptOrder {
-  id:            string;
-  customer_name: string;
-  pickup_type:   string;
-  total_paid:    number;
-  created_at:    string;
+  id:               string;
+  customer_name:    string;
+  pickup_type:      string;
+  total_paid:       number;
+  voucher_code?:    string | null;
+  voucher_discount?: number | null;
+  pass_code?:       string | null;
+  pass_discount?:   number | null;
+  created_at:       string;
 }
 
 function modsLine(mods: Record<string, unknown> | null | undefined): string {
@@ -158,6 +162,15 @@ export function generateReceiptHtml(order: ReceiptOrder, items: ReceiptItem[]): 
   }
   .total-label { font-size: 16px; font-weight: 800; color: #3A2414; }
   .total-amount { font-size: 20px; font-weight: 800; color: #3A2414; }
+  .sub-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 14px;
+    color: rgba(58,36,20,.65);
+  }
+  .discount-amount { color: #16A34A; font-weight: 700; }
   .footer {
     background: #FFF6E8;
     padding: 16px 24px;
@@ -204,6 +217,27 @@ export function generateReceiptHtml(order: ReceiptOrder, items: ReceiptItem[]): 
       <tbody>${itemRows}</tbody>
     </table>
 
+    ${(() => {
+      const voucherAmt = Number(order.voucher_discount ?? 0);
+      const passAmt    = Number(order.pass_discount ?? 0);
+      if (voucherAmt <= 0 && passAmt <= 0) return '';
+      let rows = `
+    <div class="sub-row">
+      <span>Subtotal</span>
+      <span>RM ${(Number(order.total_paid) + voucherAmt + passAmt).toFixed(2)}</span>
+    </div>`;
+      if (voucherAmt > 0) rows += `
+    <div class="sub-row">
+      <span>Voucher${order.voucher_code ? ` (${order.voucher_code})` : ''}</span>
+      <span class="discount-amount">−RM ${voucherAmt.toFixed(2)}</span>
+    </div>`;
+      if (passAmt > 0) rows += `
+    <div class="sub-row">
+      <span>Pass${order.pass_code ? ` (${order.pass_code})` : ''}</span>
+      <span class="discount-amount">−RM ${passAmt.toFixed(2)}</span>
+    </div>`;
+      return rows;
+    })()}
     <div class="total-row">
       <span class="total-label">Total paid</span>
       <span class="total-amount">RM ${Number(order.total_paid).toFixed(2)}</span>

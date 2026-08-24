@@ -2,7 +2,7 @@
 
 import { QRCodeSVG } from 'qrcode.react';
 
-const SITE_URL    = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://order.coffeeoasis.my';
+const SITE_URL    = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://coffee-oasis.com';
 const MASCOT_URL  = 'https://82fs0epyy9esp8a5.public.blob.vercel-storage.com/assets/binbean.webp';
 const LOGO_URL    = 'https://82fs0epyy9esp8a5.public.blob.vercel-storage.com/assets/co-logo.webp';
 

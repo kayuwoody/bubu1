@@ -22,7 +22,9 @@ export async function POST(req: Request) {
     channel?: string;
     outlet_id?: string;
     voucher_code?: string;
+    voucher_discount?: number;
     pass_code?: string;
+    pass_discount?: number;
   };
 
   try {
@@ -31,7 +33,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { name, email, phone, pickup, items, total, channel, outlet_id = 'main', voucher_code, pass_code } = body;
+  const { name, email, phone, pickup, items, total, channel, outlet_id = 'main', voucher_code, voucher_discount, pass_code, pass_discount } = body;
 
   if (!name || !phone || !items?.length || total == null) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -65,8 +67,8 @@ export async function POST(req: Request) {
       total_amount:   total,
       outlet_id,
       status: 'pending',
-      ...(voucher_code ? { voucher_code: voucher_code.trim().toUpperCase() } : {}),
-      ...(pass_code ? { code: pass_code.trim().toUpperCase() } : {}),
+      ...(voucher_code ? { voucher_code: voucher_code.trim().toUpperCase(), voucher_discount: voucher_discount ?? null } : {}),
+      ...(pass_code ? { code: pass_code.trim().toUpperCase(), pass_discount: pass_discount ?? null } : {}),
     })
     .select('id')
     .single();

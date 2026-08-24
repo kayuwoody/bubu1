@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { createBrowserClient } from '@/lib/online/supabase-browser';
 import { normalisePhone } from '@/lib/normalisePhone';
+import { pushSupported, isIOSNotStandalone, isSubscribed, subscribeToPush, unsubscribeFromPush, sendTestPush } from '@/lib/pushClient';
 import type { Branch } from '@/lib/types';
 
 const INK = '#3A2414';
@@ -144,6 +144,49 @@ export default function OrderPage() {
   const [branch,   setBranch]   = useState<Branch | null>(null);
   const [arrived,  setArrived]  = useState(false);
   const [arriving, setArriving] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [nowTick,  setNowTick]  = useState(Date.now());
+  const [notify, setNotify] = useState<'idle' | 'on' | 'loading' | 'denied'>('idle');
+
+  // Reflect existing push subscription state on load
+  useEffect(() => {
+    if (!pushSupported()) return;
+    isSubscribed().then(sub => { if (sub) setNotify('on'); });
+  }, []);
+
+  const handleNotifyOn = async () => {
+    setNotify('loading');
+    const r = await subscribeToPush(phone);
+    setNotify(r === 'ok' ? 'on' : r === 'denied' ? 'denied' : 'idle');
+  };
+  const handleNotifyOff = async () => {
+    setNotify('loading');
+    await unsubscribeFromPush();
+    setNotify('idle');
+  };
+  const [testMsg, setTestMsg] = useState('');
+  const handleTest = async () => {
+    setTestMsg('Sending…');
+    const r = await sendTestPush();
+    setTestMsg(r === 'ok' ? 'Sent — check your notifications' : 'Failed to send');
+    setTimeout(() => setTestMsg(''), 4000);
+  };
+
+  // Tick every 30s so the elapsed-time label stays current
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Receipt overlay: push a history entry so the Android back button closes
+  // the overlay instead of exiting the app (standalone PWA has no browser UI)
+  useEffect(() => {
+    if (!showReceipt) return;
+    const onPop = () => setShowReceipt(false);
+    history.pushState({ receipt: true }, '');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [showReceipt]);
 
   const phone = (() => {
     try { return normalisePhone(JSON.parse(localStorage.getItem('co_form') ?? '{}').phone ?? ''); } catch { return ''; }
@@ -188,27 +231,8 @@ export default function OrderPage() {
       .catch(() => setError('Could not load order.'));
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Realtime subscription
-  useEffect(() => {
-    if (!id) return;
-    const sb = createBrowserClient();
-    const channel = sb
-      .channel(`order:${id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'online_orders', filter: `id=eq.${id}` },
-        payload => {
-          setOrder(prev => {
-            if (!prev) return prev;
-            const updated = { ...prev, ...(payload.new as Partial<Order>) };
-            persistActive(updated);
-            return updated;
-          });
-        }
-      )
-      .subscribe();
-    return () => { sb.removeChannel(channel); };
-  }, [id, persistActive]);
-
-  // Polling fallback every 30s
+  // Poll for status updates every 5s (replaces Supabase Realtime — keeps the
+  // anon key out of the browser bundle so the DB can't be queried directly)
   useEffect(() => {
     if (!id) return;
     const tick = setInterval(async () => {
@@ -220,7 +244,7 @@ export default function OrderPage() {
           return data;
         });
       }
-    }, 30_000);
+    }, 5_000);
     return () => clearInterval(tick);
   }, [id, persistActive]);
 
@@ -270,6 +294,16 @@ export default function OrderPage() {
         <div style={{ marginTop: 8, fontSize: 13, opacity: .7 }}>
           Order {order.id} · {isCurbside ? 'Curbside' : 'Counter pickup'}
         </div>
+        <div style={{ marginTop: 4, fontSize: 13, opacity: .7 }}>
+          Placed {new Date(order.created_at).toLocaleTimeString('en-MY', { hour: 'numeric', minute: '2-digit' })}
+          {' · '}
+          {(() => {
+            const mins = Math.max(0, Math.floor((nowTick - new Date(order.created_at).getTime()) / 60_000));
+            if (mins < 1)  return 'just now';
+            if (mins < 60) return `${mins} min ago`;
+            return `${Math.floor(mins / 60)}h ${mins % 60}m ago`;
+          })()}
+        </div>
       </div>
 
       <div style={{ maxWidth: 420, margin: '0 auto', padding: '0 16px' }}>
@@ -301,6 +335,37 @@ export default function OrderPage() {
                 <>📍 I've arrived — bring it out</>
               )}
             </button>
+          )}
+
+          {/* Notify-when-ready opt-in */}
+          {isActive && order.status !== 'ready' && (
+            <div style={{ marginTop: isCurbside ? 10 : 0 }}>
+              {isIOSNotStandalone() ? (
+                <div style={{ fontSize: 12.5, color: hex(INK, .5), textAlign: 'center', lineHeight: 1.4 }}>
+                  💡 Add this page to your home screen to get a notification when your order is ready.
+                </div>
+              ) : pushSupported() ? (
+                notify === 'on' ? (
+                  <>
+                    <button onClick={handleNotifyOff} style={{ width: '100%', padding: '11px', borderRadius: R - 6, background: 'transparent', color: hex(INK, .6), border: `1.5px solid ${hex(INK, .15)}`, fontFamily: "'Baloo 2', system-ui", fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>
+                      🔔 Notifications on — tap to turn off
+                    </button>
+                    {/* TEMP test button — remove before launch */}
+                    <button onClick={handleTest} style={{ width: '100%', marginTop: 6, padding: '9px', borderRadius: R - 6, background: 'transparent', color: hex(INK, .45), border: `1px dashed ${hex(INK, .2)}`, fontFamily: "'Nunito', system-ui", fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>
+                      {testMsg || 'Send a test notification'}
+                    </button>
+                  </>
+                ) : notify === 'denied' ? (
+                  <div style={{ fontSize: 12.5, color: hex(INK, .5), textAlign: 'center', lineHeight: 1.4 }}>
+                    Notifications are blocked in your browser settings. Enable them there to get a ready alert.
+                  </div>
+                ) : (
+                  <button onClick={handleNotifyOn} disabled={notify === 'loading'} style={{ width: '100%', padding: '11px', borderRadius: R - 6, background: '#fff', color: PRI, border: `1.5px solid ${PRI}`, fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 13.5, cursor: 'pointer' }}>
+                    {notify === 'loading' ? 'Enabling…' : "🔔 Notify me when it's ready"}
+                  </button>
+                )
+              ) : null}
+            </div>
           )}
         </div>
 
@@ -334,10 +399,8 @@ export default function OrderPage() {
 
         {/* Receipt link */}
         {order.receipt_url && (
-          <a
-            href={order.receipt_url}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => setShowReceipt(true)}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               width: '100%', padding: '12px',
@@ -345,11 +408,31 @@ export default function OrderPage() {
               border: `1.5px solid ${hex(INK, .2)}`,
               borderRadius: R - 8, marginBottom: 14,
               fontFamily: "'Nunito', system-ui", fontWeight: 700, fontSize: 14, color: INK,
-              textDecoration: 'none',
+              cursor: 'pointer',
             }}
           >
             🧾 View Receipt
-          </a>
+          </button>
+        )}
+
+        {/* Receipt overlay — in-app so the installed PWA keeps a close control */}
+        {showReceipt && order.receipt_url && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: '#fff', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: `1px solid ${hex(INK, .1)}`, background: BG, flexShrink: 0 }}>
+              <span style={{ fontFamily: "'Baloo 2', system-ui", fontWeight: 800, fontSize: 16, color: INK }}>Receipt</span>
+              <button
+                onClick={() => history.back()}
+                style={{
+                  padding: '7px 14px', borderRadius: 999, border: `1.5px solid ${hex(INK, .15)}`,
+                  background: '#fff', color: INK, fontFamily: "'Baloo 2', system-ui",
+                  fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                }}
+              >
+                ✕ Close
+              </button>
+            </div>
+            <iframe src={order.receipt_url} title="Receipt" style={{ flex: 1, border: 'none', width: '100%' }} />
+          </div>
         )}
 
         {/* Rejection reason */}

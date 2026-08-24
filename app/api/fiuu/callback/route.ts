@@ -4,6 +4,9 @@ import { verifyFiuuCallback, isFiuuSuccess } from '@/lib/online/fiuu';
 import { nextOrderNumber } from '@/lib/online/orderNumber';
 import { generateReceiptHtml } from '@/lib/online/receiptGenerator';
 import { normalisePhone } from '@/lib/normalisePhone';
+import { issueWelcomeVoucher } from '@/lib/online/welcomeVoucher';
+import { awardDailyCheckin } from '@/lib/online/dailyCheckin';
+import { sendToStaff } from '@/lib/online/push';
 import type { CartLine, CheckoutSession } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -58,10 +61,12 @@ export async function POST(req: Request) {
     return new Response('FAILED', { status: 200 });
   }
 
-  // Upsert payment record
+  // Upsert payment record. Do NOT write order_id here — Fiuu re-sends IPNs, and
+  // a duplicate delivery would clobber the order_id backfilled below on the
+  // first pass (the idempotency guard then returns before it can be re-set).
+  // Omitting the key means a conflicting upsert leaves the existing value intact.
   const { error: upsertErr } = await supabase.from('fiuu_payments').upsert({
     payment_ref:  tranID,
-    order_id:     null,
     amount:       parseFloat(amount),
     currency:     currency ?? 'MYR',
     status_code:  status,
@@ -118,6 +123,10 @@ export async function POST(req: Request) {
     customer_phone:      session.customer_phone,
     total_paid:          session.total_amount,
     currency:            'MYR',
+    voucher_code:        session.voucher_code ?? null,
+    voucher_discount:    session.voucher_discount ?? null,
+    pass_code:           session.code ?? null,
+    pass_discount:       session.pass_discount ?? null,
     created_at:          now,
     updated_at:          now,
   });
@@ -142,6 +151,17 @@ export async function POST(req: Request) {
   );
   if (itemsErr) console.error('[fiuu/callback] order items error:', itemsErr.message);
 
+  // Alert staff that a new online order has come in — non-blocking
+  try {
+    const itemCount = items.reduce((n, l) => n + (l.qty ?? 1), 0);
+    await sendToStaff({
+      title: '🛎️ New online order',
+      body:  `Order ${orderId} · ${itemCount} item${itemCount === 1 ? '' : 's'} · RM ${Number(session.total_amount).toFixed(2)}`,
+      url:   `/order/${orderId}`,
+      tag:   `neworder-${orderId}`,
+    });
+  } catch (e: unknown) { console.error('[staff push] error:', e instanceof Error ? e.message : e); }
+
   // Update payment + session records
   const [{ error: payErr }, { data: sessData, error: sessErr }] = await Promise.all([
     supabase.from('fiuu_payments').update({ order_id: orderId }).eq('payment_ref', tranID),
@@ -164,6 +184,20 @@ export async function POST(req: Request) {
     catch (e: unknown) { console.error('[voucher] uncaught error:', e instanceof Error ? e.message : e); }
   }
 
+  // Award daily check-in stamp — so a first purchase also counts as that day's
+  // visit (deduped with website/QR check-ins). Non-blocking.
+  try {
+    const cPhone = normalisePhone(session.customer_phone);
+    if (cPhone) {
+      const { data: cMember } = await supabase
+        .from('loyalty_members')
+        .upsert({ phone: cPhone, updated_at: now }, { onConflict: 'phone' })
+        .select('id')
+        .single();
+      if (cMember) await awardDailyCheckin(cMember.id, cPhone, 'order');
+    }
+  } catch (e: unknown) { console.error('[checkin] order check-in error:', e instanceof Error ? e.message : e); }
+
   // Generate and upload receipt — non-blocking
   try { await generateAndUploadReceipt(orderId, session, items); }
   catch (e: unknown) { console.error('[receipt] uncaught error:', e instanceof Error ? e.message : e); }
@@ -174,11 +208,15 @@ export async function POST(req: Request) {
 async function generateAndUploadReceipt(orderId: string, session: CheckoutSession, items: CartLine[]) {
   const html = generateReceiptHtml(
     {
-      id:            orderId,
-      customer_name: session.customer_name,
-      pickup_type:   session.pickup_type,
-      total_paid:    session.total_amount,
-      created_at:    new Date().toISOString(),
+      id:               orderId,
+      customer_name:    session.customer_name,
+      pickup_type:      session.pickup_type,
+      total_paid:       session.total_amount,
+      voucher_code:     session.voucher_code ?? null,
+      voucher_discount: session.voucher_discount ?? null,
+      pass_code:        session.code ?? null,
+      pass_discount:    session.pass_discount ?? null,
+      created_at:       new Date().toISOString(),
     },
     items.map(l => ({
       product_name: l.name ?? l.id,
@@ -252,6 +290,8 @@ async function awardLoyaltyPoints(
     console.error('[loyalty] member upsert error:', memberErr?.message);
     return;
   }
+
+  await issueWelcomeVoucher(member.id);
 
   for (const prog of programs) {
     // Skip if order is below program's min order requirement
