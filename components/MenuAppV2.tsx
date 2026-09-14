@@ -702,10 +702,10 @@ function CartBar({ count, total, onClick, viewport }: { count: number; total: nu
 }
 
 // ── Cart Drawer ────────────────────────────────────────────────────────────
-function CartDrawer({ open, onClose, lines, incLine, decLine, total, onPay }: {
+function CartDrawer({ open, onClose, lines, incLine, decLine, total, onPay, closedMessage }: {
   open: boolean; onClose: () => void; lines: CartLine[];
   incLine: (lid: string) => void; decLine: (lid: string) => void;
-  total: number; onPay: () => void;
+  total: number; onPay: () => void; closedMessage?: string;
 }) {
   if (!open) return null;
 
@@ -757,12 +757,25 @@ function CartDrawer({ open, onClose, lines, incLine, decLine, total, onPay }: {
           <div style={{ display:'flex', justifyContent:'space-between', fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:22, color:T.inkColor, marginBottom:12 }}>
             <span>Total</span><span>RM {total.toFixed(2)}</span>
           </div>
-          <button onClick={onPay} style={{ width:'100%', padding:'16px', background:T.primaryColor, color:'#fff', border:'none', borderRadius:T.cornerRadius, fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:17, cursor:'pointer', boxShadow:`0 6px 0 ${hex(T.primaryColor,.4)}` }}>
-            Proceed to checkout →
-          </button>
-          <div style={{ textAlign:'center', marginTop:8, fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.55) }}>
-            FPX · GrabPay · Boost · Touch 'n Go
-          </div>
+          {closedMessage ? (
+            <>
+              <div style={{ width:'100%', padding:'14px 16px', background:hex(T.inkColor,.06), color:hex(T.inkColor,.7), borderRadius:T.cornerRadius, fontFamily:"'Nunito',system-ui", fontWeight:700, fontSize:14, textAlign:'center', lineHeight:1.4 }}>
+                {closedMessage}
+              </div>
+              <div style={{ textAlign:'center', marginTop:8, fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.5) }}>
+                You can browse the menu — ordering resumes when we open.
+              </div>
+            </>
+          ) : (
+            <>
+              <button onClick={onPay} style={{ width:'100%', padding:'16px', background:T.primaryColor, color:'#fff', border:'none', borderRadius:T.cornerRadius, fontFamily:"'Baloo 2',system-ui", fontWeight:800, fontSize:17, cursor:'pointer', boxShadow:`0 6px 0 ${hex(T.primaryColor,.4)}` }}>
+                Proceed to checkout →
+              </button>
+              <div style={{ textAlign:'center', marginTop:8, fontFamily:"'Nunito',system-ui", fontSize:12, color:hex(T.inkColor,.55) }}>
+                FPX · GrabPay · Boost · Touch 'n Go
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -1842,6 +1855,7 @@ export default function MenuAppV2() {
   const [categories,  setCategories]  = useState<Category[]>([]);
   const [branch,      setBranch]      = useState<Branch | null>(null);
   const [intakePaused, setIntakePaused] = useState(false);
+  const [closedMessage, setClosedMessage] = useState('');
   const [loyaltyConfig, setLoyaltyConfig] = useState<LoyaltyConfig | null>(null);
   const [savedPhone,  setSavedPhone]  = useState<string | null>(null);
   const [savedEmail,  setSavedEmail]  = useState<string>('');
@@ -1869,6 +1883,7 @@ export default function MenuAppV2() {
       setCategories(menu.categories ?? []);
       setBranch(menu.branch ?? null);
       setIntakePaused(menu.intake_paused ?? false);
+      setClosedMessage(menu.ordering_closed ? (menu.ordering_message ?? '') : '');
       setLoyaltyConfig(loyalty.config ?? null);
       if (menu.categories?.length) setActiveCat(menu.categories[0].id);
 
@@ -1951,6 +1966,7 @@ export default function MenuAppV2() {
   }, [savedPhone]);
 
   const handlePay = () => {
+    if (closedMessage) { setCartOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     try { localStorage.setItem('co_pending', JSON.stringify({ lines, pickup, total })); } catch { /* ignore */ }
     router.push('/checkout');
   };
@@ -2002,9 +2018,9 @@ export default function MenuAppV2() {
 
   return (
     <div style={{ background:T.bgColor, minHeight:'100vh', color:T.inkColor, fontFamily:"'Nunito',system-ui", width:'100%', maxWidth:'100vw', overflowX:'clip' }}>
-      {intakePaused && (
+      {closedMessage && (
         <div style={{ background:T.inkColor, color:'#fff', textAlign:'center', padding:'10px 16px', fontSize:14, fontWeight:600 }}>
-          Online ordering is temporarily paused — please try again shortly.
+          {closedMessage}
         </div>
       )}
 
@@ -2056,7 +2072,7 @@ export default function MenuAppV2() {
       <CartDrawer
         open={cartOpen} onClose={() => setCartOpen(false)}
         lines={lines} incLine={incLine} decLine={decLine}
-        total={total} onPay={handlePay}
+        total={total} onPay={handlePay} closedMessage={closedMessage}
       />
 
       <CustomizeSheet
