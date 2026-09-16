@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/online/supabase';
+import { storeStatus } from '@/lib/online/hours';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,10 +57,19 @@ export async function GET() {
     .filter(cat => products.some(p => p.category === cat))
     .map(cat => ({ id: cat, label: catLabels[cat] ?? cat }));
 
+  const paused = settingsRes.data?.intake_paused ?? false;
+  const status = storeStatus();
+  const orderingClosed = paused || !status.open;
+  const orderingMessage = paused
+    ? 'Online ordering is temporarily paused — please try again shortly.'
+    : (!status.open ? status.message : '');
+
   return NextResponse.json({
     categories,
     products,
-    intake_paused: settingsRes.data?.intake_paused ?? false,
+    intake_paused: paused,
+    ordering_closed: orderingClosed,
+    ordering_message: orderingMessage,
     branch: branchRes.data ?? null,
   });
 }

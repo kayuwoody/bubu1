@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/online/supabase';
 import { buildFiuuSeamlessParams } from '@/lib/online/fiuu';
+import { storeStatus } from '@/lib/online/hours';
 import type { CartLine } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -54,6 +55,11 @@ export async function POST(req: Request) {
       { error: 'Online ordering is temporarily paused. Please try again shortly.' },
       { status: 503 }
     );
+  }
+
+  const status = storeStatus();
+  if (!status.open) {
+    return NextResponse.json({ error: status.message }, { status: 503 });
   }
 
   const { data: session, error: sessionErr } = await supabase
