@@ -161,11 +161,14 @@ export async function POST(req: Request) {
 
   // ── Voucher pass (original logic) ─────────────────────────────────────────
   if (pass.one_per_phone_per_day) {
-    const { data: existing } = await supabase
+    // limit(1) (not maybeSingle) so a pre-existing duplicate can't make the
+    // dedup silently fail and issue another.
+    const { data: existingRows } = await supabase
       .from('vouchers')
       .select('id, code, expires_at')
       .eq('reference_id', refId)
-      .maybeSingle();
+      .limit(1);
+    const existing = existingRows?.[0];
 
     if (existing) {
       return NextResponse.json({

@@ -7,12 +7,15 @@ export async function issueWelcomeVoucher(memberId: string): Promise<void> {
   try {
     const refId = `welcome:${memberId}`;
 
+    // Robust existence check: limit(1) returns an array and never errors on
+    // duplicates (unlike maybeSingle, which errors on >1 row and silently
+    // caused repeat issuance once a member had two).
     const { data: existing } = await supabase
       .from('vouchers')
       .select('id')
       .eq('reference_id', refId)
-      .maybeSingle();
-    if (existing) return;
+      .limit(1);
+    if (existing && existing.length > 0) return;
 
     const { data: prog } = await supabase
       .from('loyalty_programs')
@@ -38,8 +41,10 @@ export async function issueWelcomeVoucher(memberId: string): Promise<void> {
       reference_id:     refId,
       created_at:       now,
     });
-    if (error) console.error('[welcome] voucher insert error:', error.message);
-    else console.log('[welcome] issued voucher', code, 'to member', memberId);
+    // 23505 = unique_violation: the partial unique index on welcome reference_ids
+    // caught a race (another call issued it first). Treat as already-issued.
+    if (error && error.code !== '23505') console.error('[welcome] voucher insert error:', error.message);
+    else if (!error) console.log('[welcome] issued voucher', code, 'to member', memberId);
   } catch (e) {
     console.error('[welcome] unexpected error:', e);
   }
