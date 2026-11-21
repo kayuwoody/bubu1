@@ -1887,6 +1887,14 @@ export default function MenuAppV2() {
       setLoyaltyConfig(loyalty.config ?? null);
       if (menu.categories?.length) setActiveCat(menu.categories[0].id);
 
+      // Deep-link: ?cat=<id> opens the menu on that category (e.g. a QR that
+      // jumps straight to ice cream). Matches the category id case-insensitively.
+      const deepCat = searchParams.get('cat');
+      if (deepCat) {
+        const catMatch = (menu.categories ?? []).find((c: Category) => c.id.toLowerCase() === deepCat.toLowerCase());
+        if (catMatch) setActiveCat(catMatch.id);
+      }
+
       // Deep-link: ?product=<id> opens that product's customise sheet, then cleans URL
       const deepProductId = searchParams.get('product');
       if (deepProductId) {
