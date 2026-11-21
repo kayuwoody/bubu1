@@ -1844,7 +1844,7 @@ function LoyaltySheet({ open, onClose, config, phone, onPhoneSave }: {
 }
 
 // ── Main App ───────────────────────────────────────────────────────────────
-export default function MenuAppV2() {
+export default function MenuAppV2({ initialCat }: { initialCat?: string } = {}) {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const viewport     = useViewport();
@@ -1885,15 +1885,14 @@ export default function MenuAppV2() {
       setIntakePaused(menu.intake_paused ?? false);
       setClosedMessage(menu.ordering_closed ? (menu.ordering_message ?? '') : '');
       setLoyaltyConfig(loyalty.config ?? null);
-      if (menu.categories?.length) setActiveCat(menu.categories[0].id);
-
-      // Deep-link: ?cat=<id> opens the menu on that category (e.g. a QR that
-      // jumps straight to ice cream). Matches the category id case-insensitively.
-      const deepCat = searchParams.get('cat');
-      if (deepCat) {
-        const catMatch = (menu.categories ?? []).find((c: Category) => c.id.toLowerCase() === deepCat.toLowerCase());
-        if (catMatch) setActiveCat(catMatch.id);
-      }
+      // Choose the starting category: an explicit initialCat (a branded path
+      // like /healthy-gelato) wins, then a ?cat= deep link, else the first.
+      // Both match the category id case-insensitively.
+      const wanted = initialCat ?? searchParams.get('cat') ?? '';
+      const catMatch = wanted
+        ? (menu.categories ?? []).find((c: Category) => c.id.toLowerCase() === wanted.toLowerCase())
+        : null;
+      setActiveCat(catMatch ? catMatch.id : (menu.categories?.[0]?.id ?? ''));
 
       // Deep-link: ?product=<id> opens that product's customise sheet, then cleans URL
       const deepProductId = searchParams.get('product');
